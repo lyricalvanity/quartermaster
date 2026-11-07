@@ -1,0 +1,27 @@
+{
+  "id": "claude",
+  "name": "Claude Code",
+  "what": "Anthropic's terminal coding agent. It talks to Anthropic's API, not to local servers, so it has no local bindings; it is listed for its version and its update.",
+  "licence": "proprietary (see upstream terms)",
+  "home": "https://claude.com/claude-code",
+  "tier": "C",
+  "role": "client",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "executables": ["claude"],
+    "version": {"cmd": ["claude", "--version"]},
+    "note": "installed either by the native installer (~/.local/bin/claude) or as the npm package @anthropic-ai/claude-code"
+  },
+  "update": {
+    "recipe": "self",
+    "self_cmd": ["claude", "update"],
+    "note": "The native installer updates itself with `claude update`; an npm install uses npm-global with package @anthropic-ai/claude-code instead (override in the inventory)."
+  },
+  "install": {
+    "all": ["Follow the installer at claude.com/claude-code, or: npm i -g @anthropic-ai/claude-code"]
+  },
+  "fits": {
+    "good": ["cloud-model coding sessions beside the local ones"],
+    "not": ["anything that must stay on the machine: it is a cloud client"]
+  }
+}

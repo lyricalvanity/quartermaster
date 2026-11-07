@@ -143,6 +143,8 @@
     if (s.vision) meta.appendChild(el("span", "tag vision", "vision"));
     if (s.footprint && s.footprint.vram_gib) meta.appendChild(el("span", "tag", `${s.footprint.vram_gib} GB VRAM · ${s.footprint.ram_gib} GB RAM`));
     c.appendChild(meta);
+    const users = usedBy(s.port);
+    if (users.length) { const ub = el("div", "c-used", `used by ${users.join(", ")}`); ub.title = "clients whose configuration points at this port"; c.appendChild(ub); }
     const live = el("div", "c-live"); c.appendChild(live);
     const vit = vitalsEl(); c.appendChild(vit);
     const oll = el("div", "oll-models"); c.appendChild(oll);
@@ -155,7 +157,7 @@
       const un = el("button", "btn small", "Unload"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
       const st = el("button", "btn small", "Start"); st.onclick = () => action("start", s.id); act.appendChild(st); refs.st = st;
       const sp = el("button", "btn small danger", "Stop");
-      sp.onclick = async () => { if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.`)) action("stop", s.id, { confirm: true }); };
+      sp.onclick = async () => { const u = usedBy(s.port); if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.${u.length ? ` ${u.join(" and ")} point${u.length === 1 ? "s" : ""} at this port.` : ""}`)) action("stop", s.id, { confirm: true }); };
       act.appendChild(sp); refs.sp = sp;
       if (s.parkable) { const pk = el("button", "btn small", "Park"); pk.onclick = () => action(c.classList.contains("parked") ? "unpark" : "park", s.id); act.appendChild(pk); refs.pk = pk; }
     } else {
@@ -374,11 +376,67 @@
       if (e.kind !== "ollama") item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
         if (await confirm(`Stop every ${e.name} unit?`, `This ends ${info.up || 0} server process${info.up === 1 ? "" : "es"}. Their models unload with them.`)) action("stop_all", e.id, { confirm: true });
       }, planRunning || !info.up);
-      if (!e.update) item("Update: no recipe declared", () => {}, true);      // recipes land with SPEC.md section 7
+      updateItems(item, e.id, e.name, info, planRunning);
     };
     const grid = el("div", "grid"); grid.id = "grp-" + e.id; g.appendChild(grid);
     bands[e.id] = { root: g, ver, cnt, grid };
     return g;
+  }
+  // The update entries of a band's or a client's menu, from the recipe the agent reports and the last check it kept.
+  // A check runs on this click and may reach the network; nothing checks on its own.
+  function updateItems(item, id, name, info, planRunning) {
+    const u = (STATE && STATE.updates && STATE.updates[id]) || null, recipe = info.recipe || "none";
+    if (recipe === "none") return item(`Update: no recipe declared${info.recipe_note ? ` · ${info.recipe_note}` : ""}`, () => {}, true);
+    if (recipe === "comfy" || recipe === "driver") return item("Update: on its own tile", () => {}, true);
+    item(u ? `Check again for an update (last ${u.checked_at || "?"})` : "Check for an update (reaches the network)", () => action("check_update", id), planRunning);
+    if (!u) return;
+    if (!u.ok) item(`Last check failed: ${(u.error || "").slice(0, 60)}`, () => {}, true);
+    else if (u.available && u.can_apply) item(`Update to ${u.latest}…`, async () => {
+      if (await confirm(`Update ${name} to ${u.latest}?`, `${u.installed || "?"} → ${u.latest} by the ${recipe} recipe. ${info.recipe_note || ""} A backup is kept where the recipe can; running units of an engine must be stopped first.`)) action("apply_update", id, { confirm: true });
+    }, planRunning);
+    else if (u.available) item(`Newer: ${u.latest} (by hand)`, () => {}, true);
+    else if (u.available === null) item(u.note ? u.note.slice(0, 70) : "No comparison possible", () => {}, true);
+    else item(`${u.installed || "?"} is current`, () => {}, true);
+    if (recipe === "self" && u.can_apply) item("Run its own updater…", async () => {
+      if (await confirm(`Let ${name} update itself?`, `Runs its own update command. ${info.recipe_note || ""}`)) action("apply_update", id, { confirm: true });
+    }, planRunning);
+    if (u.backup) item("Roll back the last update…", async () => {
+      if (await confirm(`Roll ${name} back?`, `Restores the version recorded before the last update (${u.backup}).`)) action("rollback_update", id, { confirm: true });
+    }, planRunning);
+  }
+  // ---- clients: the programs that consume the units; a strip, not cards ----
+  const clientChips = {};
+  function clientsBand() {
+    const g = el("div", "group"); g.dataset.group = "clients";
+    const head = el("div", "band-head"); g.appendChild(head); head.appendChild(el("h2", null, "Clients"));
+    const row = el("div", "clients"); g.appendChild(row);
+    for (const c of INV.clients || []) {
+      const chip = el("div", "client"); chip.dataset.id = c.id;
+      chip.appendChild(el("span", "cl-name", c.name || c.id));
+      const ver = el("span", "ver", c.version || ""); chip.appendChild(ver);
+      const ports = (c.bindings || []).map((b) => (String(b.url).match(/:(\d+)(?:\/|$)/) || [])[1]).filter(Boolean);
+      const uses = el("span", "cl-uses", ports.length ? "→ " + [...new Set(ports)].map((p) => ":" + p).join(" ") : ""); chip.appendChild(uses);
+      const mb = el("button", "btn small ghost band-menu", "▾"); mb.title = `${c.name}: more`; chip.appendChild(mb);
+      const tools = el("div", "band-tools"); tools.appendChild(mb); chip.appendChild(tools);
+      mb.onclick = (ev) => {
+        ev.stopPropagation();
+        const open = tools.querySelector(".menu"); closeMenus(); if (open) return;
+        const m = el("div", "menu"); tools.appendChild(m);
+        const info = (STATE && STATE.clients && STATE.clients[c.id]) || {};
+        const planRunning = STATE && STATE.plan && STATE.plan.status === "running";
+        const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.onclick = () => { closeMenus(); fn(); }; m.appendChild(b); return b; };
+        if (c.config) item(`config: ${c.config}`, () => {}, true);
+        updateItems(item, c.id, c.name || c.id, info, planRunning);
+      };
+      chip.onmouseenter = () => setHelp(`${c.name}: ${c.bindings && c.bindings.length ? "points at " + c.bindings.map((b) => `${b.name} (${b.url})`).join(", ") : "no local bindings"}`);
+      chip.onmouseleave = () => setHelp("");
+      clientChips[c.id] = { root: chip, ver };
+      row.appendChild(chip);
+    }
+    return g;
+  }
+  function usedBy(port) {
+    return (INV.clients || []).filter((c) => (c.bindings || []).some((b) => (String(b.url).match(/:(\d+)(?:\/|$)/) || [])[1] === String(port))).map((c) => c.name || c.id);
   }
   function legacyBand() {
     const g = el("div", "group collapsed"); g.dataset.group = "legacy"; g.dataset.slot = "e0";
@@ -393,6 +451,8 @@
     for (const k of Object.keys(bands)) delete bands[k];
     for (const e of INV.engines || []) wrap.appendChild(engineBand(e));
     if ((INV.units || []).some((s) => s.legacy)) wrap.appendChild(legacyBand());
+    for (const k of Object.keys(clientChips)) delete clientChips[k];
+    if ((INV.clients || []).length) wrap.appendChild(clientsBand());
     $("#grp-services").innerHTML = ""; owui = null; comfy = null;
     $("#grp-services-wrap").hidden = !INV.openwebui && !INV.comfyui;
     if (INV.openwebui) $("#grp-services").appendChild(owuiCard(INV.openwebui));
@@ -589,12 +649,20 @@
     const w = $("#warnings"); w.innerHTML = "";
     for (const m of st.warnings || []) w.appendChild(el("div", "warn", m));
 
-    // engine bands: version and counts
+    // engine bands: version and counts; a known newer version rides on the badge
+    const upd = st.updates || {};
     for (const [eid, b] of Object.entries(bands)) {
       const info = (st.engines || {})[eid];
       if (!info || !b.ver) continue;
-      b.ver.textContent = info.version || "";
+      const u = upd[eid];
+      b.ver.textContent = (info.version || "") + (u && u.ok && u.available ? `  ↑ ${u.latest}` : "");
+      b.ver.classList.toggle("newer", !!(u && u.ok && u.available));
       b.cnt.textContent = `${info.units} unit${info.units === 1 ? "" : "s"} · ${info.up} up${info.loaded ? ` · ${info.loaded} loaded` : ""}`;
+    }
+    for (const [cid, ch] of Object.entries(clientChips)) {
+      const info = (st.clients || {})[cid] || {}, u = upd[cid];
+      ch.ver.textContent = (info.version || "") + (u && u.ok && u.available ? `  ↑ ${u.latest}` : "");
+      ch.ver.classList.toggle("newer", !!(u && u.ok && u.available));
     }
 
     // cards

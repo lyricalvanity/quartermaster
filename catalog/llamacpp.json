@@ -1,0 +1,38 @@
+{
+  "id": "llamacpp",
+  "name": "llama.cpp",
+  "what": "The reference GGUF inference engine. llama-server serves one model per process over an OpenAI-style API with every knob exposed on the command line.",
+  "licence": "MIT",
+  "home": "https://github.com/ggml-org/llama.cpp",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "executables": ["llama-server"],
+    "roots": ["~/llama.cpp"],
+    "ports": [8080],
+    "health": "/health",
+    "version": {"cmd": ["llama-server", "--version"]},
+    "note": "a unit is proposed from a running llama-server (its -m and --port), since there is no configuration file convention"
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health", "models": "GET /v1/models"},
+    "can": ["start a unit with its recorded argv", "stop it", "treat it as loaded while it answers /health"],
+    "cannot": ["unload without stopping: one model for the server's life", "change the context without a restart"]
+  },
+  "launch": {"argv": ["llama-server", "-m", "<model.gguf>", "--port", "<port>", "-ngl", "99", "-c", "<context>"], "never": ["--host 0.0.0.0 without a reverse proxy in front: there is no login"]},
+  "update": {
+    "recipe": "github-release",
+    "github": "ggml-org/llama.cpp",
+    "note": "Releases are build numbers (b1234). Download the archive that matches your CUDA or CPU and replace the folder; the check compares the running build to the newest release."
+  },
+  "install": {
+    "windows": ["Download llama-<build>-bin-win-cuda-<cuda>-x64.zip (and the matching cudart zip) from the releases page, unpack beside each other, put the folder on PATH."],
+    "linux": ["Download the matching tarball, or build: cmake -B build -DGGML_CUDA=ON && cmake --build build --config Release -j"],
+    "then": ["llama-server -m model.gguf --port 8080 -ngl 99", "GET http://127.0.0.1:8080/health"]
+  },
+  "fits": {
+    "good": ["any GGUF, any quant, exact control of layers, context and KV types", "the newest model architectures first"],
+    "not": ["switching between models without restarting", "a store, a pull command, or a UI: bring your own"]
+  }
+}

@@ -109,8 +109,28 @@ shims, ComfyUI and OpenWebUI start/stop) over the inventory's own ids; **Save cu
 pre-filled with what is resident, its context, and which shims and ComfyUI are up; the pencil on a preset
 edits or deletes it. The agent checks a saved preset against the same table and writes `presets.json`
 itself; the inventory file has no write path from the page. Each engine's band shows its version and unit
-counts and has a menu (stop every unit of that engine; the update entry appears once an engine declares a
-recipe). Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
+counts and has a menu: stop every unit of that engine, and the update entries below.
+
+## Updates and the catalog
+
+`catalog/<kind>.json` is one record per kind Quartermaster knows (what it is, licence, tier, how to detect
+and drive it, its update recipe, how to install it, what it fits); it ships with the code and `git pull`
+is how it updates. An engine or client takes its **update recipe** from its kind's record unless its
+inventory entry overrides it (`"update": {"recipe": "git-check"}` for a custom build). Recipes:
+`npm-global`, `pip`, `winget`, `git-pull-pip-e`, `git-check`, `github-release`, `self`, `script`, `comfy`,
+`driver`, `none` (`catalog/README.md`).
+
+Every band and every client chip has **Check for an update** in its menu. That click is the only time
+Quartermaster reaches the network (npm, PyPI, GitHub, winget, `git fetch`); nothing checks on a schedule.
+A check that finds a newer version shows it on the badge (`0.40.14 ↑ 0.40.15`) and, where the recipe can
+apply it, an **Update to …** entry behind a confirmation: a backup where the recipe keeps one, apply,
+verify, and a roll-back entry afterwards. An engine's units must be stopped first. A `git-check` or
+`github-release` recipe is a check only and says "by hand". The last result per id is kept in
+`logs/updates.json`.
+
+**Clients** (Pi, Codex CLI, Claude Code) are a strip under the bands, not cards: version, the local ports
+their configuration points at, a menu with the update entries. A unit card says `used by Pi` when a
+client's configuration names its port, and the Stop dialog repeats it. Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
 legacy band), so a theme never needs to know an engine's name.
 
 ## From a terminal

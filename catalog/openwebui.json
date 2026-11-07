@@ -1,0 +1,34 @@
+{
+  "id": "openwebui",
+  "name": "OpenWebUI",
+  "what": "A chat front end for local and remote models with users, tools and a document store. It holds people's conversations, which is why the dashboard looks at it only from outside.",
+  "licence": "BSD-3-Clause with a branding clause (read upstream's LICENSE)",
+  "home": "https://github.com/open-webui/open-webui",
+  "tier": "B",
+  "role": "service",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "ports": [3000, 8080],
+    "health": "/health",
+    "version": {"url": "/api/version", "path": "version"},
+    "drivers": {"schtasks": "three Windows scheduled tasks owui-ctl-start/stop/update exist", "docker": "a container from ghcr.io/open-webui/open-webui is running", "pip": "the open-webui package is installed in a venv"}
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health", "version": "GET /api/version"},
+    "can": ["start, stop and update it through its driver", "show health, version and the tail of its control logs"],
+    "cannot": ["read its data: conversations, users, settings and the database are off limits by rule"]
+  },
+  "update": {
+    "recipe": "driver",
+    "note": "The service's own driver updates it: the scheduled task, docker compose pull, or pip install -U open-webui. Back up its data volume first; upstream's release notes say when a version migrates the database."
+  },
+  "install": {
+    "docker": ["docker run -d -p 127.0.0.1:3000:8080 -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main", "Add --add-host=host.docker.internal:host-gateway so it can reach engines on the host."],
+    "pip": ["python -m venv owui && owui/Scripts/pip install open-webui", "owui/Scripts/open-webui serve"],
+    "then": ["Open http://127.0.0.1:3000, make the first (admin) account, point Connections at your engines' OpenAI-style endpoints."]
+  },
+  "fits": {
+    "good": ["a front end for several people and several engines", "tools, document search and personas on top of local models"],
+    "not": ["a dashboard for the machine: that is this", "exposure beyond the machine without a reverse proxy and its own login"]
+  }
+}

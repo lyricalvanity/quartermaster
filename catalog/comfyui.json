@@ -1,0 +1,35 @@
+{
+  "id": "comfyui",
+  "name": "ComfyUI",
+  "what": "A node-graph front end and server for image and video models. It holds its models on the card between jobs, which is why a dashboard that manages one card needs to know about it.",
+  "licence": "GPL-3.0",
+  "home": "https://github.com/comfyanonymous/ComfyUI",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "roots": ["~/ComfyUI/ComfyUI", "~/ComfyUI", "<drive>:/ComfyUI/ComfyUI", "<drive>:/ComfyUI"],
+    "marker": "main.py beside a comfy/ directory",
+    "venv": "venv or .venv inside or beside the checkout; the one a running ComfyUI uses wins, else the one with the accelerators (sage attention, triton, xformers)",
+    "ports": [8188],
+    "health": "/system_stats",
+    "version": {"file": "<root>/comfyui_version.py"}
+  },
+  "drive": {
+    "endpoints": {"stats": "GET /system_stats", "queue": "GET /prompt (queue_remaining)", "free": "POST /free {unload_models, free_memory}", "jobs": "POST /prompt (the art queue only)"},
+    "can": ["start it with the recorded argv", "stop only a process on its port whose command line names ComfyUI", "ask it to drop its models", "read how much of the card it holds from the operating system", "run queued image batches between resident models (the art queue)"],
+    "cannot": ["read workflows, the queue's contents or outputs", "run with --listen: it has no login"]
+  },
+  "launch": {"argv": ["<venv python>", "<root>/main.py"], "never": ["--listen"]},
+  "update": {
+    "recipe": "comfy",
+    "note": "The ComfyUI procedure: fast-forward to the newest vX.Y.Z tag, reinstall requirements with torch, torchvision, torchaudio (and triton-windows) pinned at their installed versions, boot test on cuda, roll back by itself if it does not boot. Custom nodes are not updated."
+  },
+  "install": {
+    "all": ["git clone https://github.com/comfyanonymous/ComfyUI", "python -m venv venv; install the torch build that matches your CUDA from pytorch.org, then venv/Scripts/pip install -r requirements.txt", "venv/Scripts/python main.py", "Models go under models/ by type; the art queue names them in the inventory's art.models."]
+  },
+  "fits": {
+    "good": ["image and video generation with full control of the graph", "sharing a card with a resident model, when the dashboard parks one for the other"],
+    "not": ["a service that stays reachable beyond the machine: put a login in front first"]
+  }
+}

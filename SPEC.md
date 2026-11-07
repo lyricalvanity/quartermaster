@@ -96,8 +96,8 @@ Aider, OpenWebUI-as-consumer). A client is not a tile. It contributes three thin
 - its **bindings**: which local units it points at, read from its configuration (`baseUrl`-shaped fields
   only; files named `auth*`, `*token*`, `*secret*` are never opened).
 
-Bindings are drawn on the unit cards ("used by Pi, OpenWebUI") and named in the make-resident dialog, so
-the owner sees whose floor they are about to pull out.
+Bindings are drawn on the unit cards ("used by Pi") and named in the Stop dialog, so the owner sees whose
+floor they are about to pull out **(built)**.
 
 ## 4. Inventory, schema 2
 
@@ -185,6 +185,44 @@ An engine band's menu shows **Check for update** and, once a check has found one
 runs without a click (section 2.1). Ollama on Windows updates itself through its tray application: its
 button is a check and a nudge. A recipe that cannot roll back says so before it runs.
 
+**(built 2026-11-06, as catalog recipes.)** `agent/updaters.py` holds the recipes above plus `git-check`
+(check only), `github-release` (check against the newest release; apply only with a `self_cmd`), `self`,
+`comfy` and `driver` (the tile's own button), `none`. Ops `check_update`, `apply_update` (confirmed; an
+engine's units must be down; a failure part-way rolls back when a backup exists) and `rollback_update`.
+The last result per id lives in `logs/updates.json` and rides in the state as `updates`. A rewritten
+upstream (tags that would clobber) is tolerated: branches are compared, tags noted as not comparable.
+Verified on the workstation: checks for Pi (npm), Claude Code (self), Ollama (GitHub), Strata and Maya
+(git fetch); apply and rollback end to end on a `script` recipe against a scratch home. Not run: an
+apply on a real engine or client.
+
+## 7a. The catalog
+
+One record per kind, in the repository (`catalog/<kind>.json`), versioned with the code, so its update
+path is `git pull`, which is a click. The record is the source of truth for everything Quartermaster knows
+about a kind that is not particular to one machine: what it is and its licence; its **tier**; how to
+**detect** it (executables, install roots, configuration globs, default ports, health URL, version
+source); how it is **driven** (engine, service or client; the endpoints used; what can and cannot be done
+to it); the conventional **launch** shape and the flag never to add; its **update** recipe with pinned
+identifiers (a winget id, an npm package, a git remote and tag pattern); the **install** steps as text and
+as commands for the owner to run; and what it **fits**, honestly. `setup.py` reads the conventions from
+here and keeps only the quirks in code; the engine bands and the clients strip take their update recipe
+from here unless the inventory overrides it (a custom build says `{"recipe": "git-check"}` and the button
+becomes a check).
+
+Tiers say what "supported" means: **A** engines the state machine drives (Strata, Maya, Ollama,
+llama.cpp); **B** services with up, down and update (OpenWebUI, and later SearXNG, kiwix, Caddy); **C**
+clients with version, update and bindings (Pi, Codex CLI, Claude Code); **D** listed with a guide only.
+An entry moves up a tier when someone writes its driver.
+
+**Suggestions** are rules over the host facts and the detected inventory, nothing fetched: a card and no
+engine (the trade-offs between Ollama, llama.cpp and the long-context engines, not a ranking); an engine
+and no front end; ComfyUI and no art block; several units on one card and no presets; a client bound to a
+port no unit serves (a diagnostic, and the most useful of them). "Popular" is editorial, curated here;
+Quartermaster never reports what anyone runs. Install automation means generated, shown, and run on the
+owner's yes, with pinned sources and never a piped shell script. The page's Catalog panel lists installed
+kinds with their tier, suggestions with their one-line reason, and a Guide button per entry; no install
+button in the first cut.
+
 ## 8. The page
 
 The card grid stays as it is. What changes is above and around it.
@@ -246,8 +284,9 @@ Each stage leaves the original workstation working.
 | 2 | Schema 2 with migration; engine bands with version and menu; slot colours in the themes | **done 2026-11-06** |
 | 3 | `setup` and `detect`: host facts, the detectors, launcher and key | **done 2026-11-06** |
 | 4 | Preset editor and Save-current; `presets.json` | **done 2026-11-06** |
-| 5 | Updaters and the clients strip with bindings | next |
-| 6 | Platform module and the Linux implementation | |
+| 5 | Updaters as catalog recipes, and the clients strip with bindings | **done 2026-11-06** |
+| 6 | Platform module and the Linux implementation | next |
+| 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |
 
 ## 12. Decisions taken (2026-11-06)

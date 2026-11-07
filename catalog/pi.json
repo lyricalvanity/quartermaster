@@ -1,0 +1,29 @@
+{
+  "id": "pi",
+  "name": "Pi",
+  "what": "A terminal coding agent that talks to any OpenAI-style or Ollama-style server named in its models.json, with an extension API.",
+  "licence": "see upstream",
+  "home": "https://www.npmjs.com/package/@earendil-works/pi-coding-agent",
+  "tier": "C",
+  "role": "client",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "executables": ["pi"],
+    "config": "~/.pi/agent/models.json",
+    "bindings": "providers.*.baseUrl",
+    "never_open": ["~/.pi/agent/auth.json"],
+    "version": {"cmd": ["pi", "--version"]}
+  },
+  "update": {
+    "recipe": "npm-global",
+    "package": "@earendil-works/pi-coding-agent",
+    "note": "npm view for the newest version, npm i -g <package>@<version> to move; the previous version is recorded and restorable."
+  },
+  "install": {
+    "all": ["npm i -g @earendil-works/pi-coding-agent", "Add your servers to ~/.pi/agent/models.json as providers with a baseUrl on 127.0.0.1."]
+  },
+  "fits": {
+    "good": ["agentic coding against the resident model", "long sessions on a long-context engine"],
+    "not": ["a model server of its own: it is a client, and the dashboard lists it as one"]
+  }
+}

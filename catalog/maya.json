@@ -1,0 +1,36 @@
+{
+  "id": "maya",
+  "name": "Maya",
+  "what": "Project Maya: an inference server with its own engine, a dashboard and an API, built from source with CMake; a model loads at start, unloads through the API, and its context and thinking budget can be set while it runs.",
+  "licence": "see upstream",
+  "home": "https://github.com/mw00/project-maya",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux"],
+  "detect": {
+    "roots": ["~/Maya", "~/project-maya", "~/AppData/Local/Maya"],
+    "marker": "maya.py",
+    "configs": "maya-*.json",
+    "launchers": "run-*.bat",
+    "ports": [8101],
+    "health": "/health",
+    "version": {"file": "<root>/VERSION"}
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health (unloaded, status)", "load": "POST /models/load", "unload": "POST /models/unload", "settings": "GET/POST /api/models/settings (context; reloads)", "budget": "POST /api/thinking-budget", "metrics": "GET /metrics"},
+    "can": ["start a unit from its launcher", "load and unload through the API", "set the context (the engine reloads) and the thinking budget", "stop the process"],
+    "cannot": ["read the thinking budget back: the engine does not report it"]
+  },
+  "launch": {"argv": ["<python>", "<root>/maya.py", "--config", "<maya-name.json>", "--port", "<port>", "--plain"]},
+  "update": {
+    "recipe": "git-check",
+    "note": "The engine is compiled (build-maya.bat / build-maya-vision.bat, CMake). The check tells you when upstream moved; pull and rebuild by hand, then restart the unit. An owner with a reliable build step can override this with a script recipe."
+  },
+  "install": {
+    "all": ["git clone https://github.com/mw00/project-maya Maya", "python -m venv .venv && .venv/Scripts/pip install -e .", "build-maya.bat (Windows) or follow upstream's CMake steps", "python maya.py --setup to fetch a model pack; a maya-<name>.json and run-maya-<name>.bat per model"]
+  },
+  "fits": {
+    "good": ["one large model resident at long context with a settable context and thinking budget", "vision when the model pack has it"],
+    "not": ["many models at once", "a model without a Maya pack"]
+  }
+}

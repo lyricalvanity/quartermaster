@@ -1,0 +1,37 @@
+{
+  "id": "ollama",
+  "name": "Ollama",
+  "what": "A model server with its own model store and pull command; loads models on demand and unloads them after an idle time. The easiest way to get a first model answering on a machine with a GPU.",
+  "licence": "MIT",
+  "home": "https://github.com/ollama/ollama",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "executables": ["ollama"],
+    "roots": ["~/AppData/Local/Programs/Ollama", "/usr/local/bin", "/usr/bin"],
+    "ports": [11434],
+    "health": "/api/version",
+    "version": {"url": "/api/version", "path": "version"}
+  },
+  "drive": {
+    "endpoints": {"loaded models": "GET /api/ps", "unload": "POST /api/generate {model, keep_alive: 0}", "version": "GET /api/version", "models": "GET /api/tags"},
+    "can": ["see which models are loaded and how much of the card they hold", "unload every loaded model", "report its version"],
+    "cannot": ["start or stop it (it is a service that is always up)", "pull or delete models", "pick which model answers a request"]
+  },
+  "launch": {"note": "runs as a service or a tray application; OLLAMA_HOST changes its address; OLLAMA_MODELS its store."},
+  "update": {
+    "recipe": "github-release",
+    "github": "ollama/ollama",
+    "note": "On Windows the tray application updates itself and asks first; on Linux re-run the upstream install. The check compares the running version to the newest release."
+  },
+  "install": {
+    "windows": ["Download OllamaSetup.exe from the releases page and run it, or:", "winget install Ollama.Ollama"],
+    "linux": ["Download the tarball for your architecture from the releases page, unpack it to /usr/local, and run `ollama serve` under a unit of your own. The upstream one-line installer pipes a script into a shell; read it before you consider it."],
+    "then": ["ollama pull <model>", "Check it answers: GET http://127.0.0.1:11434/api/version"]
+  },
+  "fits": {
+    "good": ["a first model in minutes", "many small models that come and go", "clients that speak the Ollama API"],
+    "not": ["one large model held resident with a precise context and KV configuration: a dedicated engine does that better", "sharing a card with a resident model: its idle unload timer and on-demand loads will take the card back"]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "codex",
+  "name": "Codex CLI",
+  "what": "OpenAI's terminal coding agent; its config.toml can name local model providers with a base_url, which is how it reaches a resident model.",
+  "licence": "Apache-2.0",
+  "home": "https://github.com/openai/codex",
+  "tier": "C",
+  "role": "client",
+  "platforms": ["windows", "linux", "macos"],
+  "detect": {
+    "executables": ["codex"],
+    "config": "~/.codex/config.toml",
+    "bindings": "[model_providers.<name>].base_url",
+    "never_open": ["~/.codex/auth.json"],
+    "version": {"cmd": ["codex", "--version"]}
+  },
+  "update": {
+    "recipe": "npm-global",
+    "package": "@openai/codex"
+  },
+  "install": {
+    "all": ["npm i -g @openai/codex", "In ~/.codex/config.toml add a [model_providers.local] with base_url = \"http://127.0.0.1:<port>/v1\" and point a profile at it."]
+  },
+  "fits": {
+    "good": ["agentic coding against a local OpenAI-style server"],
+    "not": ["a model server of its own"]
+  }
+}

@@ -37,6 +37,7 @@ import urllib.request
 import urllib.error
 
 import artqueue
+import updaters
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -159,6 +160,7 @@ class Inventory:
             u["group"] = u["engine"]                              # older code says group
             self.servers[u["id"]] = u
         self.shims = {s["id"]: s for s in data.get("shims", [])}
+        self.clients = {c["id"]: c for c in data.get("clients", []) if c.get("id")}
         if PRESETS.exists():
             presets = json.loads(PRESETS.read_text(encoding="utf-8")).get("presets", [])
         else:
@@ -208,6 +210,58 @@ def engine_version(e: dict) -> str | None:
         pass
     _ENGINE_VER[e["id"]] = (time.time(), v)
     return v
+
+
+# ---- the catalog and the update recipes -------------------------------------------------------
+# catalog/<kind>.json ships with the code (SPEC.md section 7a). An engine or client takes its update recipe
+# from the catalog record of its kind unless its inventory entry carries an "update" block, which wins
+# key by key. Checks run only when someone clicks; the last result per id is kept in logs/updates.json.
+
+CATALOG_DIR = ROOT / "catalog"
+CATALOG: dict[str, dict] = {}
+for _f in sorted(CATALOG_DIR.glob("*.json")) if CATALOG_DIR.is_dir() else []:
+    try:
+        _rec = json.loads(_f.read_text(encoding="utf-8"))
+        CATALOG[_rec.get("id") or _f.stem] = _rec
+    except (OSError, ValueError) as _e:
+        print(f"catalog: {_f.name} did not load: {_e}", file=sys.stderr)
+UPDATES_FILE = LOG_DIR / "updates.json"
+try:
+    UPDATES: dict[str, dict] = json.loads(UPDATES_FILE.read_text(encoding="utf-8")) if UPDATES_FILE.exists() else {}
+except (OSError, ValueError):
+    UPDATES = {}
+
+
+def updatable(uid: str) -> tuple[dict, str] | tuple[None, None]:
+    """(entry, 'engine'|'client') for an id the update ops may act on."""
+    if uid in INV.engine_by_id:
+        return INV.engine_by_id[uid], "engine"
+    if uid in INV.clients:
+        return INV.clients[uid], "client"
+    return None, None
+
+
+def recipe_for(entry: dict) -> dict:
+    kind = entry.get("kind") or entry.get("id")
+    base = (CATALOG.get(kind) or {}).get("update") or {}
+    return {**base, **(entry.get("update") or {})}
+
+
+def update_ctx(entry: dict, role: str) -> dict:
+    py = entry.get("python")
+    if not py and entry.get("version_cmd") and "python" in str(entry["version_cmd"][0]).lower():
+        py = entry["version_cmd"][0]
+    installed = engine_version(entry) if role == "engine" else (engine_version(entry) if entry.get("version_cmd") else entry.get("version"))
+    return {"id": entry["id"], "name": entry.get("name", entry["id"]), "root": entry.get("root"), "python": py, "exe": entry.get("exe"),
+            "installed": installed, "backup_root": entry.get("backup_root") or str(LOG_DIR / "update-backups")}
+
+
+def remember_update(uid: str, rec: dict) -> None:
+    UPDATES[uid] = {**rec, "checked_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    try:
+        UPDATES_FILE.write_text(json.dumps(UPDATES, indent=2) + "\n", encoding="utf-8", newline="\n")
+    except OSError:
+        pass
 
 
 INV = Inventory()
@@ -532,8 +586,21 @@ class State:
         snap["engines"] = {}
         for e in INV.engines:
             mine = [i for sid, i in snap["servers"].items() if INV.servers[sid]["engine"] == e["id"]]
+            rp = recipe_for(e)
             snap["engines"][e["id"]] = {"version": engine_version(e), "slot": e["slot"], "units": len(mine),
-                                        "up": sum(1 for i in mine if i.get("up")), "loaded": sum(1 for i in mine if i.get("loaded"))}
+                                        "up": sum(1 for i in mine if i.get("up")), "loaded": sum(1 for i in mine if i.get("loaded")),
+                                        "recipe": rp.get("recipe") or "none", "recipe_note": rp.get("note")}
+        snap["clients"] = {}
+        for c in INV.clients.values():
+            rp = recipe_for(c)
+            ports = []
+            for b in c.get("bindings") or []:
+                m = re.search(r":(\d+)(?:/|$)", str(b.get("url", "")))
+                if m:
+                    ports.append(int(m.group(1)))
+            snap["clients"][c["id"]] = {"version": engine_version(c) if c.get("version_cmd") else c.get("version"), "ports": sorted(set(ports)),
+                                        "recipe": rp.get("recipe") or "none", "recipe_note": rp.get("note")}
+        snap["updates"] = dict(UPDATES)
         with self.lock:
             self.snapshot = snap
         return snap
@@ -1038,6 +1105,76 @@ def op_stop_all(p: Plan):
     for sid in ups:
         p.check()
         op_stop_process(p, sid)
+
+
+def op_check_update(p: Plan):
+    """Ask the engine's or client's recipe whether something newer exists. Network, on this click only."""
+    entry, role = updatable(p.target)
+    if not entry:
+        raise PlanFailed("unknown engine or client")
+    rp, ctx = recipe_for(entry), update_ctx(entry, role)
+    st = p.step(f"Check {ctx['name']} for an update", f"recipe {rp.get('recipe') or 'none'}")
+    r = updaters.check(rp, ctx)
+    remember_update(p.target, r)
+    if not r.get("ok"):
+        raise PlanFailed(r.get("error") or "check failed")
+    if r.get("available"):
+        p.done_step(st, f"{r.get('installed') or '?'} -> {r.get('latest')}" + (" (Update applies it)" if r.get("can_apply") else " (by hand)"))
+    elif r.get("available") is None:
+        p.done_step(st, r.get("note") or "no comparison possible")
+    else:
+        p.done_step(st, f"{r.get('installed') or '?'} is current")
+
+
+def op_apply_update(p: Plan):
+    """Move an engine or client to the version the last check found: back up, apply, verify, roll back on failure."""
+    if not p.args.get("confirm"):
+        raise PlanFailed("apply_update changes an installation: send confirm=true")
+    entry, role = updatable(p.target)
+    if not entry:
+        raise PlanFailed("unknown engine or client")
+    rp, ctx = recipe_for(entry), update_ctx(entry, role)
+    last = UPDATES.get(p.target) or {}
+    if role == "engine":
+        up = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and STATE.get()["servers"].get(sid, {}).get("up")]
+        if up:
+            raise PlanFailed(f"stop {entry.get('name', p.target)}'s running units first: {', '.join(up)}")
+    if not last.get("can_apply") and (rp.get("recipe") not in ("self",)):
+        raise PlanFailed("run Check first; this recipe can be applied only from a check that found a newer version")
+    st = p.step(f"Update {ctx['name']}", f"{last.get('installed') or ctx.get('installed') or '?'} -> {last.get('latest') or 'its own newest'} ({rp.get('recipe')})")
+    r = updaters.apply(rp, ctx, last.get("latest"))
+    if r.get("backup"):
+        p.say(st, f"backup: {r['backup']}")
+    if not r.get("ok"):
+        if r.get("code_updated") and r.get("backup"):
+            p.say(st, "the update broke part way; rolling back")
+            rb = updaters.rollback(rp, ctx, r["backup"])
+            p.say(st, f"rollback: {'ok' if rb.get('ok') else rb.get('error')}")
+        raise PlanFailed(r.get("error") or "update failed")
+    _ENGINE_VER.pop(p.target, None)
+    probed = any(entry.get(k) for k in ("version_cmd", "version_file", "version_url"))
+    after = update_ctx(entry, role).get("installed") if probed else (r.get("after") or last.get("latest") or ctx.get("installed"))
+    remember_update(p.target, {**last, "installed": after, "available": False, "applied_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backup": r.get("backup")})
+    p.done_step(st, f"now {after or r.get('after') or '?'}" + (f"; {r['note']}" if r.get("note") else ""))
+
+
+def op_rollback_update(p: Plan):
+    if not p.args.get("confirm"):
+        raise PlanFailed("rollback_update changes an installation: send confirm=true")
+    entry, role = updatable(p.target)
+    if not entry:
+        raise PlanFailed("unknown engine or client")
+    rp, ctx = recipe_for(entry), update_ctx(entry, role)
+    last = UPDATES.get(p.target) or {}
+    if not last.get("backup"):
+        raise PlanFailed("no backup recorded for the last update")
+    st = p.step(f"Roll back {ctx['name']}", str(last["backup"]))
+    r = updaters.rollback(rp, ctx, last["backup"])
+    if not r.get("ok"):
+        raise PlanFailed(r.get("error") or "rollback failed")
+    _ENGINE_VER.pop(p.target, None)
+    remember_update(p.target, {**last, "installed": update_ctx(entry, role).get("installed"), "backup": None, "rolled_back_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+    p.done_step(st, r.get("note") or "done")
 
 
 def op_start(p: Plan):
@@ -2104,7 +2241,8 @@ OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_
        "set_budget": op_set_budget, "start_shim": op_start_shim, "stop_shim": op_stop_shim, "preset": op_preset,
        "owui_start": op_owui_start, "owui_stop": op_owui_stop, "owui_update": op_owui_update,
        "comfy_start": op_comfy_start, "comfy_stop": op_comfy_stop, "comfy_free": op_comfy_free,
-       "art_batch": op_art_batch, "comfy_update": op_comfy_update, "comfy_rollback": op_comfy_rollback}
+       "art_batch": op_art_batch, "comfy_update": op_comfy_update, "comfy_rollback": op_comfy_rollback,
+       "check_update": op_check_update, "apply_update": op_apply_update, "rollback_update": op_rollback_update}
 
 STATE = State()
 PLANS = Plans()
@@ -2209,6 +2347,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, INV.public())
         if path == "/api/presets":
             return self._json(200, presets_public())
+        if path == "/api/catalog":
+            return self._json(200, {"catalog": CATALOG})
         if path == "/api/plans":
             with PLANS.lock:
                 return self._json(200, {"current": PLANS.current.public() if PLANS.current else None, "recent": PLANS.recent[::-1]})

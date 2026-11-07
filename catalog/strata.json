@@ -1,0 +1,37 @@
+{
+  "id": "strata",
+  "name": "Strata",
+  "what": "A Python-fronted inference server with its own engine binary, built for long context on consumer cards: a model loads on request or at start, unloads through its API, and keeps a configuration file per served model.",
+  "licence": "see upstream",
+  "home": "https://github.com/Niko1221/Strata",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux"],
+  "detect": {
+    "executables": ["strata"],
+    "roots": ["~/Strata", "~/AppData/Local/Strata", "~/AppData/Local/Programs/Strata"],
+    "configs": "strata-*.json",
+    "launchers": "run-*.bat",
+    "launch_presets": "~/AppData/Local/Strata/launch/*.json",
+    "ports": [8080],
+    "health": "/health",
+    "version": {"cmd": ["<python>", "<root>/strata.py", "--version"]}
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health (loaded)", "load": "POST /v1/load", "unload": "POST /v1/unload?wait=N", "metrics": "GET /metrics"},
+    "can": ["start a unit from its launcher", "load and unload through the API", "stop the process", "park a unit that would load on any request", "run a launch-namespace preset as a unit of its own (strata launch --preset)"],
+    "cannot": ["change a unit's context without editing its configuration file"]
+  },
+  "launch": {"argv": ["<python>", "<root>/serve/server.py", "--engine", "strata", "--config", "<strata-name.json>", "--port", "<port>"]},
+  "update": {
+    "recipe": "git-pull-pip-e",
+    "note": "Updates the Python side of a checkout (git pull --ff-only, pip install -e .). The engine binary under engine/ is a separate build or download: when the check says the engine changed, rebuild or refetch it by hand. A custom build should override this with git-check."
+  },
+  "install": {
+    "all": ["git clone https://github.com/Niko1221/Strata", "python -m venv .venv && .venv/Scripts/pip install -e . (Scripts/ is bin/ on Linux)", "Follow upstream for the engine binary that matches your card.", "Write a strata-<name>.json per model (upstream's examples), and a run-<name>.bat that calls serve/server.py with it."]
+  },
+  "fits": {
+    "good": ["one large model resident at very long context", "models the engine has a route for, at quants the card can hold"],
+    "not": ["many small models coming and going: Ollama does that", "a model the engine has no route for: llama.cpp will"]
+  }
+}

@@ -60,6 +60,16 @@ h2.toggle { cursor: pointer; user-select: none; }
 .band-tools { position: relative; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--fg3); white-space: nowrap; }
 .band-tools .ver { font-family: var(--mono); color: var(--fg2); }
 .band-tools .ver:empty, .band-tools .cnt:empty { display: none; }
+.ver.newer { color: var(--warn); }
+/* the clients strip and the "used by" line on a unit */
+.clients { display: flex; flex-wrap: wrap; gap: 8px; }
+.client { display: flex; align-items: center; gap: 10px; background: var(--bg2); border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px 6px 12px; font-size: 12px; }
+.client .cl-name { font-weight: 600; }
+.client .ver { font-family: var(--mono); color: var(--fg2); font-size: 11px; }
+.client .cl-uses { color: var(--fg3); font-family: var(--mono); font-size: 11px; }
+.client .cl-uses:empty { display: none; }
+.client .band-tools { gap: 0; }
+.c-used { font-size: 11px; color: var(--fg3); }
 .band-menu { padding: 0 7px; line-height: 18px; }
 .menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 190px; display: flex; flex-direction: column; gap: 2px;
   background: var(--bg2); border: 1px solid var(--line2); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px -8px rgba(0,0,0,.6); }
