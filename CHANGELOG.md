@@ -13,6 +13,9 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
 - llama.cpp's version is read so that it compares with its release tags, which are now `v0.x.y`.
 - `qm` reads its key on first use (so `qm setup` works on a fresh clone) and honours `QM_HOME` and `QM_PORT`.
 - `quartermaster.service`, which setup writes with local paths, is ignored by git.
+- A `pnpm-global` update recipe beside `npm-global`. Setup and detect choose it for a client whose executable
+  is pnpm's global shim for its package; either recipe refuses to apply to a package its manager does not
+  list as global, rather than install a second copy.
 
 ## 0.1.0 - 2026-11-07
 

@@ -572,7 +572,47 @@ def client(cid: str, name: str, exe: str | None, cfg: Path | None, bindings: lis
         c["config"] = str(cfg)
     if bindings:
         c["bindings"] = bindings
+    u = node_update(cid, exe)
+    if u:
+        c["update"] = u
     return c
+
+
+def pnpm_owns(exe: str, pkg: str) -> bool:
+    """exe is pnpm's global shim for pkg: it sits in pnpm's global bin dir, pnpm lists the package, and the
+    package names exe among its bins. The dir alone proves nothing: ~/.local/bin is also where native
+    installers (Claude Code's) put their programs."""
+    pm = which("pnpm")
+    if not pm:
+        return False
+    rc, o, _ = run([pm, "bin", "-g"], timeout=20)
+    bindir = o.strip().splitlines()[-1].strip() if rc == 0 and o.strip() else ""
+    same = lambda a: os.path.normcase(os.path.realpath(a))
+    if not bindir or same(os.path.dirname(exe)) != same(bindir):
+        return False
+    rc, o, _ = run([pm, "ls", "-g", pkg, "--json", "--depth=0"], timeout=60)
+    try:
+        roots = json.loads(o or "[]")
+    except ValueError:
+        return False
+    for r in roots if isinstance(roots, list) else [roots]:
+        d = ((r or {}).get("dependencies") or {}).get(pkg)
+        if d is None:
+            continue
+        bins = (load_json(Path(d.get("path") or "") / "package.json") or {}).get("bin") if d.get("path") else None
+        if bins is None:
+            return True                                  # listed, bins unreadable: the dir and the listing decide
+        names = set(bins) if isinstance(bins, dict) else {pkg.split("/")[-1]}
+        return (Path(exe).stem if WIN else Path(exe).name) in names
+    return False
+
+
+def node_update(cid: str, exe: str) -> dict | None:
+    """The update block for a client whose kind updates through npm but which pnpm installed; None otherwise."""
+    rec = (load_json(ROOT / "catalog" / f"{cid}.json") or {}).get("update") or {}
+    if rec.get("recipe") == "npm-global" and rec.get("package") and pnpm_owns(exe, rec["package"]):
+        return {"recipe": "pnpm-global", "note": f"installed through pnpm: pnpm view for the newest version, pnpm add -g {rec['package']}@<version> to move; the previous version is recorded and restorable."}
+    return None
 
 
 def local_url(u: str) -> bool:
@@ -677,7 +717,8 @@ def show(hf: dict, found: dict) -> None:
         print("\nClients")
         for c in found["clients"]:
             b = ", ".join(x["url"].split("//")[1].split("/")[0] for x in c.get("bindings", []))
-            print(f"  {c['id']:<8} {c['version'] or '?':<10} {('-> ' + b) if b else ''}")
+            via = " (pnpm)" if (c.get("update") or {}).get("recipe") == "pnpm-global" else ""
+            print(f"  {c['id']:<8} {(c['version'] or '?') + via:<10} {('-> ' + b) if b else ''}")
     if found["notes"]:
         print("\nNotes")
         for n in found["notes"]:
@@ -821,9 +862,11 @@ def do_detect(home: Path) -> int:
     new_u = [u for u in found["units"] if u["id"] not in have_u and unit_key(u) not in have_k]
     new_s = {k: s for k, s in found["services"].items() if k not in inv}
     new_c = [c for c in found["clients"] if c["id"] not in have_c]
+    # a listed client installed by another manager than its kind's recipe assumes (pnpm, not npm)
+    re_c = [(c, x["update"]) for c in inv.get("clients", []) for x in found["clients"] if x["id"] == c["id"] and x.get("update") and not c.get("update")]
     for n in found["notes"]:
         print(f"  - {n}")
-    if not (new_e or new_u or new_s or new_c):
+    if not (new_e or new_u or new_s or new_c or re_c):
         print("nothing new: the inventory already has everything detection can see")
         return 0
     changed = False
@@ -842,6 +885,9 @@ def do_detect(home: Path) -> int:
     for c in new_c:
         if ask(f"Add client {c['id']} ({c['version'] or '?'})?", True):
             inv.setdefault("clients", []).append(c); changed = True
+    for c, upd in re_c:
+        if ask(f"Update client {c['id']} through {upd['recipe'].split('-')[0]}, which installed it?", True):
+            c["update"] = upd; changed = True
     if not changed:
         print("nothing added")
         return 0

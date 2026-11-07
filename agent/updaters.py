@@ -11,7 +11,7 @@ failure (ok False and an error instead):
 ctx: {"id", "name", "root", "python", "exe", "installed", "backup_root", "log"} as far as known.
 
 Every check runs because someone clicked; nothing here is scheduled. A check may reach the network
-(npm, PyPI, GitHub, winget, git fetch): that is the click. Nothing is ever piped into a shell.
+(npm or pnpm, PyPI, GitHub, winget, git fetch): that is the click. Nothing is ever piped into a shell.
 Stdlib only. Written 2026-11-06 (Faber)."""
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from pathlib import Path
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1", PIP_NO_COLOR="1", PIP_PROGRESS_BAR="off", NO_COLOR="1")
 VER_RE = re.compile(r"\d+\.\d+(?:\.\d+)*(?:[-+.][0-9A-Za-z.]+)?")
-RECIPES = ("npm-global", "pip", "winget", "git-pull-pip-e", "git-check", "github-release", "self", "script", "comfy", "driver", "none")
+RECIPES = ("npm-global", "pnpm-global", "pip", "winget", "git-pull-pip-e", "git-check", "github-release", "self", "script", "comfy", "driver", "none")
 
 
 def sh(args, cwd=None, timeout=600):
@@ -65,42 +65,61 @@ def result(ok=True, **kw) -> dict:
     return dict(ok=ok, **kw)
 
 
-# ---- npm-global ----------------------------------------------------------------------------
+# ---- npm-global, pnpm-global ----------------------------------------------------------------
+# One package, two managers. A package the manager does not list as global is not applied: installing it
+# would put a second copy beside the one on PATH (a pnpm install moved with npm, or the reverse).
 
-def npm_installed(pkg: str) -> str | None:
-    rc, o, _ = sh([which("npm") or "npm", "ls", "-g", pkg, "--json", "--depth=0"], timeout=120)
+NODE_PM = {"npm-global": "npm", "pnpm-global": "pnpm"}
+
+
+def node_installed(pm: str, pkg: str) -> str | None:
+    rc, o, _ = sh([which(pm) or pm, "ls", "-g", pkg, "--json", "--depth=0"], timeout=120)
     try:
-        return (json.loads(o or "{}").get("dependencies") or {}).get(pkg, {}).get("version")
+        d = json.loads(o or "{}")
     except ValueError:
         return None
+    for root in d if isinstance(d, list) else [d]:      # npm prints one root, pnpm a list of them
+        v = (((root or {}).get("dependencies") or {}).get(pkg) or {}).get("version")
+        if v:
+            return v
+    return None
 
 
 def npm_check(recipe, ctx):
-    pkg = recipe.get("package")
+    pm, pkg = NODE_PM[recipe["recipe"]], recipe.get("package")
     if not pkg:
-        return result(False, error="npm-global needs a package name")
-    installed = npm_installed(pkg) or ctx.get("installed")
-    rc, o, e = sh([which("npm") or "npm", "view", pkg, "version"], timeout=120)
+        return result(False, error=f"{recipe['recipe']} needs a package name")
+    if not which(pm):
+        return result(False, installed=ctx.get("installed"), error=f"{pm} is not installed here; if another manager installed {pkg}, set the entry's update recipe to it")
+    listed = node_installed(pm, pkg)
+    rc, o, e = sh([which(pm), "view", pkg, "version"], timeout=120)
     if rc:
-        return result(False, installed=installed, error=f"npm view failed: {(e or o).strip()[-200:]}")
+        return result(False, installed=listed or ctx.get("installed"), error=f"{pm} view failed: {(e or o).strip()[-200:]}")
     latest = o.strip().splitlines()[-1].strip() if o.strip() else None
-    return result(installed=installed, latest=latest, available=newer(latest, installed), can_apply=True, note=f"npm i -g {pkg}@{latest}")
+    if not listed:
+        return result(installed=ctx.get("installed"), latest=latest, available=newer(latest, ctx.get("installed")), can_apply=False,
+                      note=f"{pm} does not list {pkg} as global, so an update through it would add a second copy; set the entry's update recipe to the manager that installed it")
+    verb = "add" if pm == "pnpm" else "i"
+    return result(installed=listed, latest=latest, available=newer(latest, listed), can_apply=True, note=f"{pm} {verb} -g {pkg}@{latest}")
 
 
 def npm_apply(recipe, ctx, latest):
-    pkg = recipe["package"]
-    before = npm_installed(pkg)
-    rc, o, e = sh([which("npm") or "npm", "i", "-g", f"{pkg}@{latest}"], timeout=900)
+    pm, pkg = NODE_PM[recipe["recipe"]], recipe["package"]
+    before = node_installed(pm, pkg)
+    if not before:
+        return result(False, error=f"{pm} does not list {pkg} as global; not installing a second copy")
+    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{pkg}@{latest}"], timeout=900)
     if rc:
-        return result(False, before=before, error=f"npm install failed: {(e or o).strip()[-300:]}")
-    after = npm_installed(pkg)
+        return result(False, before=before, error=f"{pm} install failed: {(e or o).strip()[-300:]}")
+    after = node_installed(pm, pkg)
     return result(backup={"package": pkg, "version": before}, before=before, after=after, note=(o + e).strip()[-200:])
 
 
 def npm_rollback(recipe, ctx, backup):
     if not backup or not backup.get("version"):
         return result(False, error="no previous version recorded")
-    rc, o, e = sh([which("npm") or "npm", "i", "-g", f"{backup['package']}@{backup['version']}"], timeout=900)
+    pm = NODE_PM[recipe["recipe"]]
+    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{backup['package']}@{backup['version']}"], timeout=900)
     return result(rc == 0, note=(e or o).strip()[-200:])
 
 
@@ -326,11 +345,11 @@ def script_rollback(recipe, ctx, backup):
 
 # ---- dispatch ---------------------------------------------------------------------------------
 
-CHECK = {"npm-global": npm_check, "pip": pip_check, "winget": winget_check, "git-pull-pip-e": git_check, "git-check": git_check,
+CHECK = {"npm-global": npm_check, "pnpm-global": npm_check, "pip": pip_check, "winget": winget_check, "git-pull-pip-e": git_check, "git-check": git_check,
          "github-release": github_check, "self": self_check, "script": script_check}
-APPLY = {"npm-global": npm_apply, "pip": pip_apply, "winget": winget_apply, "git-pull-pip-e": git_pull_apply,
+APPLY = {"npm-global": npm_apply, "pnpm-global": npm_apply, "pip": pip_apply, "winget": winget_apply, "git-pull-pip-e": git_pull_apply,
          "github-release": self_apply, "self": self_apply, "script": script_apply}
-ROLLBACK = {"npm-global": npm_rollback, "pip": pip_rollback, "git-pull-pip-e": git_rollback, "script": script_rollback}
+ROLLBACK = {"npm-global": npm_rollback, "pnpm-global": npm_rollback, "pip": pip_rollback, "git-pull-pip-e": git_rollback, "script": script_rollback}
 
 
 def check(recipe: dict, ctx: dict) -> dict:

@@ -182,6 +182,7 @@ pins, boot test, roll back by itself) is the pattern. It generalises to `updater
 | `git-pull-pip-e` | `git fetch`, compare tags | `git pull`, `pip install -e .` | head + freeze | start, probe `/health` |
 | `pip` | `pip index versions` | `pip install -U` | freeze | import or `--version` |
 | `npm-global` | `npm view <pkg> version` | `npm i -g <pkg>` | current version | `--version` |
+| `pnpm-global` | `pnpm view <pkg> version` | `pnpm add -g <pkg>` | current version | `--version` |
 | `winget` | `winget upgrade --id` | same | installed version | `--version` |
 | `script` | owner's script, `--check` | owner's script | owner's | owner's |
 
@@ -195,7 +196,9 @@ button is a check and a nudge. A recipe that cannot roll back says so before it 
 engine's units must be down; a failure part-way rolls back when a backup exists) and `rollback_update`.
 The last result per id lives in `logs/updates.json` and rides in the state as `updates`. A rewritten
 upstream (tags that would clobber) is tolerated: branches are compared, tags noted as not comparable.
-Verified on the workstation: checks for Pi (npm), Claude Code (self), Ollama (GitHub), Strata and Maya
+Both node recipes refuse a package their manager does not list as global (it would be a second copy beside
+the one on PATH); setup and detect write `pnpm-global` for a client whose executable is pnpm's global shim
+for that package (2026-11-07). Verified on the workstation: checks for Pi (npm), Claude Code (self), Ollama (GitHub), Strata and Maya
 (git fetch); apply and rollback end to end on a `script` recipe against a scratch home. Not run: an
 apply on a real engine or client.
 

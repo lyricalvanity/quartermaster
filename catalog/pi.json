@@ -17,7 +17,7 @@
   "update": {
     "recipe": "npm-global",
     "package": "@earendil-works/pi-coding-agent",
-    "note": "npm view for the newest version, npm i -g <package>@<version> to move; the previous version is recorded and restorable."
+    "note": "npm view for the newest version, npm i -g <package>@<version> to move; the previous version is recorded and restorable. Setup writes pnpm-global instead when pnpm installed it."
   },
   "install": {
     "all": ["npm i -g @earendil-works/pi-coding-agent", "Add your servers to ~/.pi/agent/models.json as providers with a baseUrl on 127.0.0.1."]

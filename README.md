@@ -132,11 +132,12 @@ counts and has a menu: stop every unit of that engine, and the update entries be
 and drive it, its update recipe, how to install it, what it fits); it ships with the code and `git pull`
 is how it updates. An engine or client takes its **update recipe** from its kind's record unless its
 inventory entry overrides it (`"update": {"recipe": "git-check"}` for a custom build). Recipes:
-`npm-global`, `pip`, `winget`, `git-pull-pip-e`, `git-check`, `github-release`, `self`, `script`, `comfy`,
-`driver`, `none` (`catalog/README.md`).
+`npm-global`, `pnpm-global`, `pip`, `winget`, `git-pull-pip-e`, `git-check`, `github-release`, `self`,
+`script`, `comfy`, `driver`, `none` (`catalog/README.md`). Setup writes `pnpm-global` for a client that pnpm
+installed although its kind's record says npm.
 
 Every band and every client chip has **Check for an update** in its menu. That click is the only time
-Quartermaster reaches the network (npm, PyPI, GitHub, winget, `git fetch`); nothing checks on a schedule.
+Quartermaster reaches the network (npm or pnpm, PyPI, GitHub, winget, `git fetch`); nothing checks on a schedule.
 A check that finds a newer version shows it on the badge (`0.40.14 ↑ 0.40.15`) and, where the recipe can
 apply it, an **Update to …** entry behind a confirmation: a backup where the recipe keeps one, apply,
 verify, and a roll-back entry afterwards. An engine's units must be stopped first. A `git-check` or

@@ -18,7 +18,8 @@ run time. See SPEC.md section 7a.
 | `fits` | what it is good for and what it is not |
 | `platforms` | where the record applies |
 
-Recipes (`agent/updaters.py`): `npm-global`, `pip`, `winget`, `git-pull-pip-e`, `git-check` (check only),
+Recipes (`agent/updaters.py`): `npm-global` and `pnpm-global` (either refuses a package its manager does not
+list as global, which would be a second copy), `pip`, `winget`, `git-pull-pip-e`, `git-check` (check only),
 `github-release` (check against the newest release; apply only when the record names a `self_cmd`),
 `self` (the program updates itself; apply runs its own command), `script` (the owner's script, `--check`
 then apply), `comfy` (the ComfyUI procedure in `comfy_update.py`), `driver` (the service's own driver),
