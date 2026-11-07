@@ -595,6 +595,71 @@
     return { id: slug(`${main}-${hhmm}`), name: `${main} arrangement`, desc: `saved from the dashboard ${stamp.toLocaleString()}`, steps };
   }
 
+  // ---- the catalog panel: what is installed and its tier, suggestions from the agent's rules, a scan on a click, guides ----
+  let CATALOG = null;
+  function guideShow(rec) {
+    const b = $("#guide-body"); b.innerHTML = "";
+    const h = (t) => b.appendChild(el("h3", null, t));
+    const p = (t, cls) => { const e = el("p", cls || null, t); b.appendChild(e); return e; };
+    const list = (items) => { const u = el("ul"); for (const i of items || []) { const li = el("li"); li.appendChild(looksLikeCommand(i) ? el("code", null, i) : document.createTextNode(i)); u.appendChild(li); } b.appendChild(u); };
+    $("#guide-title").textContent = `${rec.name}  ·  tier ${rec.tier}, ${rec.role}`;
+    p(rec.what);
+    p(`Licence: ${rec.licence || "?"}   ·   ${rec.home || ""}`, "lic");
+    if (rec.fits) { h("Fits"); list((rec.fits.good || []).map((x) => "good for: " + x)); list((rec.fits.not || []).map((x) => "not for: " + x)); }
+    if (rec.install) { for (const [plat, steps] of Object.entries(rec.install)) { h(`Install · ${plat}`); list(steps); } }
+    if (rec.drive) { h("What Quartermaster does with it"); list((rec.drive.can || []).map((x) => "can: " + x)); list((rec.drive.cannot || []).map((x) => "cannot: " + x)); }
+    if (rec.launch) { h("Launch"); if (rec.launch.argv) p(rec.launch.argv.join(" ")).className = "mono"; if (rec.launch.never) list(rec.launch.never.map((x) => "never: " + x)); if (rec.launch.note) p(rec.launch.note); }
+    if (rec.update) { h("Update"); p(`recipe ${rec.update.recipe}${rec.update.package ? " · " + rec.update.package : ""}${rec.update.github ? " · github " + rec.update.github : ""}`); if (rec.update.note) p(rec.update.note); }
+    if (rec.detect) { h("How it is found"); p(Object.entries(rec.detect).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("  ·  ")); }
+    $("#guide-modal").hidden = false;
+  }
+  function looksLikeCommand(s) { return /^(git |npm |pip |python |winget |docker |cmake |ollama |llama-server |venv|\.venv|\S+\.(bat|sh|exe)\b|[A-Za-z]:\\|\/usr\/)/.test(s) || /^[a-z0-9_.\/-]+( [-\w.\/:=<>"'\\@]+)+$/.test(s) && s.length < 90 && !/[.!?]$/.test(s); }
+  function catRow(name, tier, ver, rec) {
+    const r = el("div", "cat-row");
+    r.appendChild(el("span", "tier", tier || "?"));
+    r.appendChild(el("span", "nm", name));
+    if (ver) r.appendChild(el("span", "ver", ver));
+    r.appendChild(el("span", "spacer"));
+    if (rec) { const g = el("button", "btn small ghost", "guide"); g.onclick = () => guideShow(rec); r.appendChild(g); }
+    return r;
+  }
+  async function loadCatalog() {
+    try { CATALOG = (await api("/api/catalog")).catalog; } catch (e) { $("#cat-status").textContent = "no catalog"; return; }
+    const box = $("#cat-installed"); box.innerHTML = "";
+    const seen = new Set();
+    const rowFor = (kind, name, ver) => { const rec = CATALOG[kind]; seen.add(kind); box.appendChild(catRow(name, rec && rec.tier, ver, rec)); };
+    for (const e of INV.engines || []) rowFor(e.kind, e.name, (STATE && STATE.engines && STATE.engines[e.id] || {}).version);
+    if (INV.openwebui) rowFor("openwebui", INV.openwebui.name || "OpenWebUI", STATE && STATE.openwebui && STATE.openwebui.version);
+    if (INV.comfyui) rowFor("comfyui", INV.comfyui.name || "ComfyUI", STATE && STATE.comfyui && STATE.comfyui.version);
+    for (const c of INV.clients || []) rowFor(c.id, c.name || c.id, (STATE && STATE.clients && STATE.clients[c.id] || {}).version);
+    const rest = Object.values(CATALOG).filter((r) => !seen.has(r.id));
+    if (rest.length) { box.appendChild(el("div", "cat-sub", "Known, not installed here")); for (const r of rest) box.appendChild(catRow(r.name, r.tier, "", r)); }
+    $("#cat-status").textContent = `${seen.size} of ${Object.keys(CATALOG).length} kinds`;
+    await loadSuggestions();
+  }
+  async function loadSuggestions() {
+    let s = [];
+    try { s = (await api("/api/suggestions")).suggestions || []; } catch (e) { return; }
+    const box = $("#cat-sugg"); box.innerHTML = "";
+    $("#cat-sugg-head").hidden = !s.length;
+    for (const x of s) { const d = el("div", "cat-sugg"); d.appendChild(el("div", "t", x.title)); d.appendChild(el("div", "w", x.why)); d.appendChild(el("div", "h", x.how)); box.appendChild(d); }
+    if (!s.length) box.appendChild(el("div", "cat-note", "nothing to suggest: the inventory satisfies every rule"));
+  }
+  async function runScan() {
+    const b = $("#cat-scan"); b.disabled = true; b.textContent = "scanning…";
+    try {
+      const r = await api("/api/scan", { by: "ui" });
+      const box = $("#cat-scan-out"); box.innerHTML = ""; $("#cat-scan-head").hidden = false;
+      for (const u of r.units) box.appendChild(el("div", "cat-note", `unit ${u.id} (${u.engine} :${u.port}${u.running ? ", running" : ""})`));
+      for (const c of r.clients) box.appendChild(el("div", "cat-note", `client ${c.id} ${c.version || ""}`));
+      for (const e of r.engines) box.appendChild(el("div", "cat-note", `engine ${e}`));
+      for (const s of r.services) box.appendChild(el("div", "cat-note", `service ${s}`));
+      if (!(r.units.length || r.clients.length || r.engines.length || r.services.length)) box.appendChild(el("div", "cat-note", "the roster has everything detection can see"));
+      else box.appendChild(el("div", "cat-note", "`qm detect` adds what you choose; nothing was written"));
+      for (const n of r.notes || []) box.appendChild(el("div", "cat-note", "· " + n));
+    } catch (e) { toast(e.message, "bad"); } finally { b.disabled = false; b.textContent = "scan"; }
+  }
+
   // ---- render ----
   function render(st) {
     STATE = st;
@@ -743,6 +808,7 @@
       lastPlanId = p.id;
       toast(`${p.op} ${p.target || ""}: ${p.status}${p.error ? " — " + p.error : ""}`, p.status === "done" ? "ok" : "bad");
       loadHistory();
+      if (CATALOG && /update|preset|reload/.test(p.op)) loadSuggestions();     // a check or a preset may change what there is to suggest
     }
     if (p.status === "running") lastPlanId = null;
   }
@@ -975,13 +1041,16 @@
     document.addEventListener("click", closeMenus);
     $("#preset-new").onclick = () => openPresetEditor(null);
     $("#preset-snap").onclick = () => openPresetEditor(snapshotPreset(), true);
+    $("#cat-scan").onclick = runScan;
+    $("#guide-close").onclick = () => { $("#guide-modal").hidden = true; };
+    loadCatalog();
     $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", `Unloads every resident model (${(INV.engines || []).map((e) => e.name).join(", ")})${INV.comfyui ? " and asks ComfyUI to drop its models" : ""}. Servers stay up.`, "killall")) action("unload_all"); };
     $("#plan-cancel").onclick = () => api("/api/plans/current/cancel", {}).then(() => toast("cancel requested")).catch((e) => toast(e.message, "bad"));
     $("#hist-refresh").onclick = loadHistory;
     $("#log-close").onclick = () => { $("#log-modal").hidden = true; logServer = null; };
     $("#log-refresh").onclick = refreshLog;
     $("#log-filter").onkeydown = (e) => { if (e.key === "Enter") refreshLog(); };
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; $("#preset-modal").hidden = true; closeMenus(); } });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; $("#preset-modal").hidden = true; $("#guide-modal").hidden = true; closeMenus(); } });
     loadHistory();
     connect();
     setInterval(() => { if (!$("#log-modal").hidden) refreshLog(); }, 4000);

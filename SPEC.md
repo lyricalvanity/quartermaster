@@ -223,6 +223,16 @@ owner's yes, with pinned sources and never a piped shell script. The page's Cata
 kinds with their tier, suggestions with their one-line reason, and a Guide button per entry; no install
 button in the first cut.
 
+**(built 2026-11-06.)** `GET /api/catalog`, `GET /api/suggestions` (the rules in `suggestions()`: no
+engine for a card; engines with no front end or client; ComfyUI without the art block; several models and
+few presets; a client's port nothing serves; units without a footprint; engines without a version source;
+an update a check found) and `POST /api/scan` (runs `setup.detect_all` once, on the click, and returns what
+the roster lacks; logged; writes nothing). The panel shows installed kinds with tier and version, the
+known-but-absent kinds, suggestions with why and how, the scan's findings, and a guide modal rendered from
+the record. `qm suggest` and `qm scan` are the terminal forms. Detectors reading their conventions from the
+catalog records, rather than from code, is still to do: the records describe the conventions, `setup.py`
+still implements them.
+
 ## 8. The page
 
 The card grid stays as it is. What changes is above and around it.
@@ -295,7 +305,7 @@ Each stage leaves the original workstation working.
 | 4 | Preset editor and Save-current; `presets.json` | **done 2026-11-06** |
 | 5 | Updaters as catalog recipes, and the clients strip with bindings | **done 2026-11-06** |
 | 6 | Platform module and the Linux implementation | **done 2026-11-06** (WSL-tested; a real Linux host still owed) |
-| 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | next |
+| 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | **done 2026-11-06** (panel, suggestions, scan, guides); detectors-from-records still to do |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |
 
 ## 12. Decisions taken (2026-11-06)

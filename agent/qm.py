@@ -2,6 +2,7 @@
 
   qm setup | detect [--yes]      find what this machine runs and write the inventory (setup.py; no agent needed)
   qm status                      who holds the card, every server's state
+  qm suggest | scan              what the inventory could use; what detection sees that the roster lacks
   qm resident <id> [--force]     make <id> the resident model (unloads the others first)
   qm unload <id> | all           give the card back
   qm start <id>                  start a server (its model loads at start)
@@ -171,6 +172,33 @@ def main(argv):
     rest = [r for r in rest if r != "--force"]
     if cmd == "status":
         return status()
+    if cmd == "suggest":
+        _, r = call("GET", "/api/suggestions")
+        for s in r.get("suggestions", []):
+            print(f"- {s['title']}\n    why: {s['why']}\n    how: {s['how']}")
+        if not r.get("suggestions"):
+            print("nothing to suggest")
+        return 0
+    if cmd == "scan":
+        _, r = call("POST", "/api/scan", {"by": "cli"})
+        if "error" in r:
+            print(r["error"])
+            return 1
+        for n in r.get("notes", []):
+            print(f"  - {n}")
+        for u in r["units"]:
+            print(f"  unit not in the roster: {u['id']} ({u['engine']} :{u['port']}){' running' if u['running'] else ''}")
+        for c in r["clients"]:
+            print(f"  client not in the roster: {c['id']} {c.get('version') or ''}")
+        for e in r["engines"]:
+            print(f"  engine not in the roster: {e}")
+        for s in r["services"]:
+            print(f"  service not in the roster: {s}")
+        if not (r["units"] or r["clients"] or r["engines"] or r["services"]):
+            print("the roster has everything detection can see")
+        else:
+            print("`qm detect` adds what you choose")
+        return 0
     if cmd == "resident":
         return action("make_resident", rest[0], {"force": force})
     if cmd == "unload":

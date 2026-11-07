@@ -93,6 +93,15 @@
       <div class="p-head"><span>Card</span><span class="p-status" id="gpu-apps"></span></div>
       <svg id="gpu-spark" viewBox="0 0 300 50" preserveAspectRatio="none"></svg>
     </div>
+    <div class="panel" id="catalog-panel">
+      <div class="p-head"><span>Catalog</span><span class="p-status" id="cat-status"></span>
+        <button class="btn small ghost" id="cat-scan" title="Read the machine once: what detection sees that the roster lacks. Nothing is written.">scan</button></div>
+      <div class="cat-list" id="cat-installed"></div>
+      <div class="cat-sub" id="cat-sugg-head" hidden>Suggestions</div>
+      <div class="cat-list" id="cat-sugg"></div>
+      <div class="cat-sub" id="cat-scan-head" hidden>Seen by the scan, not in the roster</div>
+      <div class="cat-list" id="cat-scan-out"></div>
+    </div>
     <div class="panel" id="history-panel">
       <div class="p-head"><span>Activity</span><button class="btn small ghost" id="hist-refresh">refresh</button></div>
       <ul class="history" id="history"></ul>
@@ -108,6 +117,13 @@
       <button class="btn small" id="log-refresh">refresh</button>
       <button class="btn small ghost" id="log-close">close</button></div>
     <pre id="log-body"></pre>
+  </div>
+</div>
+
+<div class="modal" id="guide-modal" hidden>
+  <div class="modal-box guide-box">
+    <div class="m-head"><span id="guide-title">Guide</span><span class="spacer"></span><button class="btn small ghost" id="guide-close">close</button></div>
+    <div class="guide" id="guide-body"></div>
   </div>
 </div>
 

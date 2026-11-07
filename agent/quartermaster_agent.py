@@ -233,6 +233,74 @@ except (OSError, ValueError):
     UPDATES = {}
 
 
+def suggestions() -> list[dict]:
+    """Rules over the inventory and the state, nothing fetched (SPEC.md 7a). Each: {kind, title, why, how}."""
+    st = STATE.get()
+    out = []
+    has_card = bool(INV.gpu.get("total_mib"))
+    engines_with_units = {s["engine"] for s in INV.servers.values()}
+    model_units = [s for s in INV.servers.values() if s["kind"] != "ollama" and not s.get("legacy")]
+    if has_card and not engines_with_units:
+        out.append({"kind": "engine", "title": "Nothing serves a model yet",
+                    "why": "the inventory names a card but no engine with a unit",
+                    "how": "Ollama is the quickest first model (pull one, it answers on 11434); llama.cpp gives every knob and runs any GGUF; "
+                           "Strata or Maya hold one large model resident at very long context. Run `qm setup` after installing one; the catalog's guides have the steps."})
+    if engines_with_units and not INV.openwebui and not INV.clients:
+        out.append({"kind": "openwebui", "title": "No front end or client is listed",
+                    "why": "engines serve models but nothing in the inventory consumes them",
+                    "how": "OpenWebUI is a chat front end for several engines and people; Pi or Codex CLI are terminal coding agents. "
+                           "`qm detect` adds a client it finds; the OpenWebUI guide has the install."})
+    if INV.comfyui and not INV.art:
+        out.append({"kind": "comfyui", "title": "ComfyUI without the art queue",
+                    "why": "image batches could wait for the card and run between resident models in one swap",
+                    "how": "add an `art` block to the inventory (agent/inventory.example.json shows it: queue_dir, out_roots, models) and reload."})
+    if len(model_units) >= 2 and len(INV.presets) < 2:
+        out.append({"kind": "presets", "title": "Several models, few presets",
+                    "why": f"{len(model_units)} units take turns on the card and {len(INV.presets)} preset{'s' if len(INV.presets) != 1 else ''} name an arrangement",
+                    "how": "Save current on the Presets band after you have set a working arrangement up; + New composes one from the agent's ops."})
+    served = {s.get("port") for s in INV.servers.values()} | {sh.get("port") for sh in INV.shims.values()}
+    for c in INV.clients.values():
+        orphan = sorted({int(m.group(1)) for b in c.get("bindings") or [] for m in [re.search(r":(\d+)(?:/|$)", str(b.get("url", "")))] if m} - served)
+        if orphan:
+            out.append({"kind": "client", "title": f"{c.get('name', c['id'])} points at {', '.join(':' + str(p) for p in orphan)}",
+                        "why": "nothing in the roster serves those ports; its requests there will fail quietly",
+                        "how": f"add the unit that should answer there, or fix the binding in {c.get('config', 'its configuration')}."})
+    blank = [s["id"] for s in model_units if not (s.get("footprint") or {}).get("vram_gib")]
+    if blank:
+        out.append({"kind": "inventory", "title": f"{len(blank)} unit{'s' if len(blank) != 1 else ''} without a footprint",
+                    "why": "the card's planning and the warnings use vram_gib and ram_gib; setup cannot measure them",
+                    "how": f"fill in footprint.vram_gib and ram_gib for {', '.join(blank[:4])}{'…' if len(blank) > 4 else ''} after one load (the VRAM gauge shows what it took)."})
+    no_ver = [e["id"] for e in INV.engines if not any(e.get(k) for k in ("version", "version_cmd", "version_file", "version_url"))]
+    if no_ver:
+        out.append({"kind": "inventory", "title": f"No version source for {', '.join(no_ver)}",
+                    "why": "the band shows nothing and an update check has nothing to compare",
+                    "how": "give the engine a version_cmd, version_file or version_url in the inventory (the catalog record says which it has)."})
+    for uid, u in UPDATES.items():
+        if u.get("ok") and u.get("available"):
+            out.append({"kind": "update", "title": f"{uid}: {u.get('latest')} is newer than {u.get('installed') or '?'}",
+                        "why": f"from the check you ran {u.get('checked_at', '')}",
+                        "how": "the Update entry in its menu applies it where the recipe can; otherwise by hand, as the menu says."})
+    if INV.servers and not INV.presets:
+        pass
+    return out
+
+
+def scan_proposals() -> dict:
+    """What detection sees that the inventory lacks: a read of the machine on a click, never applied here."""
+    import setup as _setup
+    kinds = {k for k, _ in _setup.KINDS}
+    found = _setup.detect_all(kinds)
+    have_e = {e["id"] for e in INV.engines}
+    have_p = {s.get("port") for s in INV.servers.values()}
+    have_c = set(INV.clients)
+    return {"engines": [e["id"] for e in found["engines"] if e["id"] not in have_e],
+            "units": [{"id": u["id"], "engine": u["engine"], "port": u["port"], "name": u["name"], "running": u.get("running", False)}
+                      for u in found["units"] if u["port"] not in have_p],
+            "services": [k for k in found["services"] if not getattr(INV, k, None)],
+            "clients": [{"id": c["id"], "version": c.get("version")} for c in found["clients"] if c["id"] not in have_c],
+            "notes": found["notes"]}
+
+
 def updatable(uid: str) -> tuple[dict, str] | tuple[None, None]:
     """(entry, 'engine'|'client') for an id the update ops may act on."""
     if uid in INV.engine_by_id:
@@ -2269,6 +2337,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, presets_public())
         if path == "/api/catalog":
             return self._json(200, {"catalog": CATALOG})
+        if path == "/api/suggestions":
+            try:
+                return self._json(200, {"suggestions": suggestions()})
+            except Exception as e:  # noqa: BLE001
+                return self._json(500, {"error": f"suggestions: {e}"})
         if path == "/api/plans":
             with PLANS.lock:
                 return self._json(200, {"current": PLANS.current.public() if PLANS.current else None, "recent": PLANS.recent[::-1]})
@@ -2364,6 +2437,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(500, {"error": f"presets.json: {e}"})
             self._art_log("preset_save", pr["id"], by, f"{'replaced' if was else 'created'} {pr['name']} ({len(pr['steps'])} steps)")
             return self._json(200, {"preset": pr, "replaced": was})
+        if path == "/api/scan":
+            try:
+                r = scan_proposals()
+            except Exception as e:  # noqa: BLE001
+                return self._json(500, {"error": f"scan: {e}"})
+            self._art_log("scan", None, by, f"{len(r['engines'])} engines, {len(r['units'])} units, {len(r['services'])} services, {len(r['clients'])} clients not in the roster")
+            return self._json(200, r)
         if path == "/api/presets/delete":
             pid = str(body.get("id") or "")
             if pid not in INV.presets:

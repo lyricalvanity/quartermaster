@@ -139,7 +139,16 @@ verify, and a roll-back entry afterwards. An engine's units must be stopped firs
 
 **Clients** (Pi, Codex CLI, Claude Code) are a strip under the bands, not cards: version, the local ports
 their configuration points at, a menu with the update entries. A unit card says `used by Pi` when a
-client's configuration names its port, and the Stop dialog repeats it. Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
+client's configuration names its port, and the Stop dialog repeats it.
+
+The **Catalog panel** (side column) lists what is installed with its tier and a **guide** per kind (what
+it is, licence, what it fits and does not, install steps, what Quartermaster can and cannot do with it,
+its update recipe, how it is found), the kinds known but not installed, and **suggestions**: rules over the
+inventory and the state, nothing fetched (a card with no engine; engines with no front end or client;
+ComfyUI without the art queue; several models and few presets; a client bound to a port nothing serves; a
+unit without a footprint; an engine without a version source; an update a check found). **scan** reads the
+machine once, on that click, and lists what detection sees that the roster lacks; nothing is written,
+`qm detect` adds what you choose. `qm suggest` and `qm scan` do the same from a terminal. Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
 legacy band), so a theme never needs to know an engine's name.
 
 ## From a terminal
