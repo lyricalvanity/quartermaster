@@ -541,6 +541,22 @@ def detect_comfyui(seen: dict, running: list[dict]) -> dict:
     return out
 
 
+def webui_system_unit(port: int) -> tuple[str, str] | None:
+    """(unit, user) of a running systemd system service whose command line serves OpenWebUI on port, from
+    systemd's own view of the unit (ExecStart and User only: its environment may hold secrets)."""
+    rc, o, _ = run(["systemctl", "list-units", "--type=service", "--state=running", "--no-legend", "--plain"], timeout=15)
+    for name in (l.split()[0] for l in (o.splitlines() if rc == 0 else []) if l.split()):
+        if "webui" not in name.lower():
+            continue
+        rc, s, _ = run(["systemctl", "show", name, "-p", "User", "-p", "ExecStart"], timeout=15)
+        props = dict(l.split("=", 1) for l in s.splitlines() if "=" in l)
+        exe = props.get("ExecStart", "")
+        m = re.search(r"--port[ =](\d+)", exe)
+        if "open-webui" in exe and (int(m.group(1)) if m else 8080) == port:
+            return name, props.get("User") or "root"
+    return None
+
+
 def detect_openwebui() -> dict:
     out = {"notes": []}
     port = next((p for p in (3000, 8080) if get_json(f"http://127.0.0.1:{p}/health")[0] == 200), None)
@@ -555,6 +571,15 @@ def detect_openwebui() -> dict:
             "name": "OpenWebUI", "url": f"http://127.0.0.1:{port or 3000}", "open_url": f"http://localhost:{port or 3000}",
             "tasks": {"start": "owui-ctl-start", "stop": "owui-ctl-stop", "update": "owui-ctl-update"}}
         out["notes"].append(f"OpenWebUI: scheduled tasks {tasks}; answering on :{port}" if port else f"OpenWebUI: scheduled tasks {tasks}; not answering")
+        return out
+    unit = webui_system_unit(port) if port and not WIN else None
+    if unit:
+        name, user = unit
+        out["service"] = {
+            "_comment": f"OpenWebUI as the systemd system unit {name}, running as {user}. The agent reads /health and /api/version from the URL and nothing else, and has no controls for a system unit: start, stop and update stay with root.",
+            "name": "OpenWebUI", "model": f"system unit · user {user}", "url": f"http://127.0.0.1:{port}", "open_url": f"http://127.0.0.1:{port}",
+            "install_hint": f"a system unit: start, stop and update it as root (systemctl restart {name})"}
+        out["notes"].append(f"OpenWebUI is the system unit {name} (user {user}) on :{port}: a read-only tile, health and version")
         return out
     if port:
         rc, o, _ = run(["docker", "ps", "--format", "{{.Image}}"], timeout=15)

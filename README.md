@@ -89,8 +89,9 @@ docker compose up -d --build
 
    What differs on Linux: per-process VRAM comes from `nvidia-smi --query-compute-apps` instead of the
    Windows GPU counter; servers start in their own session and stop with a group signal; the OpenWebUI
-   scheduled-task driver does not exist there (a systemd driver is a later stage), so that tile reads
-   only health and version.
+   scheduled-task driver does not exist there (a systemd driver is a later stage). Setup writes a
+   read-only tile for an OpenWebUI that runs as a systemd system unit: health and version from its URL,
+   the unit's name and user from systemd, and its start, stop and update left to root.
 
 After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
 variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory
@@ -200,7 +201,10 @@ rain, a honeycomb that pulses, a tracker sweep). Everything that moves stops und
 Fonts: the themes name display faces that ship with Windows and Office (Agency FB, OCR A Extended, Felix
 Titling, Old English Text MT, Bahnschrift, Cascadia). They are used from the viewer's machine; if a browser
 hides installed fonts from pages, drop your own copies into `ui/fonts/` (ignored by git) and `fonts.css`
-will serve them. Michroma is included under the SIL Open Font License (`ui/fonts/OFL-Michroma.txt`).
+will serve them. A machine without them (Linux, macOS) can map the names to faces it has in
+`ui/fonts/local.css`, also ignored: one `@font-face` per name, with `url()` to copies in `ui/fonts/`. The
+page loads it after `fonts.css`, so its rules win; where it does not exist, the agent and the container
+serve an empty one. Michroma is included under the SIL Open Font License (`ui/fonts/OFL-Michroma.txt`).
 
 The themes are homages. The names and marks they allude to belong to their owners and are used here as
 fan reference only.

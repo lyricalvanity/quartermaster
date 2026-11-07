@@ -16,6 +16,11 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
 - A `pnpm-global` update recipe beside `npm-global`. Setup and detect choose it for a client whose executable
   is pnpm's global shim for its package; either recipe refuses to apply to a package its manager does not
   list as global, rather than install a second copy.
+- The page loads an optional `ui/fonts/local.css` (ignored by git) after `fonts.css`, so a machine without the
+  Windows and Office faces can map those names to faces it has; the agent and the container serve an empty
+  one when it is absent. The agent sends `.ttf` and `.otf` as fonts.
+- Setup writes a read-only OpenWebUI tile on Linux when a systemd system unit serves it: health and version,
+  no controls.
 
 ## 0.1.0 - 2026-11-07
 

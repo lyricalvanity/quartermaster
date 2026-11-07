@@ -85,7 +85,9 @@ proxy. One generic tile, driven by a declared **driver**:
 - `docker-compose`: `up -d` / `down` / `pull` in a named project directory;
 - `schtasks`: run named Windows scheduled tasks, pass nothing (version 1's OpenWebUI driver, generalised);
 - `windows-service`: `sc start|stop`;
-- `systemd` (Linux, later): `systemctl --user`.
+- `systemd` (Linux, later): `systemctl --user`. An OpenWebUI that runs as a system unit (another user, for
+  isolation) gets a read-only tile from setup: health and version from its URL, and no controls, since a
+  system unit is root's to start, stop and update (2026-11-07).
 
 Version 1's `openwebui` block becomes a service of driver `schtasks`; its extras (bridge ports, two logs)
 stay as driver-specific fields.
@@ -293,7 +295,7 @@ counter, does not see graphics-only clients; Vulkan engines do appear there (as 
 The claim "nothing of the owner's machine is in the repository" is **enforced, not promised**:
 
 - `.gitignore`: `agent/inventory.json`, `agent/presets.json`, `agent/agent.key`, `logs/`, `artq/`,
-  `backup/`, `local/`, the generated launchers, every font in `ui/fonts/` except Michroma (OFL).
+  `backup/`, `local/`, the generated launchers, every font in `ui/fonts/` except Michroma (OFL), and with them a machine's own font map, `ui/fonts/local.css`.
 - `tools/scrub_check.py` scans tracked and staged files for the current user name, home directory,
   hostname and local addresses (derived at run time), plus the patterns in `local/scrub-denylist.txt`
   (never committed: the list itself would be the leak). It also refuses if any must-ignore path is

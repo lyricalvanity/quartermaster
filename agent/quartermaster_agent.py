@@ -65,7 +65,10 @@ ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya"
                                "ollama", "ollama_llama_server", "ollama-runner", "llama-server"))
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
-                ".woff2": "font/woff2", ".ico": "image/x-icon", ".json": "application/json"}
+                ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf", ".ico": "image/x-icon",
+                ".json": "application/json"}
+# a machine's own font map (ui/fonts/local.css, ignored by git); the page always links it, so an empty one is served when absent
+NO_FONT_MAP = b"/* no local font map: see README, Fonts */\n"
 
 
 def log(msg: str) -> None:
@@ -2424,10 +2427,13 @@ class Handler(BaseHTTPRequestHandler):
         rel = path[1:] or "index.html"
         f = (UI_DIR / rel).resolve()
         if UI_DIR.resolve() not in f.parents or not f.is_file():
-            return self._json(404, {"error": "not found"})
-        body = f.read_bytes()
+            if rel != "fonts/local.css":
+                return self._json(404, {"error": "not found"})
+            body = NO_FONT_MAP
+        else:
+            body = f.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", STATIC_TYPES.get(f.suffix, "application/octet-stream"))
+        self.send_header("Content-Type", STATIC_TYPES.get(f.suffix.lower(), "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()

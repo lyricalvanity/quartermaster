@@ -12,6 +12,16 @@ server {
         add_header Cache-Control "no-cache";
     }
 
+    # a machine's own font map (ui/fonts/local.css, ignored by git); the page always links it
+    location = /fonts/local.css {
+        try_files $uri @no_font_map;
+        add_header Cache-Control "no-cache";
+    }
+    location @no_font_map {
+        default_type text/css;
+        return 200 "/* no local font map */";
+    }
+
     # the host agent; the bearer key is injected here, the browser never sees it
     location /api/ {
         proxy_pass ${AGENT_URL}/api/;
