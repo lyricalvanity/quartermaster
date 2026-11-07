@@ -201,7 +201,7 @@
     const top = el("div", "c-top");
     const left = el("div");
     left.appendChild(el("div", "c-name", o.name || "OpenWebUI"));
-    left.appendChild(el("div", "c-model", "sequestered · owui-distro · podman"));
+    left.appendChild(el("div", "c-model", o.model || "scheduled-task driver"));     // the inventory may describe how it runs
     top.appendChild(left);
     const pill = el("span", "pill", "—"); top.appendChild(pill);
     c.appendChild(top);
@@ -212,16 +212,16 @@
     const act = el("div", "c-actions");
     const st = el("button", "btn small", "Start"); st.onclick = () => action("owui_start"); act.appendChild(st);
     const sp = el("button", "btn small danger", "Stop");
-    sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", "This takes it down for everyone using it. The distro stays up; Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
+    sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", "This takes it down for everyone using it. Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
     act.appendChild(sp);
     const up = el("button", "btn small", "Update");
-    up.onclick = async () => { if (await confirm("Update OpenWebUI?", "Pulls the current :main image, backs up the data volume, and restarts on the new image. A release with schema changes migrates the database one way. Windows will ask you to approve it.")) action("owui_update", null, { confirm: true }); };
+    up.onclick = async () => { if (await confirm("Update OpenWebUI?", "Runs the update task: the current image is pulled, the data backed up, the service restarted on the new version. A release with schema changes migrates the database one way. Windows may ask you to approve it.")) action("owui_update", null, { confirm: true }); };
     act.appendChild(up);
     act.appendChild(el("span", "spacer"));
     const open = el("a", "btn small ghost", "open"); open.href = o.open_url || o.url; open.target = "_blank"; open.rel = "noopener"; act.appendChild(open);
     const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("openwebui", "OpenWebUI · control log"); act.appendChild(lg);
     c.appendChild(act);
-    c.onmouseenter = () => setHelp("OpenWebUI, sequestered. Start and Stop run as the owui user; Update asks Windows for approval.");
+    c.onmouseenter = () => setHelp(o.help || "OpenWebUI, driven by scheduled tasks the agent runs by name and passes nothing; the tile reads only health and version.");
     c.onmouseleave = () => setHelp("");
     owui = { root: c, pill, meta, live, note, st, sp, up, vit };
     return c;
@@ -238,11 +238,11 @@
     if (mine) setVitals(owui.vit, "active", state, 1.2); else if (i.up) setVitals(owui.vit, "alive", "nominal"); else setVitals(owui.vit, "flat", "no signal");
     owui.meta.innerHTML = "";
     const tag = (t, cls) => owui.meta.appendChild(el("span", "tag" + (cls ? " " + cls : ""), t));
-    tag(":3000");
+    tag(":" + (Number(new URL(INV.openwebui.url, location.href).port) || 80));
     if (i.version) tag("v" + i.version);
     if (i.bridge_expected) tag(`bridge ${i.bridge_bound}/${i.bridge_expected}`, i.bridge_bound < i.bridge_expected ? "bad" : "");
     const lv = [];
-    if (i.keepalive_last) lv.push(`distro started ${i.keepalive_last}`);
+    if (i.keepalive_last) lv.push(`started ${i.keepalive_last}`);
     if (i.keepalive_exited) lv.push("keepalive is restarting it");
     if (i.session_warning) lv.push("login path degraded until a reboot");
     owui.live.textContent = lv.join(" · ");

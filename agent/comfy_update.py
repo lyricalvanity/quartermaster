@@ -15,8 +15,8 @@ rollback  git reset --hard to backup head.txt (the tree was clean when it was ta
           pip install -r freeze.txt -c constraints.txt (the freeze without the constrained and file:// lines).
 
 The constraints pin the installed versions of the named packages (default torch, torchvision, torchaudio,
-triton-windows): this venv runs a cu130 nightly that pip cannot fetch again, and the ComfyUI reference card
-records a broken boot after an unguarded `pip install -r` (2026-10-05). If a requirement cannot be met
+triton-windows): a venv may run a torch nightly that pip cannot fetch again, and an unguarded `pip install -r`
+has broken a boot before (2026-10-05). If a requirement cannot be met
 without moving a pinned package, pip fails and nothing is half-installed past that point.
 
 Written 2026-11-05 (Faber). Stdlib only.
