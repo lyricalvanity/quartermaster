@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-11-07
 
-From the first install on a second machine, a Linux laptop with Ollama and a llama.cpp router on Vulkan:
+The first install on a second machine, a Linux laptop with Ollama and a llama.cpp router on Vulkan, and what
+it taught. A minor version because it adds a unit kind, a service driver and an update recipe; the inventory
+format is unchanged and 0.1.0 inventories load as they are.
 
 - A llama.cpp router (`llama-server --models-dir`) is driven as one unit per model it offers (kind
   `llamacpp-router`): make resident and unload through `POST /models/load` and `/models/unload`, busy from the

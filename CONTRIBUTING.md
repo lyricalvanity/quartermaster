@@ -18,9 +18,14 @@ branches in `agent/quartermaster_agent.py`. A record alone is tier D: listed wit
 
 **Adding a theme** is one stylesheet scoped to `:root[data-theme="<id>"]`, a line in `ui/theme.js`, and a
 `<link>` in `ui/index.html`. Colour the engine bands by slot (`--e1`..`--e6`, `--e0` for legacy), never by
-an engine's name; fill host, owner and the card's number from the `{HOST}`, `{host}`, `{owner}` and `{N}`
-tokens in theme copy. Everything that moves stops under `prefers-reduced-motion`. Name no real person.
+an engine's name; fill host, owner and the card's number from the `{HOST}`, `{host}`, `{owner}`, `{OWNER}`
+and `{N}` tokens in theme copy; the start-up screen addresses the owner, with the theme's canon as the
+fallback in `OWNER_DEFAULT`. Everything that moves stops under `prefers-reduced-motion`. Name no real person.
 
 **Platform code** goes in `agent/platform_host.py`, with a Windows and a Linux branch.
 
 Standard library only in the agent; no build step in the page.
+
+**Versions** are `MAJOR.MINOR.PATCH` in `VERSION`, with a `## x.y.z - date` section in `CHANGELOG.md` and an
+annotated tag `vx.y.z` on the commit. Before 1.0: a patch for fixes, a minor for a new kind, driver, recipe
+or inventory field. Changes land under `## Unreleased` until someone cuts a version.

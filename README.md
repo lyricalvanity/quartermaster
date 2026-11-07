@@ -10,7 +10,7 @@ It was built on one workstation and generalised so it can be installed on yours:
 machine runs and writes the inventory; a catalog of kinds carries detection, update recipes and guides. It
 runs on **Windows** (where it was built and is used daily) and on **Linux** through a platform module whose
 branches were exercised under WSL Ubuntu and then on a Linux laptop running Ollama and a llama.cpp router on
-Vulkan (2026-11-07); one NVIDIA GPU either way. Version 0.1.0; the design and what remains are in [SPEC.md](SPEC.md).
+Vulkan (2026-11-07); one NVIDIA GPU either way. Version 0.2.0; the design and what remains are in [SPEC.md](SPEC.md).
 
 ![Quartermaster, plain theme](docs/img/plain.png)
 
@@ -213,12 +213,12 @@ fan reference only.
 
 ## Status
 
-0.1.0 (see [CHANGELOG.md](CHANGELOG.md)). Built on one workstation in November 2026 and in daily use there;
-the seven stages of the generalisation in [SPEC.md](SPEC.md) are done. Tested on that machine and under
-WSL, and installed on a second machine, a Linux laptop, on 2026-11-07. What
-remains: detectors reading their conventions from the catalog records instead of code, a systemd service
-driver, more than one card, a fleet view across several agents, the optional scheduled update check (off
-by default). Issues and pull requests welcome ([CONTRIBUTING.md](CONTRIBUTING.md)); the rules under "What it
+0.2.0 (see [CHANGELOG.md](CHANGELOG.md); releases are tagged `v0.x.y`). Built on one workstation in
+November 2026 and in daily use there; the seven stages of the generalisation in [SPEC.md](SPEC.md) are done.
+Tested on that machine and under WSL, and installed on a second machine, a Linux laptop, on 2026-11-07,
+which is where 0.2.0 came from. What remains: detectors reading their conventions from the catalog records
+instead of code, a systemd driver for engines kept as system units, more than one card, a fleet view across
+several agents, the optional scheduled update check (off by default). Issues and pull requests welcome ([CONTRIBUTING.md](CONTRIBUTING.md)); the rules under "What it
 will not do" are not up for negotiation ([SECURITY.md](SECURITY.md)).
 
 ## Licence
