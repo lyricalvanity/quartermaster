@@ -35,8 +35,10 @@
   /* ---- header ---- */
   header { border-bottom: 2px solid var(--line2); }
   .hdr-actions .btn { white-space: nowrap; }
-  .mark { border-radius: 50%; border: 1px solid var(--fg2);
-    background: conic-gradient(from 0deg, rgba(155,248,180,.6), transparent 28%); animation: mu-sweep 3.2s linear infinite; }
+  /* radar: the ring and the centre stay put; only the sweep turns, its glow trailing behind the leading edge */
+  .mark { border-radius: 50%; border: 1px solid var(--fg2); overflow: hidden; }
+  .mark::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 72%, rgba(155,248,180,.6)); animation: mu-sweep 3.2s linear infinite; }
   .mark::after { inset: 11px; background: var(--fg); }
   .title { font-family: var(--disp); text-transform: uppercase; letter-spacing: 2px; font-weight: 400; }
   .sub { text-transform: uppercase; color: var(--fg2); }
@@ -146,7 +148,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root[data-theme="muthur"] .mark,
+  :root[data-theme="muthur"] .mark::before,
   :root[data-theme="muthur"] .v-sweep,
   :root[data-theme="muthur"] .r-main::after { animation: none; }
   :root[data-theme="muthur"] body::before { animation: none; display: none; }

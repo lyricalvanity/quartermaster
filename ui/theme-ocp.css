@@ -32,7 +32,7 @@
   .mark { border: 2px solid var(--hud); border-radius: 50%;
     background: linear-gradient(var(--hud), var(--hud)) 50% 50% / 140% 2px no-repeat, linear-gradient(var(--hud), var(--hud)) 50% 50% / 2px 140% no-repeat; }
   .mark::after { inset: 9px; background: var(--alert); }
-  .title { font: italic 900 21px/1 var(--logo); letter-spacing: 1px; text-transform: uppercase;
+  .title { font: italic 900 20px/1 var(--logo); letter-spacing: 0; text-transform: uppercase;     /* fits the 240px brand column beside a 28px mark */
     background: linear-gradient(#f6fafd 0%, #9dbfdf 42%, #2c4052 52%, #cfe0ee 78%, #6f8ea8 100%); -webkit-background-clip: text; background-clip: text;
     color: transparent; filter: drop-shadow(0 1px 0 #000); }
   .sub { color: var(--fg3); }

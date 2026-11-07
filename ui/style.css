@@ -15,7 +15,7 @@ button { font: inherit; }
 header { display: grid; grid-template-columns: 240px 1fr 1fr 1.4fr auto; gap: 18px; align-items: center;
   padding: 10px 18px; background: var(--bg2); border-bottom: 1px solid var(--line); }
 .brand { display: flex; gap: 10px; align-items: center; }
-.mark { width: 28px; height: 28px; border-radius: 7px; border: 2px solid var(--e2); position: relative; }
+.mark { flex: none; width: 28px; height: 28px; border-radius: 7px; border: 2px solid var(--e2); position: relative; }   /* flex: none, or the brand text squeezes it into an oval */
 .mark::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--e2); }
 .title { font-weight: 650; font-size: 16px; letter-spacing: .3px; }
 .sub { color: var(--fg3); font-size: 11px; font-family: var(--mono); }

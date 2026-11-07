@@ -43,11 +43,13 @@
 
   /* ---- header ---- */
   header { background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.25)); border-bottom: 1px solid var(--pline); }
-  .mark { border: 1px solid var(--ap); border-radius: 50%; position: relative; box-shadow: 0 0 10px -2px var(--ap);
+  /* radar: ring, crosshair and centre stay put; only the sweep turns, its glow trailing behind the leading edge */
+  .mark { border: 1px solid var(--ap); border-radius: 50%; position: relative; overflow: hidden; box-shadow: 0 0 10px -2px var(--ap);
     background:
       linear-gradient(var(--ap), var(--ap)) 50% 50% / 100% 1px no-repeat,
-      linear-gradient(var(--ap), var(--ap)) 50% 50% / 1px 100% no-repeat,
-      conic-gradient(from 0deg, color-mix(in srgb, var(--ap) 70%, transparent), transparent 30%);
+      linear-gradient(var(--ap), var(--ap)) 50% 50% / 1px 100% no-repeat; }
+  .mark::before { content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 70%, color-mix(in srgb, var(--ap) 70%, transparent));
     animation: rv-sweep 3s linear infinite; }
   .mark::after { inset: 11px; background: var(--fg); }
   .title { font: 700 14px/1.2 var(--ac); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; text-shadow: 0 0 9px var(--sel); }
@@ -228,7 +230,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :root:is([data-theme="cortex"], [data-theme="concord"]) .mark,
+  :root:is([data-theme="cortex"], [data-theme="concord"]) .mark::before,
   :root:is([data-theme="cortex"], [data-theme="concord"]) .pill.busy,
   :root:is([data-theme="cortex"], [data-theme="concord"]) .vitals[data-mode="active"]::before { animation: none; }
 }

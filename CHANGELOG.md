@@ -35,6 +35,10 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
   refuses it.
 - A band's or chip's menu stays inside its band and the window: one that would cross an edge slides back, one
   wider than the room wraps, and it fits again when a theme's face loads after it opened.
+- The brand mark no longer shrinks when the title beside it is wide (it had been an oval in every theme, a
+  sliver in OCP), and the radar marks of MU/TH/UR, Global Cortex and Nerves Concord turn only their sweep,
+  with the glow trailing it, while the ring, crosshair and centre stay put. OCP's title is set a size smaller
+  to fit beside a whole mark.
 
 ## 0.1.0 - 2026-11-07
 
