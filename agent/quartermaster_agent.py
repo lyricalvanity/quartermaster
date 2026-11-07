@@ -603,12 +603,13 @@ class State:
         snap["gpu_history"] = self.gpu_history[-120:]
         snap["parked"] = sorted(self.parked)
         snap["openwebui"] = OWUI_WATCH.get()
-        aq = art_queue()
-        if aq:
-            try:
+        try:
+            aq = art_queue()
+            if aq:
                 snap["art"] = aq.summary()
-            except Exception as e:  # noqa: BLE001 - the queue is decoration for the poll
-                snap["art"] = {"error": str(e)[:160]}
+        except Exception as e:  # noqa: BLE001 - the queue is decoration for the poll; a queue_dir that cannot be made must not kill it
+            snap["art"] = {"error": str(e)[:160]}
+            snap["warnings"].append(f"art queue: {str(e)[:120]}")
         snap["plan"] = PLANS.current_public()
         snap["inventory_rev"] = INV.data.get("rev", 1)
         snap["engines"] = {}
@@ -643,8 +644,15 @@ class State:
             try:
                 snap = self.poll_once()
                 PLANS.park_watch(snap)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 log("poll error: " + traceback.format_exc()[-600:])
+                # the page must say so rather than show dashes: publish the last snapshot with the failure on it
+                with self.lock:
+                    broken = dict(self.snapshot)
+                broken["time"] = time.time()
+                broken["warnings"] = [f"the agent's poll failed: {type(e).__name__}: {str(e)[:160]} (logs/agent.log has the trace)"]
+                with self.lock:
+                    self.snapshot = broken
             time.sleep(max(0.5, INV.poll_s - (time.time() - t0)))
 
 
@@ -1949,7 +1957,7 @@ def art_queue():
     """The queue for the inventory's art block, or None without one."""
     if not INV.art or not INV.comfyui:
         return None
-    root = Path(INV.art.get("queue_dir") or (ROOT / "artq"))
+    root = Path(INV.art.get("queue_dir") or ((ROOT / "artq") if HOME == HERE else (HOME / "artq")))
     if _ART["root"] != root:
         _ART.update(root=root, q=artqueue.ArtQueue(root))
     return _ART["q"]

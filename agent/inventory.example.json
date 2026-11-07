@@ -70,7 +70,8 @@
       "timeouts": { "start_s": 360, "load_s": 360, "unload_s": 90 },
       "notes": "idle_unload_s 0; loads on the first inference request from anyone. Parkable.",
       "parkable": true,
-      "source": "where the weights came from (shown on the card)"
+      "source": "",
+      "_source": "where the weights came from, shown on the card when set"
     },
     {
       "id": "strata-old",
@@ -175,8 +176,7 @@
     }
   },
   "art": {
-    "_comment": "Optional (needs comfyui): the art queue. Batches of image jobs wait for the card; one op parks the resident model, runs them all in ComfyUI, and loads the model again. out_dir must lie under one of out_roots and never under anything in deny or under this folder. models overrides a workflow's file names.",
-    "queue_dir": "C:\\Users\\you\\Quartermaster\\artq",
+    "_comment": "Optional (needs comfyui): the art queue. Batches of image jobs wait for the card; one op parks the resident model, runs them all in ComfyUI, and loads the model again. out_dir must lie under one of out_roots and never under anything in deny or under this folder. models overrides a workflow's file names. queue_dir is optional: without it the queue lives in artq/ beside the agent.",
     "out_roots": ["D:\\projects"],
     "deny": [],
     "max_images": 400,

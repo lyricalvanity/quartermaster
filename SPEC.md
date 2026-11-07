@@ -1,5 +1,8 @@
 # Quartermaster — specification, version 2 (2026-11-06)
 
+*Status 2026-11-07: all seven stages below are built (section 11). This document stays as the design and
+its reasons; what each stage left undone is marked where it is described.*
+
 Version 1 (2026-11-03) specified a dashboard for one machine and was built that week. This version
 specifies the generalisation: the same dashboard installed on any machine that runs local inference,
 finding what is installed, keeping the host's own particulars in one untracked file, and growing from

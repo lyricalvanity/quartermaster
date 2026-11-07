@@ -6,10 +6,16 @@ own APIs (Strata, Maya, Ollama), starts and stops the processes you have told it
 OpenWebUI in view, runs **presets** (a whole working arrangement in one button), and dresses itself in
 nineteen themes because a status page you look at every day should be a pleasure to look at.
 
-It is being generalised from a single workstation into something you can install on yours. It runs on
-**Windows** (where it was built and is used daily) and, since 2026-11-06, on **Linux** through a platform
-module whose branches were exercised under WSL Ubuntu but not yet on a real Linux box with its engines; one
-NVIDIA GPU either way. The plan and its stages are in [SPEC.md](SPEC.md).
+It was built on one workstation and generalised so it can be installed on yours: `setup.py` finds what the
+machine runs and writes the inventory; a catalog of kinds carries detection, update recipes and guides. It
+runs on **Windows** (where it was built and is used daily) and on **Linux** through a platform module whose
+branches were exercised under WSL Ubuntu but not yet on a Linux box with engines on it; one NVIDIA GPU either
+way. Version 0.1.0; the design and what remains are in [SPEC.md](SPEC.md).
+
+![Quartermaster, plain theme](docs/img/plain.png)
+
+<p><img src="docs/img/hal.png" width="49%" alt="HAL 9000 theme"> <img src="docs/img/muthur.png" width="49%" alt="MU/TH/UR theme"></p>
+<p><img src="docs/img/lcars.png" width="49%" alt="LCARS theme"> <img src="docs/img/bladerunner.png" width="49%" alt="Voight-Kampff theme"></p>
 
 ## How it is built
 
@@ -193,18 +199,20 @@ rain, a honeycomb that pulses, a tracker sweep). Everything that moves stops und
 Fonts: the themes name display faces that ship with Windows and Office (Agency FB, OCR A Extended, Felix
 Titling, Old English Text MT, Bahnschrift, Cascadia). They are used from the viewer's machine; if a browser
 hides installed fonts from pages, drop your own copies into `ui/fonts/` (ignored by git) and `fonts.css`
-will serve them. Michroma is included under the SIL Open Font License.
+will serve them. Michroma is included under the SIL Open Font License (`ui/fonts/OFL-Michroma.txt`).
 
 The themes are homages. The names and marks they allude to belong to their owners and are used here as
 fan reference only.
 
-## Status and roadmap
+## Status
 
-Built on one workstation in November 2026 and in daily use there. The generalisation (a four-layer model of
-host, engines, services and clients; a CLI installer with detectors; presets made in the page; declared
-update recipes with backup and rollback; a platform shim so Linux is a second implementation rather than a
-port) is specified in [SPEC.md](SPEC.md) and lands in stages. Issues and pull requests welcome; the rules
-under "What it will not do" are not up for negotiation.
+0.1.0 (see [CHANGELOG.md](CHANGELOG.md)). Built on one workstation in November 2026 and in daily use there;
+the seven stages of the generalisation in [SPEC.md](SPEC.md) are done. Tested on that machine and under
+WSL; not yet installed on a second machine by anyone, which is the next thing that should happen. What
+remains: detectors reading their conventions from the catalog records instead of code, a systemd service
+driver, more than one card, a fleet view across several agents, the optional scheduled update check (off
+by default). Issues and pull requests welcome ([CONTRIBUTING.md](CONTRIBUTING.md)); the rules under "What it
+will not do" are not up for negotiation ([SECURITY.md](SECURITY.md)).
 
 ## Licence
 

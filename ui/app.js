@@ -1052,6 +1052,8 @@
     $("#log-filter").onkeydown = (e) => { if (e.key === "Enter") refreshLog(); };
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; $("#preset-modal").hidden = true; $("#guide-modal").hidden = true; closeMenus(); } });
     loadHistory();
+    // first paint from a plain read of the state, so the gauges and pills are not dashes until the stream's first frame
+    try { render(await api("/api/state")); } catch (e) { /* the stream will bring it */ }
     connect();
     setInterval(() => { if (!$("#log-modal").hidden) refreshLog(); }, 4000);
   }
