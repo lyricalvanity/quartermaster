@@ -11,7 +11,7 @@
   --blue: #1B4FD8; --red: #D81B1B; --green: #1E9E4A; --purple: #7B3FC8; --amber: #E0A000; --eye: #FF2A00;
   --bg: #000; --bg2: #060606; --bg3: #141414; --line: #262626; --line2: #4a4a4a;
   --fg: #F2F2EE; --fg2: #B4B4AC; --fg3: #7c7c76;
-  --strata: #1B4FD8; --maya: #1E9E4A; --ollama: #7B3FC8; --legacy: #55554f;
+  --e1: #1B4FD8; --e2: #1E9E4A; --e3: #7B3FC8; --e0: #55554f;
   --ok: #35c265; --warn: #E0A000; --bad: #FF3B30; --busy: #fff; --idle: #B4B4AC;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: "Franklin Gothic Medium", "Segoe UI", Arial, sans-serif;
@@ -56,9 +56,11 @@
   h2 { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; font: 400 10px var(--code); letter-spacing: 3px; color: var(--fg2); }
   h2::before { display: grid; place-items: center; width: 58px; height: 34px; border-radius: 5px; background: var(--hc, #55554f);
     font: 400 15px var(--code); letter-spacing: 2px; color: #fff; }
-  .group[data-group="strata"] { --hc: var(--blue); }     .group[data-group="strata"] h2::before { content: "STR"; }
-  .group[data-group="maya"] { --hc: var(--green); }      .group[data-group="maya"] h2::before { content: "MAY"; }
-  .group[data-group="ollama"] { --hc: var(--purple); }   .group[data-group="ollama"] h2::before { content: "OLL"; }
+  /* the three-letter module labels from HAL's screens; the folded legacy band is hibernation */
+  .group[data-slot="e1"] { --hc: var(--blue); }     .group[data-slot="e1"] h2::before { content: "COM"; }
+  .group[data-slot="e2"] { --hc: var(--green); }      .group[data-slot="e2"] h2::before { content: "NAV"; }
+  .group[data-slot="e3"] { --hc: var(--purple); }   .group[data-slot="e3"] h2::before { content: "GDE"; }
+  .group[data-slot="e4"] h2::before { content: "VEH"; }
   .group[data-group="legacy"] h2::before { content: "HIB"; }
   .group[data-group="services"] { --hc: var(--red); }    .group[data-group="services"] h2::before { content: "COM"; }
   .group:not([data-group]) { --hc: var(--amber); }       .group:not([data-group]) h2::before { content: "NAV"; }

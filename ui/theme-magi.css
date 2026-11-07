@@ -1,6 +1,6 @@
 /* MAGI, after the NERV displays in Neon Genesis Evangelion (1995). Black ground under a faint honeycomb,
-   orange linework, green for normal, red for the alarm. The three engines are the three computers:
-   Strata is MELCHIOR-1, Maya is BALTHASAR-2, Ollama is CASPER-3; the folded legacy group is the dummy
+   orange linework, green for normal, red for the alarm. The engines are the three computers, by band:
+   the first is MELCHIOR-1, the second BALTHASAR-2, the third CASPER-3; the folded legacy band is the dummy
    system and the sequestered OpenWebUI is Terminal Dogma. Headings are set like the episode title cards
    (a heavy serif, squeezed). State badges carry the kanji the show uses; free VRAM is the internal
    battery counter. Kanji are written as escapes so the file stays ASCII. */
@@ -13,7 +13,7 @@
   --hexred: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48'%3E%3Cpath d='M14 0L28 8V24L14 32L0 24V8ZM14 32V48' fill='none' stroke='%23000' stroke-opacity='.45'/%3E%3C/svg%3E");
   --bg: #000; --bg2: rgba(22,8,0,.86); --bg3: #1c0b00; --line: #5a2a00; --line2: #B85300;
   --fg: #FFB060; --fg2: #D07820; --fg3: #96581c;
-  --strata: #FF7A00; --maya: #FF7A00; --ollama: #FF7A00; --legacy: #96581c;
+  --e1: #FF7A00; --e2: #FF7A00; --e3: #FF7A00; --e0: #96581c;
   --ok: #3DFF7A; --warn: #FFD23A; --bad: #F01818; --busy: #F4F0E8; --idle: #D07820;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: "Bahnschrift", "Segoe UI", sans-serif;
@@ -61,9 +61,9 @@
   h2 { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; font: 900 21px/1 var(--card); letter-spacing: 0; color: var(--wh); }
   h2::before { font: 700 11px/1 var(--sans); letter-spacing: 2px; background: var(--or); color: #000; padding: 4px 9px 3px; }
   h2::after { content: ""; flex: 1; height: 1px; background: var(--or2); }
-  .group[data-group="strata"] h2::before { content: "MELCHIOR \00B7  1"; }
-  .group[data-group="maya"] h2::before { content: "BALTHASAR \00B7  2"; }
-  .group[data-group="ollama"] h2::before { content: "CASPER \00B7  3"; }
+  .group[data-slot="e1"] h2::before { content: "MELCHIOR \00B7  1"; }
+  .group[data-slot="e2"] h2::before { content: "BALTHASAR \00B7  2"; }
+  .group[data-slot="e3"] h2::before { content: "CASPER \00B7  3"; }
   .group[data-group="legacy"] h2::before { content: "DUMMY SYSTEM"; background: var(--fg3); }
   .group[data-group="services"] h2::before { content: "TERMINAL DOGMA"; background: var(--rd); color: #fff; }
   .group:not([data-group]) h2::before { content: "OPERATIONS"; }

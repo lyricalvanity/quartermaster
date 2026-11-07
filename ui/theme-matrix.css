@@ -8,7 +8,7 @@
   --g: #22c34a; --g2: #7dff9b; --g3: #14702c; --w: #e6ffe9;
   --bg: #000; --bg2: rgba(0,12,3,.80); --bg3: rgba(0,34,9,.85); --line: #0b3d18; --line2: #14702c;
   --fg: #6ee58a; --fg2: #2fb552; --fg3: #1e8a3c;
-  --strata: #7dff9b; --maya: #7dff9b; --ollama: #7dff9b; --legacy: #1e8a3c;
+  --e1: #7dff9b; --e2: #7dff9b; --e3: #7dff9b; --e0: #1e8a3c;
   --ok: #7dff9b; --warn: #d8ff7a; --bad: #ff4a4a; --busy: #e6ffe9; --idle: #1e8a3c;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: Consolas, "Lucida Console", monospace;

@@ -16,7 +16,7 @@
   --bg: #1A0508; --bg2: #220a0e; --bg3: #2e0e14; --line: #4A1A22; --line2: #6b3a2a;
   --fg: #E8D0C0; --fg2: #C8B8A0; --fg3: #9A7A7A;
   --crimson: #F03050; --gold: #E0C060; --gold2: #C8A84A; --bronze: #8A7060; --sage: #96B8A4; --night: #110305;
-  --strata: #E0C060; --maya: #96B8A4; --ollama: #C8B8A0; --legacy: #9A7A7A;
+  --e1: #E0C060; --e2: #96B8A4; --e3: #C8B8A0; --e0: #9A7A7A;
   --ok: #96B8A4; --warn: #E0C060; --bad: #F03050; --busy: #F0DEC8; --idle: #9A7A7A;
   --mono: "Cascadia Mono", Consolas, monospace;
   --sans: "Palatino Linotype", "Book Antiqua", Georgia, serif;

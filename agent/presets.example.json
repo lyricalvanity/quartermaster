@@ -1,0 +1,29 @@
+{
+  "_comment": "Presets, example. Copy to presets.json beside inventory.json. A preset is a list of steps over the agent's ops and the inventory's ids: make_resident, unload, unload_all, start, stop, park, unpark, set_context, set_budget, start_shim, stop_shim, comfy_start, comfy_stop, comfy_free, owui_start, owui_stop. presets.json is never committed (.gitignore).",
+  "presets": [
+    {
+      "id": "glm-long",
+      "name": "GLM long context",
+      "desc": "GLM resident at 256k",
+      "steps": [
+        { "op": "make_resident", "target": "maya-glm" },
+        { "op": "set_context", "target": "maya-glm", "value": 262144 }
+      ]
+    },
+    {
+      "id": "qwen-shimmed",
+      "name": "Qwen for Ollama clients",
+      "desc": "Qwen resident with its Ollama-API shim on 11437",
+      "steps": [
+        { "op": "make_resident", "target": "strata-main" },
+        { "op": "start_shim", "target": "shim-glm" }
+      ]
+    },
+    {
+      "id": "clear",
+      "name": "Clear the card",
+      "desc": "Nothing resident: small models and image work get the whole card",
+      "steps": [ { "op": "unload_all" } ]
+    }
+  ]
+}

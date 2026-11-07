@@ -12,7 +12,7 @@
   --shutter: repeating-conic-gradient(from 12deg, #1A1D1F 0 39deg, transparent 39deg 45deg);
   --bg: #E4E7E9; --bg2: #FFFFFF; --bg3: #EEF1F2; --line: #D2D8DB; --line2: #AEB7BC;
   --fg: #1A1D1F; --fg2: #4c555b; --fg3: #7b858b;
-  --strata: #F26B00; --maya: #0090E0; --ollama: #4c555b; --legacy: #9aa3a8;
+  --e1: #F26B00; --e2: #0090E0; --e3: #4c555b; --e0: #9aa3a8;
   --ok: #1E8E46; --warn: #B87A00; --bad: #D9261C; --busy: #F26B00; --idle: #7b858b;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: "Segoe UI", Arial, sans-serif;

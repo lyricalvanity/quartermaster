@@ -1,7 +1,8 @@
 :root {
   --bg: #0c0f13; --bg2: #12161c; --bg3: #181d25; --line: #242b36; --line2: #2f3843;
   --fg: #d9dee7; --fg2: #9aa4b2; --fg3: #6b7482;
-  --strata: #5aa9ff; --maya: #66d9a3; --ollama: #f2b84b; --legacy: #8a93a3;
+  /* engine accents by slot: --e1.. in inventory order (a theme sets e1-e4; e5, e6 fall back to these), --e0 the folded legacy band */
+  --e1: #5aa9ff; --e2: #66d9a3; --e3: #f2b84b; --e4: #ff8fab; --e5: #9ad0ff; --e6: #c9b6ff; --e0: #8a93a3;
   --ok: #66d9a3; --warn: #f2b84b; --bad: #ff6b6b; --busy: #c78cff; --idle: #6b7482;
   --mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --sans: Inter, "Segoe UI", system-ui, sans-serif;
@@ -14,15 +15,15 @@ button { font: inherit; }
 header { display: grid; grid-template-columns: 240px 1fr 1fr 1.4fr auto; gap: 18px; align-items: center;
   padding: 10px 18px; background: var(--bg2); border-bottom: 1px solid var(--line); }
 .brand { display: flex; gap: 10px; align-items: center; }
-.mark { width: 28px; height: 28px; border-radius: 7px; border: 2px solid var(--maya); position: relative; }
-.mark::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--maya); }
+.mark { width: 28px; height: 28px; border-radius: 7px; border: 2px solid var(--e2); position: relative; }
+.mark::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--e2); }
 .title { font-weight: 650; font-size: 16px; letter-spacing: .3px; }
 .sub { color: var(--fg3); font-size: 11px; font-family: var(--mono); }
 .gauge .g-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--fg2); text-transform: uppercase; letter-spacing: .6px; }
 .gauge .g-val { font-family: var(--mono); color: var(--fg); text-transform: none; letter-spacing: 0; }
 .bar { position: relative; height: 10px; background: var(--bg3); border: 1px solid var(--line); border-radius: 5px; margin: 4px 0; overflow: hidden; }
-.fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--strata), var(--busy)); transition: width .6s; }
-.fill.ram { background: linear-gradient(90deg, var(--maya), var(--ollama)); }
+.fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--e1), var(--busy)); transition: width .6s; }
+.fill.ram { background: linear-gradient(90deg, var(--e2), var(--e3)); }
 .mark-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--fg3); }
 .g-foot { display: flex; gap: 14px; font-family: var(--mono); font-size: 11px; color: var(--fg2); }
 /* by id: the card that holds the resident model also carries the class "resident" */
@@ -51,7 +52,18 @@ h2.toggle { cursor: pointer; user-select: none; }
 
 .card { position: relative; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 12px 16px; display: flex; flex-direction: column; gap: 8px; transition: border-color .3s, box-shadow .3s; }
 .card::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
-.card.strata { --accent: var(--strata); } .card.maya { --accent: var(--maya); } .card.ollama { --accent: var(--ollama); } .card.legacy { --accent: var(--legacy); }
+/* a band's accent is its slot colour; the cards inside inherit it */
+.group[data-slot="e1"] { --accent: var(--e1); } .group[data-slot="e2"] { --accent: var(--e2); } .group[data-slot="e3"] { --accent: var(--e3); }
+.group[data-slot="e4"] { --accent: var(--e4); } .group[data-slot="e5"] { --accent: var(--e5); } .group[data-slot="e6"] { --accent: var(--e6); }
+.group[data-slot="e0"] { --accent: var(--e0); }
+.band-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.band-tools { position: relative; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--fg3); white-space: nowrap; }
+.band-tools .ver { font-family: var(--mono); color: var(--fg2); }
+.band-tools .ver:empty, .band-tools .cnt:empty { display: none; }
+.band-menu { padding: 0 7px; line-height: 18px; }
+.menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 190px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--bg2); border: 1px solid var(--line2); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px -8px rgba(0,0,0,.6); }
+.menu .btn { text-align: left; justify-content: flex-start; }
 .card.service { --accent: var(--busy); }
 .tag.bad { color: var(--bad); }
 a.btn { text-decoration: none; display: inline-block; }
@@ -69,7 +81,7 @@ a.btn.off { opacity: .4; pointer-events: none; }      /* a link to a service tha
 @keyframes pulse { 50% { opacity: .5; } }
 .c-meta { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-family: var(--mono); font-size: 10.5px; color: var(--fg2); background: var(--bg3); border-radius: 4px; padding: 1px 6px; }
-.tag.vision { color: var(--maya); }
+.tag.vision { color: var(--e2); }
 /* two lines are always reserved: the live note wraps while a model works, and the tile must not change height under it */
 .c-live { font-family: var(--mono); font-size: 11px; color: var(--fg2); min-height: 2.8em; }
 .c-live b { color: var(--fg); font-weight: 600; }
@@ -77,7 +89,7 @@ a.btn.off { opacity: .4; pointer-events: none; }      /* a link to a service tha
 .btn { background: var(--bg3); border: 1px solid var(--line2); color: var(--fg); padding: 6px 12px; border-radius: 7px; cursor: pointer; }
 .btn:hover { border-color: var(--fg3); }
 .btn:disabled { opacity: .45; cursor: default; }
-.btn.primary { background: var(--accent, var(--strata)); color: #0b0e12; border-color: transparent; font-weight: 650; }
+.btn.primary { background: var(--accent, var(--e1)); color: #0b0e12; border-color: transparent; font-weight: 650; }
 .btn.primary:hover { filter: brightness(1.1); }
 .btn.small { padding: 3px 9px; font-size: 12px; }
 .btn.ghost { background: transparent; }

@@ -13,7 +13,7 @@
   --dn: inset 1px 1px 0 var(--lo), inset -1px -1px 0 var(--hi);
   --bg: #12302c; --bg2: #BFC3C6; --bg3: #AEB3B6; --line: #8d9296; --line2: #6c7174;
   --fg: #111314; --fg2: #33383b; --fg3: #585e62;
-  --strata: #C8102E; --maya: #1E5AA8; --ollama: #0a6b2a; --legacy: #585e62;
+  --e1: #C8102E; --e2: #1E5AA8; --e3: #0a6b2a; --e0: #585e62;
   --ok: #0a6b2a; --warn: #8a5a00; --bad: #C8102E; --busy: #8a5a00; --idle: #585e62;
   --mono: "Courier New", Consolas, monospace;
   --sans: "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
@@ -56,9 +56,9 @@
   /* ---- sections: where in the park ---- */
   h2 { display: flex; align-items: center; gap: 10px; margin: 18px 0 9px; font: 700 12px var(--sans); letter-spacing: 2px; color: #d8e6d2; }
   h2::before { font: 900 11px var(--hd); letter-spacing: 1px; background: var(--jy); color: #000; padding: 3px 9px; border: 2px solid var(--jr); }
-  .group[data-group="strata"] h2::before { content: "T. REX PADDOCK"; }
-  .group[data-group="maya"] h2::before { content: "RAPTOR PEN"; }
-  .group[data-group="ollama"] h2::before { content: "GALLIMIMUS ENCLOSURE"; }
+  .group[data-slot="e1"] h2::before { content: "T. REX PADDOCK"; }
+  .group[data-slot="e2"] h2::before { content: "RAPTOR PEN"; }
+  .group[data-slot="e3"] h2::before { content: "GALLIMIMUS ENCLOSURE"; }
   .group[data-group="legacy"] h2::before { content: "COLD STORAGE"; }
   .group[data-group="services"] h2::before { content: "VISITOR CENTER"; }
   .group:not([data-group]) h2::before { content: "TOUR PROGRAM"; }
@@ -78,7 +78,7 @@
   .c-model { color: rgba(255,255,255,.9); }
   .c-source { font-family: var(--mono); color: rgba(255,255,255,.7); }
   .tag { border-radius: 0; background: #fff; color: #000; font-weight: 700; box-shadow: var(--dn); padding: 2px 7px; }
-  .tag.vision { color: var(--maya); }
+  .tag.vision { color: var(--e2); }
   .tag.bad { background: var(--jr); color: #fff; }
   .c-live { color: var(--fg2); font-weight: 700; }
   .c-live b { color: var(--jr); }

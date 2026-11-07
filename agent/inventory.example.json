@@ -1,15 +1,18 @@
 {
-  "_comment": "Quartermaster inventory, example. Copy to inventory.json and edit. Every server the dashboard may order about, and how: the agent executes only what is written here; the page sends intents (op + server id), never commands. Paths are examples. After editing: POST /api/reload (bearer) or restart the agent. inventory.json itself is never committed (.gitignore).",
+  "_comment": "Quartermaster inventory, schema 2, example. Copy to inventory.json and edit. Every engine and unit the dashboard may order about, and how: the agent executes only what is written here; the page sends intents (op + id), never commands. Paths are examples. After editing: POST /api/reload (bearer) or restart the agent. inventory.json itself is never committed (.gitignore). Presets go in presets.json beside this file (see presets.example.json).",
+  "schema": 2,
   "host": "workstation",
   "owner": "Dave",
   "_owner": "optional; some themes address the owner by name (HAL, the Matrix). Without it they use their canon.",
-  "gpu": {
-    "index": 0,
-    "name": "NVIDIA GeForce RTX 4090",
-    "total_mib": 24564,
-    "free_card_mib": 2048,
-    "_free_card": "the card counts as free for a load when nvidia-smi memory.used is below this (a bare desktop sits at 0.5-2 GB)"
-  },
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA GeForce RTX 4090",
+      "total_mib": 24564,
+      "free_card_mib": 2048,
+      "_free_card": "the card counts as free for a load when nvidia-smi memory.used is below this (a bare desktop sits at 0.5-2 GB)"
+    }
+  ],
   "ram_total_gib": 128,
   "pin_budget_gib": 64,
   "commit_warn_gib": 16,
@@ -20,13 +23,36 @@
     "free_comfyui_on_resident": true,
     "humans_only": true
   },
-  "servers": [
+  "engines": [
+    {
+      "id": "strata",
+      "kind": "strata",
+      "name": "Strata",
+      "root": "C:\\Users\\you\\Strata",
+      "version_cmd": ["C:\\Users\\you\\Strata\\.venv\\Scripts\\python.exe", "C:\\Users\\you\\Strata\\strata.py", "--version"],
+      "_version": "one source per engine: version (a string), version_file, version_cmd (argv; first version-looking token of its output) or version_url + version_path (dotted JSON path). Bands appear in this order and take theme colours --e1, --e2, ..."
+    },
+    {
+      "id": "maya",
+      "kind": "maya",
+      "name": "Maya",
+      "root": "C:\\Users\\you\\Maya",
+      "version_file": "C:\\Users\\you\\Maya\\VERSION"
+    },
+    {
+      "id": "ollama",
+      "kind": "ollama",
+      "name": "Ollama",
+      "version_url": "http://127.0.0.1:11434/api/version",
+      "version_path": "version"
+    }
+  ],
+  "units": [
     {
       "id": "strata-main",
-      "group": "strata",
+      "engine": "strata",
       "kind": "strata",
       "name": "Qwen Q8_0",
-      "engine": "Strata",
       "model": "Qwen3.8-Flash-Next Q8_0",
       "model_id": "qwen3.8-flash-next-q8_0",
       "context": 262144,
@@ -47,11 +73,31 @@
       "source": "where the weights came from (shown on the card)"
     },
     {
+      "id": "strata-old",
+      "engine": "strata",
+      "kind": "strata",
+      "legacy": true,
+      "name": "Qwen IQ3_XXS",
+      "model": "Qwen3.8-Flash-Next IQ3_XXS",
+      "context": 262144,
+      "vision": false,
+      "quant": "IQ3_XXS",
+      "port": 8096,
+      "footprint": { "vram_gib": 20, "ram_gib": 40 },
+      "start": {
+        "argv": ["C:\\Users\\you\\Strata\\run-qwen-iq3-8096.bat"],
+        "cwd": "C:\\Users\\you\\Strata",
+        "loads_at_start": true
+      },
+      "log": "C:\\Users\\you\\Strata\\strata-qwen-iq3_xxs.log",
+      "timeouts": { "start_s": 300, "load_s": 300, "unload_s": 90 },
+      "_legacy": "legacy: true folds the unit into the collapsed band"
+    },
+    {
       "id": "maya-glm",
-      "group": "maya",
+      "engine": "maya",
       "kind": "maya",
       "name": "GLM-5.3-Flash",
-      "engine": "project-maya",
       "model": "GLM-5.3-Flash Maya-M",
       "model_id": "glm-5.3-flash",
       "context": 262144,
@@ -72,10 +118,9 @@
     },
     {
       "id": "ollama",
-      "group": "ollama",
+      "engine": "ollama",
       "kind": "ollama",
       "name": "Ollama",
-      "engine": "ollama",
       "model": "small models, loaded on demand",
       "port": 11434,
       "vision": false,
@@ -95,23 +140,6 @@
         "argv": ["C:\\Users\\you\\shims\\run-shim-glm-11437.bat"],
         "cwd": "C:\\Users\\you\\shims"
       }
-    }
-  ],
-  "presets": [
-    {
-      "id": "glm-long",
-      "name": "GLM long context",
-      "desc": "GLM resident at 256k",
-      "steps": [
-        { "op": "make_resident", "target": "maya-glm" },
-        { "op": "set_context", "target": "maya-glm", "value": 262144 }
-      ]
-    },
-    {
-      "id": "clear",
-      "name": "Clear the card",
-      "desc": "Nothing resident: small models and image work get the whole card",
-      "steps": [ { "op": "unload_all" } ]
     }
   ],
   "openwebui": {

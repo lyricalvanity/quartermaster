@@ -3,6 +3,7 @@
 
 # the roster of this host, its presets and its bearer key
 agent/inventory.json
+agent/inventory.schema1.json
 agent/presets.json
 agent/agent.key
 

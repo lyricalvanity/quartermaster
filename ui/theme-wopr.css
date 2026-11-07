@@ -11,7 +11,7 @@
   --arcs: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 520' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%232f8cff' stroke-opacity='.22'%3E%3Cpath d='M60 430Q380 -60 760 300'/%3E%3Cpath d='M140 470Q520 20 980 260'/%3E%3Cpath d='M1150 440Q820 -40 420 330'/%3E%3Cpath d='M1080 480Q700 60 240 290' stroke-dasharray='6 8'/%3E%3C/g%3E%3Cg fill='%23ff3b30' fill-opacity='.5'%3E%3Ccircle cx='760' cy='300' r='4'/%3E%3Ccircle cx='980' cy='260' r='4'/%3E%3Ccircle cx='420' cy='330' r='4'/%3E%3Ccircle cx='240' cy='290' r='4'/%3E%3C/g%3E%3C/svg%3E");
   --bg: #00040a; --bg2: rgba(0,10,22,.88); --bg3: #041426; --line: #0d2f52; --line2: #1d5fa8;
   --fg: #A8ECFF; --fg2: #5fa9c9; --fg3: #3d7391;
-  --strata: #A8ECFF; --maya: #A8ECFF; --ollama: #A8ECFF; --legacy: #3d7391;
+  --e1: #A8ECFF; --e2: #A8ECFF; --e3: #A8ECFF; --e0: #3d7391;
   --ok: #A8ECFF; --warn: #FFB000; --bad: #FF3B30; --busy: #fff; --idle: #5fa9c9;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: Consolas, "Lucida Console", monospace;

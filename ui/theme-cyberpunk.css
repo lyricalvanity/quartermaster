@@ -15,7 +15,7 @@
   --yellow: #FCEE0A; --cyan: #5EF6FF; --hot: #FF003C; --red: #FF6B75; --green: #1AFFA3; --ink: #0c0709;
   --bg: #07060a; --bg2: #0c0709; --bg3: #17090c; --line: #3a1218; --line2: #7a1f2b;
   --fg: #D7F6FA; --fg2: #FF6B75; --fg3: #b0616c;
-  --strata: #FCEE0A; --maya: #5EF6FF; --ollama: #1AFFA3; --legacy: #b0616c;
+  --e1: #FCEE0A; --e2: #5EF6FF; --e3: #1AFFA3; --e0: #b0616c;
   --ok: #5EF6FF; --warn: #FCEE0A; --bad: #FF003C; --busy: #FCEE0A; --idle: #b0616c;
   --mono: "Cascadia Mono", Consolas, monospace;
   --sans: "Bahnschrift", "Segoe UI", sans-serif;

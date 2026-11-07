@@ -18,7 +18,7 @@
   --ap: #FF7A30; --weapon: #6FE08A;
   --bg: var(--g0); --bg2: #1c0707; --bg3: #2a0c0c; --line: rgba(255,150,70,.22); --line2: rgba(255,150,70,.42);
   --fg: #EDE6F4; --fg2: #C9B6C0; --fg3: #9a7a84;
-  --strata: #F7A63A; --maya: #A892E0; --ollama: #E8C070; --legacy: #9a7a84;
+  --e1: #F7A63A; --e2: #A892E0; --e3: #E8C070; --e0: #9a7a84;
   --ok: #6FE08A; --warn: #F7C04A; --bad: #FF4A3A; --busy: #58C8FF; --idle: #C9B6C0;
   --mono: "Cascadia Mono", Consolas, monospace;
   --sans: "Segoe UI", Tahoma, sans-serif;
@@ -212,7 +212,7 @@
   --ap: #D8D048;
   --bg2: #04161d; --bg3: #072430; --line: rgba(90,220,230,.20); --line2: rgba(90,220,230,.42);
   --fg: #DDF5F6; --fg2: #9CC8CC; --fg3: #6b9aa0;
-  --strata: #35C8D8; --maya: #7FD0A0; --ollama: #D8D048; --legacy: #6b9aa0;
+  --e1: #35C8D8; --e2: #7FD0A0; --e3: #D8D048; --e0: #6b9aa0;
   --busy: #F59A23;
   --art: url("img/concord.svg");
 

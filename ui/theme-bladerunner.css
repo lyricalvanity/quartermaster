@@ -17,7 +17,7 @@
   --amber: #FF9A2E; --teal: #5AD7D0; --neon: #FF3D7F; --paper: #E6D9C2;
   --bg: #04070A; --bg2: #0A1118; --bg3: #101B24; --line: rgba(120,200,220,.18); --line2: rgba(120,200,220,.38);
   --fg: var(--paper); --fg2: #B9A98C; --fg3: #7D7767;
-  --strata: #FF9A2E; --maya: #5AD7D0; --ollama: #FF3D7F; --legacy: #7D7767;
+  --e1: #FF9A2E; --e2: #5AD7D0; --e3: #FF3D7F; --e0: #7D7767;
   --ok: #7FE0B0; --warn: #FFC24A; --bad: #FF3B2F; --busy: #5AD7D0; --idle: #B9A98C;
   --sign: "Agency FB", Bahnschrift, "Segoe UI", sans-serif;
   --lcd: "OCR A Extended", Consolas, monospace;

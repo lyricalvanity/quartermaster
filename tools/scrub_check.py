@@ -28,7 +28,7 @@ ROOT = HERE.parent
 DENYLIST = ROOT / "local" / "scrub-denylist.txt"
 # attribution lives here on purpose; the owner's name is the licence's point
 EXEMPT = {"LICENSE"}
-MUST_IGNORE = ("agent/inventory.json", "agent/presets.json", "agent/agent.key")
+MUST_IGNORE = ("agent/inventory.json", "agent/inventory.schema1.json", "agent/presets.json", "agent/agent.key")
 MUST_IGNORE_DIRS = ("logs/", "artq/", "backup/", "local/")
 FONT_OK = {"ui/fonts/Michroma-Regular.ttf"}
 BINARY = {".ttf", ".otf", ".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".pyc", ".zip"}

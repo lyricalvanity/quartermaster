@@ -9,7 +9,7 @@
 :root[data-theme="muthur"] {
   --bg: #020a05; --bg2: #04110a; --bg3: #08190f; --line: #11402a; --line2: #1b6038;
   --fg: #9bf8b4; --fg2: #58c47d; --fg3: #3a9a60;
-  --strata: #74dcff; --maya: #9bf8b4; --ollama: #ffc24a; --legacy: #4f9d70;
+  --e1: #74dcff; --e2: #9bf8b4; --e3: #ffc24a; --e0: #4f9d70;
   --ok: #9bf8b4; --warn: #ffb000; --bad: #ff5a47; --busy: #eafff0; --idle: #3a9a60;
   --mono: "Cascadia Mono", Consolas, "Lucida Console", monospace;
   --sans: "Cascadia Mono", Consolas, "Lucida Console", monospace;
@@ -43,10 +43,10 @@
   .sub::before { content: "USCSS "; }
   .gauge .g-label, .r-label { font-family: var(--label); letter-spacing: 1.5px; font-size: 12px; }
   .bar { height: 12px; border-radius: 0; border-color: var(--line2); background: var(--bg); }
-  .fill { background: var(--maya);
+  .fill { background: var(--e2);
     -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
             mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); }
-  .fill.ram { background: var(--strata); }
+  .fill.ram { background: var(--e1); }
   .mark-line { background: var(--warn); width: 2px; }
   .g-foot { text-transform: uppercase; }
   #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
@@ -77,7 +77,7 @@
   .c-meta::before { content: "UNIT " counter(unit, decimal-leading-zero); font: 600 10.5px var(--label); letter-spacing: 1.5px;
     background: var(--accent); color: var(--bg); padding: 1px 6px; text-shadow: none; }
   .tag { border-radius: 0; background: transparent; border: 1px solid var(--line); text-transform: uppercase; }
-  .tag.vision { color: var(--strata); border-color: var(--strata); }
+  .tag.vision { color: var(--e1); border-color: var(--e1); }
   .tag.bad { border-color: var(--bad); }
   .c-live { text-transform: uppercase; }
   .pill { border-radius: 0; font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; }

@@ -9,7 +9,7 @@
   --orange: #FF9900; --peach: #FFCC99; --lilac: #CC99CC; --peri: #9999FF; --sky: #99CCFF; --rust: #CC6666; --tan: #FFCC66; --dim: #443355;
   --bg: #000; --bg2: #000; --bg3: #1a1424; --line: #332244; --line2: #554466;
   --fg: #FFCC99; --fg2: #B4A7E6; --fg3: #8C7FB8;
-  --strata: #FF9900; --maya: #CC99CC; --ollama: #9999FF; --legacy: #8C7FB8;
+  --e1: #FF9900; --e2: #CC99CC; --e3: #9999FF; --e0: #8C7FB8;
   --ok: #99CCFF; --warn: #FFCC66; --bad: #E8625A; --busy: #FFFF99; --idle: #8C7FB8;
   --mono: "Cascadia Mono", Consolas, monospace;
   --lc: "Bahnschrift", "Agency FB", "Arial Narrow", sans-serif;
@@ -54,10 +54,10 @@
     letter-spacing: 2px; color: var(--hc, var(--tan)); }
   h2::before { content: ""; flex: none; width: 30px; height: 16px; background: var(--hc, var(--tan)); border-radius: 8px 0 0 8px; }
   h2::after { content: ""; flex: 1; height: 16px; background: var(--hc, var(--tan)); border-radius: 0 8px 8px 0; }
-  .group[data-group="strata"] { --hc: var(--strata); }
-  .group[data-group="maya"] { --hc: var(--maya); }
-  .group[data-group="ollama"] { --hc: var(--ollama); }
-  .group[data-group="legacy"] { --hc: var(--legacy); }
+  .group[data-slot="e1"] { --hc: var(--e1); }
+  .group[data-slot="e2"] { --hc: var(--e2); }
+  .group[data-slot="e3"] { --hc: var(--e3); }
+  .group[data-group="legacy"] { --hc: var(--e0); }
   .group[data-group="services"] { --hc: var(--sky); }
 
   /* ---- cards: a bracket in the group's colour; the resident one is wider ---- */

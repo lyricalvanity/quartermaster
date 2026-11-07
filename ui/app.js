@@ -115,7 +115,7 @@
     const parts = [s.model + "."];
     if (s.footprint && s.footprint.vram_gib) parts.push(`${s.footprint.vram_gib} GB VRAM, ${s.footprint.ram_gib} GB RAM.`);
     if (s.kind === "ollama") return parts.join(" ");
-    const others = STATE ? (STATE.holders || []).filter((h) => h !== s.id).map((h) => (INV.servers.find((x) => x.id === h) || {}).name) : [];
+    const others = STATE ? (STATE.holders || []).filter((h) => h !== s.id).map((h) => (INV.units.find((x) => x.id === h) || {}).name) : [];
     if (i.loaded) parts.push("Resident now.");
     else if (others.length) parts.push(`Making it resident unloads ${others.join(", ")}.`);
     else parts.push(i.up ? "Server up, nothing loaded." : "Server down; Make resident starts it.");
@@ -125,8 +125,8 @@
   // ---- cards ----
   const cards = {};
   function serverCard(s) {
-    const c = el("div", `card ${s.group}`);
-    c.dataset.id = s.id;
+    const c = el("div", "card");
+    c.dataset.id = s.id; c.dataset.engine = s.engine;
     if (s.port) c.appendChild(el("div", "freq", (s.port / 100).toFixed(2)));      // the port as a frequency, for themes that show .freq
     const top = el("div", "c-top");
     const left = el("div");
@@ -182,7 +182,7 @@
   }
   function hoverEvict(id, on) {
     if (!STATE) return;
-    const s = INV.servers.find((x) => x.id === id);
+    const s = INV.units.find((x) => x.id === id);
     if (!s || s.kind === "ollama") return;
     for (const [sid, info] of Object.entries(STATE.servers)) {
       if (sid === id) continue;
@@ -281,7 +281,7 @@
     const rq = el("button", "btn small", "Run art queue"); rq.title = "park the resident model, run every queued image batch, put the model back";
     rq.onclick = async () => {
       const a = (STATE && STATE.art) || { batches: 0, images: 0 };
-      const res = STATE && STATE.resident && INV.servers.find(s => s.id === STATE.resident);
+      const res = STATE && STATE.resident && INV.units.find(s => s.id === STATE.resident);
       const who = res ? `${res.name} is unloaded first and loaded again afterwards` : "Nothing is resident; the card stays empty afterwards";
       if (await confirm("Run the art queue?", `${a.images} image(s) in ${a.batches} batch(es), about ${Math.max(1, Math.round(a.images * 10 / 60))} min in ComfyUI. ${who}.`)) action("art_batch", null, { then: "prior" });
     };
@@ -351,13 +351,56 @@
     comfy.open.classList.toggle("off", !i.up);
   }
 
+  // ---- engine bands: one per engine in the inventory, in its order; its accent is a slot colour the theme sets ----
+  const bands = {};
+  function engineOf(s) { return INV.engines.find((e) => e.id === s.engine) || { id: s.engine, name: s.engine, slot: "e1" }; }
+  function slotOf(s) { return s.legacy ? "e0" : engineOf(s).slot; }
+  function closeMenus() { document.querySelectorAll(".menu").forEach((m) => m.remove()); }
+  function engineBand(e) {
+    const g = el("div", "group"); g.dataset.group = e.id; g.dataset.slot = e.slot;
+    const head = el("div", "band-head"); g.appendChild(head);
+    head.appendChild(el("h2", null, e.name));
+    const tools = el("div", "band-tools"); head.appendChild(tools);
+    const ver = el("span", "ver", e.version || ""); ver.title = "version"; tools.appendChild(ver);
+    const cnt = el("span", "cnt", ""); tools.appendChild(cnt);
+    const mb = el("button", "btn small ghost band-menu", "▾"); mb.title = `${e.name}: more`; tools.appendChild(mb);
+    mb.onclick = (ev) => {
+      ev.stopPropagation();
+      const open = tools.querySelector(".menu"); closeMenus(); if (open) return;
+      const m = el("div", "menu"); tools.appendChild(m);
+      const info = (STATE && STATE.engines && STATE.engines[e.id]) || {};
+      const planRunning = STATE && STATE.plan && STATE.plan.status === "running";
+      const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.onclick = () => { closeMenus(); fn(); }; m.appendChild(b); return b; };
+      if (e.kind !== "ollama") item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
+        if (await confirm(`Stop every ${e.name} unit?`, `This ends ${info.up || 0} server process${info.up === 1 ? "" : "es"}. Their models unload with them.`)) action("stop_all", e.id, { confirm: true });
+      }, planRunning || !info.up);
+      if (!e.update) item("Update: no recipe declared", () => {}, true);      // recipes land with SPEC.md section 7
+    };
+    const grid = el("div", "grid"); grid.id = "grp-" + e.id; g.appendChild(grid);
+    bands[e.id] = { root: g, ver, cnt, grid };
+    return g;
+  }
+  function legacyBand() {
+    const g = el("div", "group collapsed"); g.dataset.group = "legacy"; g.dataset.slot = "e0";
+    const h = el("h2", "toggle", "Legacy units "); h.id = "legacy-toggle"; h.appendChild(el("span", "chev", "▸")); g.appendChild(h);
+    h.onclick = () => g.classList.toggle("collapsed");
+    const grid = el("div", "grid"); grid.id = "grp-legacy"; g.appendChild(grid);
+    bands.legacy = { root: g, grid };
+    return g;
+  }
   function buildCards() {
-    for (const g of ["strata", "maya", "ollama", "legacy"]) $("#grp-" + g).innerHTML = "";
+    const wrap = $("#bands"); wrap.innerHTML = "";
+    for (const k of Object.keys(bands)) delete bands[k];
+    for (const e of INV.engines || []) wrap.appendChild(engineBand(e));
+    if ((INV.units || []).some((s) => s.legacy)) wrap.appendChild(legacyBand());
     $("#grp-services").innerHTML = ""; owui = null; comfy = null;
     $("#grp-services-wrap").hidden = !INV.openwebui && !INV.comfyui;
     if (INV.openwebui) $("#grp-services").appendChild(owuiCard(INV.openwebui));
     if (INV.comfyui) $("#grp-services").appendChild(comfyCard(INV.comfyui));
-    for (const s of INV.servers) $("#grp-" + (s.legacy ? "legacy" : s.group)).appendChild(serverCard(s));
+    for (const s of INV.units) {
+      const b = s.legacy ? bands.legacy : bands[s.engine];
+      if (b) b.grid.appendChild(serverCard(s));
+    }
     const pr = $("#presets"); pr.innerHTML = "";
     for (const p of INV.presets || []) {
       const b = el("button", "preset"); b.appendChild(el("div", "n", p.name)); b.appendChild(el("div", "d", p.desc || ""));
@@ -395,7 +438,7 @@
     // resident line
     const holders = st.holders || [];
     const rl = $("#resident-line");
-    const transient = INV.servers.find((s) => ["starting", "loading", "unloading", "stopping", "reloading"].includes((st.servers[s.id] || {}).state));
+    const transient = INV.units.find((s) => ["starting", "loading", "unloading", "stopping", "reloading"].includes((st.servers[s.id] || {}).state));
     if (transient) {
       $("#resident-main").textContent = `${st.servers[transient.id].state} ${transient.name}`;
       $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card`;
@@ -411,7 +454,7 @@
       $("#resident-main").textContent = (st.ollama && st.ollama.models.length) ? `Ollama: ${st.ollama.models.map((m) => m.name).join(", ")}` : "nothing on the card";
       $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB used by the desktop`;
     } else {
-      const names = holders.map((h) => { const s = INV.servers.find((x) => x.id === h); const i = st.servers[h]; return `${s.name} on ${s.engine.split(" ")[0]} ${s.port} · ${i.state}`; });
+      const names = holders.map((h) => { const s = INV.units.find((x) => x.id === h); const i = st.servers[h]; return `${s.name} on ${engineOf(s).name} ${s.port} · ${i.state}`; });
       $("#resident-main").textContent = names.join("  +  ");
       const i = st.servers[holders[0]];
       const parts = [];
@@ -420,15 +463,23 @@
       if (i.engine && i.engine.context) parts.push(`${fmtK(i.engine.context)} ctx`);
       $("#resident-sub").textContent = parts.join("   ");
     }
-    rl.style.borderLeftColor = holders.length > 1 ? "var(--bad)" : holders.length ? `var(--${INV.servers.find((x) => x.id === holders[0]).group})` : "var(--line)";
+    rl.style.borderLeftColor = holders.length > 1 ? "var(--bad)" : holders.length ? `var(--${slotOf(INV.units.find((x) => x.id === holders[0]))})` : "var(--line)";
 
     // warnings
     const w = $("#warnings"); w.innerHTML = "";
     for (const m of st.warnings || []) w.appendChild(el("div", "warn", m));
 
+    // engine bands: version and counts
+    for (const [eid, b] of Object.entries(bands)) {
+      const info = (st.engines || {})[eid];
+      if (!info || !b.ver) continue;
+      b.ver.textContent = info.version || "";
+      b.cnt.textContent = `${info.units} unit${info.units === 1 ? "" : "s"} · ${info.up} up${info.loaded ? ` · ${info.loaded} loaded` : ""}`;
+    }
+
     // cards
     const planRunning = st.plan && st.plan.status === "running";
-    for (const s of INV.servers) {
+    for (const s of INV.units) {
       const refs = cards[s.id], i = st.servers[s.id] || { state: "down" };
       if (!refs) continue;
       let state = i.state;
@@ -520,7 +571,7 @@
   }
   function renderTelemetry(st) {
     const rid = (st.holders || [])[0];
-    const s = rid && INV.servers.find((x) => x.id === rid), i = rid && st.servers[rid];
+    const s = rid && INV.units.find((x) => x.id === rid), i = rid && st.servers[rid];
     $("#tele-name").textContent = s ? `${s.name} :${s.port}` : "no resident model";
     if (!i) { ["t-toks", "t-prefill", "t-state", "t-ctx"].forEach((k) => $("#" + k).textContent = "—"); $("#t-facts").innerHTML = ""; $("#t-reqs").innerHTML = ""; spark($("#spark"), [], "var(--fg3)"); return; }
     const live = i.live || {}, last = i.last_request || {};
@@ -541,10 +592,10 @@
       [r.prompt_tokens, r.output_tokens, r.prefill_tok_s && Math.round(r.prefill_tok_s), r.decode_tok_s && r.decode_tok_s.toFixed(1), r.finish_reason || r.finish].forEach((v) => tr.appendChild(el("td", null, v == null ? "—" : String(v))));
       tb.appendChild(tr);
     }
-    spark($("#spark"), i.tok_history || [], `var(--${s.group})`, 25);
+    spark($("#spark"), i.tok_history || [], `var(--${slotOf(s)})`, 25);
   }
   function renderGpuSpark(h) {
-    spark($("#gpu-spark"), h.map((p) => [p[0], p[1]]), "var(--strata)", STATE && STATE.gpu && STATE.gpu.total_mib);
+    spark($("#gpu-spark"), h.map((p) => [p[0], p[1]]), "var(--e1)", STATE && STATE.gpu && STATE.gpu.total_mib);
   }
 
   // ---- history / log ----
@@ -733,14 +784,14 @@
     initThemes();
     setHelp("");
     buildCards();
-    $("#legacy-toggle").onclick = () => document.querySelector('[data-group="legacy"]').classList.toggle("collapsed");
-    $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", "Unloads every resident model (Strata, Maya, Ollama) and asks ComfyUI to drop its models. Servers stay up.", "killall")) action("unload_all"); };
+    document.addEventListener("click", closeMenus);
+    $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", `Unloads every resident model (${(INV.engines || []).map((e) => e.name).join(", ")})${INV.comfyui ? " and asks ComfyUI to drop its models" : ""}. Servers stay up.`, "killall")) action("unload_all"); };
     $("#plan-cancel").onclick = () => api("/api/plans/current/cancel", {}).then(() => toast("cancel requested")).catch((e) => toast(e.message, "bad"));
     $("#hist-refresh").onclick = loadHistory;
     $("#log-close").onclick = () => { $("#log-modal").hidden = true; logServer = null; };
     $("#log-refresh").onclick = refreshLog;
     $("#log-filter").onkeydown = (e) => { if (e.key === "Enter") refreshLog(); };
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; } });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; closeMenus(); } });
     loadHistory();
     connect();
     setInterval(() => { if (!$("#log-modal").hidden) refreshLog(); }, 4000);

@@ -12,7 +12,7 @@
   --c: #6FE8FF; --c2: #18B4DC; --c3: #0d6c88; --w: #F2FDFF; --o: #FF7A1A; --o2: #a8480a;
   --bg: #000408; --bg2: rgba(0,10,16,.84); --bg3: #021820; --line: #0d4a5e; --line2: #18B4DC;
   --fg: #D8F8FF; --fg2: #7fcbe0; --fg3: #4a8fa4;
-  --strata: #6FE8FF; --maya: #6FE8FF; --ollama: #6FE8FF; --legacy: #4a8fa4;
+  --e1: #6FE8FF; --e2: #6FE8FF; --e3: #6FE8FF; --e0: #4a8fa4;
   --ok: #6FE8FF; --warn: #FFC24A; --bad: #FF7A1A; --busy: #F2FDFF; --idle: #7fcbe0;
   --mono: Consolas, "Lucida Console", monospace;
   --sans: "Segoe UI", Tahoma, sans-serif;

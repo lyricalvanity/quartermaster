@@ -101,11 +101,14 @@ the owner sees whose floor they are about to pull out.
 
 ## 4. Inventory, schema 2
 
-One file, `agent/inventory.json`, `"schema": 2`. Top level: `host`, `owner`, `gpus[]`, `ram`, `policy`,
-`engines[]`, `units[]`, `services[]`, `clients[]`, `shims[]`, `art`. Presets move to **`presets.json`**
-beside it (section 6). The agent migrates a schema-1 file on first load (servers become units, their
-groups become engines with no recipes, the `openwebui` and `comfyui` blocks become a service and an engine)
-and writes the result back once, keeping the original as `inventory.schema1.json`.
+One file, `agent/inventory.json`, `"schema": 2`. Top level: `host`, `owner`, `gpus[]`, the RAM figures,
+`policy`, `engines[]`, `units[]`, `shims[]`, and for now the `openwebui`, `comfyui` and `art` blocks;
+`services[]` and `clients[]` arrive with stages 3 and 5. Presets live in **`presets.json`** beside it
+(section 6). The agent migrates a schema-1 file on first load (servers become units, their groups become
+engines whose version is read from the old label, Ollama's from its `/api/version`) and writes the result
+back once, keeping the original as `inventory.schema1.json` **(built)**. An engine declares one version
+source: `version`, `version_file`, `version_cmd` or `version_url` + `version_path`; all local, cached ten
+minutes, refreshed on reload.
 
 `owner` and `host` feed the header and the themes (`{HOST}`, `{host}`, `{owner}`, `{N}` tokens in theme
 copy; themes that address someone fall back to their canon when `owner` is absent) **(decided, built)**.
@@ -179,9 +182,11 @@ CLIENTS   a strip: name, version, ↑ when an update is known; bindings drawn on
 SIDE      Presets (+ New · Save current) · KPIs · Warnings · Actions log
 ```
 
-Theme accents move from engine names (`--strata`, `--maya`, `--ollama`) to **slots** (`--e1` … `--e4`,
-`--e0` for legacy) assigned by engine order, one mechanical pass over the theme files. Themes that name
-the engines (MAGI's three computers) name them by slot.
+Theme accents are **slots** (`--e1` … `--e6`, `--e0` for legacy) assigned by engine order; a band sets
+`--accent` from its slot and its cards inherit it. Themes that name the engines (MAGI's three computers,
+HAL's module labels, the park's paddocks) name them by slot **(built)**. The band head carries the version,
+unit counts and a menu; today the menu stops every unit of that engine and names the missing update recipe.
+ComfyUI still sits in the services row; it becomes a band when the engine kinds table lands.
 
 ## 9. Platform
 
@@ -222,8 +227,8 @@ Each stage leaves the original workstation working.
 | stage | content | status |
 |---|---|---|
 | 1 | Scrub, `owner`/`host` tokens, example inventory, MIT, scrub check, repository | **done 2026-11-06** |
-| 2 | Schema 2 with migration; engine bands with version and menu; slot colours in the themes | next |
-| 3 | `setup` and `detect`: host facts, the detectors, launcher and key | |
+| 2 | Schema 2 with migration; engine bands with version and menu; slot colours in the themes | **done 2026-11-06** |
+| 3 | `setup` and `detect`: host facts, the detectors, launcher and key | next |
 | 4 | Preset editor and Save-current; `presets.json` | |
 | 5 | Updaters and the clients strip with bindings | |
 | 6 | Platform module and the Linux implementation | |

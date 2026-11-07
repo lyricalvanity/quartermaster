@@ -43,8 +43,9 @@ cd quartermaster
 ```
 
 1. Copy `agent/inventory.example.json` to `agent/inventory.json` and describe your machine: host name,
-   GPU, RAM, and each server (its kind, port, how to start it, where its log is). The example has one of
-   each kind with comments. `inventory.json` is in `.gitignore`: it describes your machine and stays there.
+   GPU, RAM, each engine, and each unit (its kind, port, how to start it, where its log is). The example
+   has one of each kind with comments. Copy `agent/presets.example.json` to `agent/presets.json` too.
+   Both are in `.gitignore`: they describe your machine and stay there.
 2. Make the bearer key (one line, any shell):
 
 ```bash
@@ -77,18 +78,27 @@ After editing the inventory: `POST /api/reload` with the bearer, or restart the 
 
 ## The inventory
 
+Schema 2. A schema-1 file (`servers[]` with a `group` each, one `gpu`, presets inside) is migrated the
+first time the agent loads it: the original is kept as `inventory.schema1.json` and the presets move to
+`presets.json` beside it.
+
 | key | what it is |
 |---|---|
 | `host`, `owner` | names shown in the header and used by the themes (`owner` is optional) |
-| `gpu` | index, name, total MiB, and `free_card_mib`: below this much used, the card counts as free |
+| `gpus[]` | index, name, total MiB, and `free_card_mib`: below this much used, the card counts as free. The first one is the card the resident-model state machine manages |
 | `ram_total_gib`, `pin_budget_gib`, `commit_warn_gib` | the RAM gauge and its warning lines |
 | `policy` | `unload_ollama_on_resident`, `free_comfyui_on_resident`, `park_8099_default`, `humans_only` |
-| `servers[]` | one per model server: `kind` is `strata`, `strata-launch`, `maya` or `ollama`; `group` is the band it sits in; `start.argv` and `cwd`; `log`; `timeouts`; `footprint`; `legacy: true` folds it away |
-| `shims[]` | small proxies that front a server on another port (an Ollama-API shim for an OpenAI-style server, say) |
-| `presets[]` | named lists of `{op, target, value}` steps |
-| `openwebui` | optional tile; this driver runs three named Windows scheduled tasks and reads health, version and two logs |
+| `engines[]` | one per runtime, in the order the bands appear: `id`, `kind` (`strata`, `maya`, `ollama`, …), `name`, optional `root`, and one version source: `version` (a string), `version_file`, `version_cmd` (argv; the first version-looking token of its output) or `version_url` + `version_path` (a dotted JSON path). All local; read on a click or a reload, cached ten minutes |
+| `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya` or `ollama`; `start.argv` and `cwd`; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
+| `shims[]` | small proxies that front a unit on another port (an Ollama-API shim for an OpenAI-style server, say) |
+| `openwebui` | optional tile; this driver runs three named Windows scheduled tasks (`tasks`) and reads health, version and two logs |
 | `comfyui` | optional tile: start argv, port, the command-line text that identifies the process, an optional `update` section |
 | `art` | optional queue of image batches that wait for the card (needs `comfyui`) |
+
+`presets.json`: `{"presets": [{id, name, desc, steps: [{op, target, value}]}]}`. Each engine's band shows its
+version and unit counts and has a menu (stop every unit of that engine; the update entry appears once an
+engine declares a recipe). Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
+legacy band), so a theme never needs to know an engine's name.
 
 ## From a terminal
 

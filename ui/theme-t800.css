@@ -12,7 +12,7 @@
   --w: #FFFFFF; --p: #FFC8C8; --d: #D07070; --r: #E01010;
   --bg: #140000; --bg2: rgba(70,0,0,.50); --bg3: rgba(120,0,0,.45); --line: rgba(255,200,200,.28); --line2: rgba(255,220,220,.6);
   --fg: #FFFFFF; --fg2: #FFC8C8; --fg3: #D88080;
-  --strata: #FFFFFF; --maya: #FFFFFF; --ollama: #FFFFFF; --legacy: #D88080;
+  --e1: #FFFFFF; --e2: #FFFFFF; --e3: #FFFFFF; --e0: #D88080;
   --ok: #FFFFFF; --warn: #FFE08A; --bad: #FFFFFF; --busy: #FFFFFF; --idle: #FFC8C8;
   --mono: "Lucida Console", Consolas, monospace;
   --sans: "Lucida Console", Consolas, monospace;

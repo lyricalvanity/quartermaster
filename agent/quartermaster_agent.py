@@ -75,6 +75,55 @@ def log(msg: str) -> None:
 
 
 # ---- inventory ---------------------------------------------------------------
+# Schema 2 (SPEC.md section 4): engines[] and units[] (a unit is one server of one engine), gpus[] (the
+# first is the card the state machine manages), presets in presets.json beside the inventory. A schema-1
+# file (servers[] with a group each, one gpu, presets inside) is migrated on first load: the result is
+# written back once, the original kept as inventory.schema1.json.
+
+PRESETS = HERE / "presets.json"
+SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
+ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI"}
+
+
+def migrate_schema1(data: dict) -> tuple[dict, list]:
+    """A schema-1 inventory as schema 2. Returns (inventory, presets). Pure: writes nothing."""
+    out = {"schema": 2}
+    for k in ("_comment", "host", "owner"):
+        if k in data:
+            out[k] = data[k]
+    out["gpus"] = data.get("gpus") or ([data["gpu"]] if data.get("gpu") else [])
+    for k in ("ram_total_gib", "pin_budget_gib", "commit_warn_gib", "poll_s", "policy", "rev"):
+        if k in data:
+            out[k] = data[k]
+    engines, by_id, units = [], {}, []
+    for s in data.get("servers", []):
+        u = dict(s)
+        kind = str(s.get("kind", "")).split("-")[0] or "engine"
+        eid = s.get("group") or kind
+        if eid == "legacy":                       # the folded group was never an engine
+            eid = kind
+            u["legacy"] = True
+        label = s.get("engine") if isinstance(s.get("engine"), str) else ""
+        u["engine"] = eid
+        if label:
+            u["engine_label"] = label
+        u.pop("group", None)
+        if eid not in by_id:
+            e = {"id": eid, "kind": kind, "name": ENGINE_NAMES.get(kind, eid.capitalize())}
+            m = re.search(r"\d+\.\d+(?:\.\d+)*", label or "")
+            if kind == "ollama" and s.get("port"):
+                e["version_url"], e["version_path"] = f"http://127.0.0.1:{s['port']}/api/version", "version"
+            elif m:
+                e["version"] = m.group(0)
+            by_id[eid] = e
+            engines.append(e)
+        units.append(u)
+    out["engines"], out["units"] = engines, units
+    for k in ("shims", "openwebui", "comfyui", "art"):
+        if k in data:
+            out[k] = data[k]
+    return out, list(data.get("presets", []))
+
 
 class Inventory:
     def __init__(self):
@@ -82,11 +131,38 @@ class Inventory:
 
     def load(self):
         data = json.loads(INVENTORY.read_text(encoding="utf-8"))
+        if int(data.get("schema") or 1) < 2:
+            data, presets = migrate_schema1(data)
+            keep = HERE / "inventory.schema1.json"
+            if not keep.exists():
+                keep.write_bytes(INVENTORY.read_bytes())
+            if presets and not PRESETS.exists():
+                PRESETS.write_text(json.dumps({"presets": presets}, indent=2) + "\n", encoding="utf-8", newline="\n")
+            INVENTORY.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="\n")
+            log("inventory migrated to schema 2 (original kept as inventory.schema1.json; presets now in presets.json)")
         self.data = data
-        self.servers = {s["id"]: s for s in data["servers"]}
+        self.engines = list(data.get("engines", []))
+        for i, e in enumerate(self.engines):
+            e["slot"] = f"e{min(i + 1, SLOTS)}"
+        self.engine_by_id = {e["id"]: e for e in self.engines}
+        self.servers = {}
+        for u in data.get("units", []):
+            u.setdefault("engine", str(u.get("kind", "")).split("-")[0])
+            if u["engine"] not in self.engine_by_id:          # a unit naming no declared engine still gets a band
+                e = {"id": u["engine"], "kind": u["engine"], "name": ENGINE_NAMES.get(u["engine"], u["engine"].capitalize()),
+                     "slot": f"e{min(len(self.engines) + 1, SLOTS)}"}
+                self.engines.append(e)
+                self.engine_by_id[e["id"]] = e
+            u["group"] = u["engine"]                              # older code says group
+            self.servers[u["id"]] = u
         self.shims = {s["id"]: s for s in data.get("shims", [])}
-        self.presets = {p["id"]: p for p in data.get("presets", [])}
-        self.gpu = data["gpu"]
+        if PRESETS.exists():
+            presets = json.loads(PRESETS.read_text(encoding="utf-8")).get("presets", [])
+        else:
+            presets = data.get("presets", [])
+        self.presets = {p["id"]: p for p in presets}
+        self.gpus = data.get("gpus") or ([data["gpu"]] if data.get("gpu") else [])
+        self.gpu = self.gpus[0] if self.gpus else {"index": 0, "name": "", "total_mib": 0, "free_card_mib": 2048}
         self.policy = data.get("policy", {})
         self.poll_s = float(data.get("poll_s", 2.0))
         self.openwebui = data.get("openwebui")       # optional; absent = no OpenWebUI tile
@@ -94,7 +170,41 @@ class Inventory:
         self.art = data.get("art")                   # optional; absent = no art queue (needs comfyui too)
 
     def public(self):
-        return self.data
+        """What the page gets: the inventory with the derived pieces filled in."""
+        return {**self.data, "gpu": self.gpu, "gpus": self.gpus, "engines": self.engines,
+                "units": list(self.servers.values()), "presets": list(self.presets.values())}
+
+
+_ENGINE_VER: dict[str, tuple[float, str | None]] = {}
+
+
+def engine_version(e: dict) -> str | None:
+    """An engine's version from whichever source it declares: version (static), version_file, version_cmd
+    (first version-looking token of its output) or version_url + version_path (a dotted JSON path). Cached
+    ten minutes; every source is local, nothing leaves the machine."""
+    hit = _ENGINE_VER.get(e["id"])
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
+    v = e.get("version")
+    try:
+        if e.get("version_file"):
+            v = Path(e["version_file"]).read_text(encoding="utf-8", errors="replace").strip().splitlines()[0][:40]
+        elif e.get("version_cmd"):
+            rc, out, err = run(list(e["version_cmd"]), timeout=25, cwd=e.get("root"))
+            text = (out or err).strip()
+            m = re.search(r"\d+\.\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.]+)?", text)
+            v = m.group(0) if m else (text.splitlines()[0][:40] if text else v)
+        elif e.get("version_url"):
+            st, body = http("GET", e["version_url"], timeout=3.0)
+            cur = body if st == 200 else None
+            for k in str(e.get("version_path") or "version").split("."):
+                cur = cur.get(k) if isinstance(cur, dict) else None
+            if cur:
+                v = str(cur)[:40]
+    except Exception:  # noqa: BLE001 - a version is decoration; the band shows none
+        pass
+    _ENGINE_VER[e["id"]] = (time.time(), v)
+    return v
 
 
 INV = Inventory()
@@ -416,6 +526,11 @@ class State:
                 snap["art"] = {"error": str(e)[:160]}
         snap["plan"] = PLANS.current_public()
         snap["inventory_rev"] = INV.data.get("rev", 1)
+        snap["engines"] = {}
+        for e in INV.engines:
+            mine = [i for sid, i in snap["servers"].items() if INV.servers[sid]["engine"] == e["id"]]
+            snap["engines"][e["id"]] = {"version": engine_version(e), "slot": e["slot"], "units": len(mine),
+                                        "up": sum(1 for i in mine if i.get("up")), "loaded": sum(1 for i in mine if i.get("loaded"))}
         with self.lock:
             self.snapshot = snap
         return snap
@@ -898,6 +1013,23 @@ def op_stop(p: Plan):
     if p.target not in INV.servers:
         raise PlanFailed("unknown server")
     op_stop_process(p, p.target)
+
+
+def op_stop_all(p: Plan):
+    """End every running unit of one engine (the band's menu). Ollama is a service and is skipped."""
+    if not p.args.get("confirm"):
+        raise PlanFailed("stop_all ends server processes: send confirm=true")
+    if p.target not in INV.engine_by_id:
+        raise PlanFailed("unknown engine")
+    st = STATE.get()["servers"]
+    ups = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and s["kind"] != "ollama" and st.get(sid, {}).get("up")]
+    if not ups:
+        s = p.step("Nothing running", INV.engine_by_id[p.target]["name"])
+        p.done_step(s)
+        return
+    for sid in ups:
+        p.check()
+        op_stop_process(p, sid)
 
 
 def op_start(p: Plan):
@@ -1846,7 +1978,7 @@ def op_art_batch(p: Plan):
                      f"{time.time() - t_all - gen:.0f} s of swapping and loading")
 
 
-OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_unload_all, "stop": op_stop,
+OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_unload_all, "stop": op_stop, "stop_all": op_stop_all,
        "start": op_start, "park": op_park, "unpark": op_unpark, "set_context": op_set_context,
        "set_budget": op_set_budget, "start_shim": op_start_shim, "stop_shim": op_stop_shim, "preset": op_preset,
        "owui_start": op_owui_start, "owui_stop": op_owui_stop, "owui_update": op_owui_update,
@@ -2063,9 +2195,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/reload":
             try:
                 INV.load()
+                _ENGINE_VER.clear()
             except Exception as e:  # noqa: BLE001
                 return self._json(400, {"error": f"inventory did not load: {e}"})
-            return self._json(200, {"ok": True, "servers": list(INV.servers)})
+            return self._json(200, {"ok": True, "units": list(INV.servers), "engines": [e["id"] for e in INV.engines],
+                                    "presets": list(INV.presets)})
         return self._json(404, {"error": "not found"})
 
 
