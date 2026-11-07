@@ -204,9 +204,12 @@ Fonts: the themes name display faces that ship with Windows and Office (Agency F
 Titling, Old English Text MT, Bahnschrift, Cascadia). They are used from the viewer's machine; if a browser
 hides installed fonts from pages, drop your own copies into `ui/fonts/` (ignored by git) and `fonts.css`
 will serve them. A machine without them (Linux, macOS) can map the names to faces it has in
-`ui/fonts/local.css`, also ignored: one `@font-face` per name, with `url()` to copies in `ui/fonts/`. The
+`ui/fonts/local.css`, also ignored: one `@font-face` per name and weight, with `url()` to copies in `ui/fonts/`. The
 page loads it after `fonts.css`, so its rules win; where it does not exist, the agent and the container
-serve an empty one. Michroma is included under the SIL Open Font License (`ui/fonts/OFL-Michroma.txt`).
+serve an empty one. Map the light weights too: Precrime, Aperture and Ghost in the Shell set Segoe UI and
+Bahnschrift at 200 to 300, and without a light rule the browser draws the Regular cut, which is wider and
+pushes their titles out of the brand column. A stand-in no wider than the face it replaces keeps the header
+as drawn. Michroma is included under the SIL Open Font License (`ui/fonts/OFL-Michroma.txt`).
 
 The themes are homages. The names and marks they allude to belong to their owners and are used here as
 fan reference only.
