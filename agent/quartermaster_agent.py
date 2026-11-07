@@ -41,13 +41,16 @@ import artqueue
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 UI_DIR = ROOT / "ui"
-LOG_DIR = ROOT / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+# QM_HOME: where inventory.json, presets.json and agent.key live (default: beside this file); with it set, logs go
+# beside them too, so a second agent (a test, another port) never touches the installed one's files. QM_PORT: the port.
+HOME = Path(os.environ["QM_HOME"]).resolve() if os.environ.get("QM_HOME") else HERE
+LOG_DIR = (HOME / "logs") if os.environ.get("QM_HOME") else ROOT / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 ACTIONS_LOG = LOG_DIR / "actions.jsonl"
 AGENT_LOG = LOG_DIR / "agent.log"
-INVENTORY = HERE / "inventory.json"
-KEY = (HERE / "agent.key").read_text(encoding="utf-8").strip()
-HOST, PORT = "127.0.0.1", 8790
+INVENTORY = HOME / "inventory.json"
+KEY = (HOME / "agent.key").read_text(encoding="utf-8").strip()
+HOST, PORT = "127.0.0.1", int(os.environ.get("QM_PORT") or 8790)
 UI_PORT = 8800                                   # the nginx container's page (docker-compose.yml)
 # nginx forwards Host as $host, which drops the port, so the bare names are the container's requests
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"} | {f"{h}:{p}" for h in ("127.0.0.1", "localhost") for p in (PORT, UI_PORT)}
@@ -57,7 +60,7 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 DEBUG = "--debug" in sys.argv
 ENGINE_PROCS = ("strata.exe", "strata-dsv41.exe", "strata-vision.exe", "maya.exe", "maya-vision.exe",
-                "ollama.exe", "ollama_llama_server.exe", "ollama-runner.exe")
+                "ollama.exe", "ollama_llama_server.exe", "ollama-runner.exe", "llama-server.exe")
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
                 ".woff2": "font/woff2", ".ico": "image/x-icon", ".json": "application/json"}
@@ -80,7 +83,7 @@ def log(msg: str) -> None:
 # file (servers[] with a group each, one gpu, presets inside) is migrated on first load: the result is
 # written back once, the original kept as inventory.schema1.json.
 
-PRESETS = HERE / "presets.json"
+PRESETS = HOME / "presets.json"
 SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
 ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI"}
 
@@ -133,7 +136,7 @@ class Inventory:
         data = json.loads(INVENTORY.read_text(encoding="utf-8"))
         if int(data.get("schema") or 1) < 2:
             data, presets = migrate_schema1(data)
-            keep = HERE / "inventory.schema1.json"
+            keep = HOME / "inventory.schema1.json"
             if not keep.exists():
                 keep.write_bytes(INVENTORY.read_bytes())
             if presets and not PRESETS.exists():
@@ -751,6 +754,11 @@ def op_unload_server(p: Plan, sid: str, force=False):
         elif kind == "strata-launch":
             # the launch namespace has no lazy load: unloading IS stopping the server
             op_stop_launch(p, sid, st)
+        elif kind == "llamacpp":
+            # llama-server holds its one model for its whole life: unloading it is ending the process
+            p.say(st, "llama-server loads one model at start and keeps it; unloading is stopping the process")
+            p.done_step(st)
+            op_stop_process(p, sid)
         elif kind == "maya":
             code, r = http("POST", base + "/models/unload", body={}, timeout=60)
             p.say(st, f"/models/unload -> {code} {json.dumps(r)[:160]}")

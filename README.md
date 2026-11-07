@@ -42,17 +42,24 @@ git clone https://github.com/lyricalvanity/quartermaster.git
 cd quartermaster
 ```
 
-1. Copy `agent/inventory.example.json` to `agent/inventory.json` and describe your machine: host name,
-   GPU, RAM, each engine, and each unit (its kind, port, how to start it, where its log is). The example
-   has one of each kind with comments. Copy `agent/presets.example.json` to `agent/presets.json` too.
-   Both are in `.gitignore`: they describe your machine and stay there.
-2. Make the bearer key (one line, any shell):
+1. Let setup find what the machine runs and write the inventory:
 
 ```bash
-python -c "import secrets, pathlib; pathlib.Path('agent/agent.key').write_text(secrets.token_hex(32))"
+python agent/setup.py
 ```
 
-3. Start the agent, in a console the first time so you see what it finds:
+   It reads the host (name, CPU, RAM, `nvidia-smi`), asks which kinds to look for (Strata, Maya, Ollama,
+   llama.cpp, ComfyUI, OpenWebUI, Pi, Codex CLI, Claude Code), finds their installs and configuration
+   files and any of them listening on a port, shows what it found, and writes `agent/inventory.json`,
+   `agent/presets.json`, the bearer key `agent/agent.key` and the two launchers once you say yes.
+   Nothing is written before that. Footprints, contexts and quants are yours to fill in afterwards:
+   setup cannot measure them. `--yes` accepts every default; `--kinds ollama,comfyui` skips the
+   checklist; `--skip <id>` leaves a proposal out. Later, `python agent/setup.py detect` re-scans and
+   proposes only what the inventory does not have yet. `agent/inventory.example.json` shows the shape if
+   you would rather write it by hand. All of these files are in `.gitignore`: they describe your machine
+   and stay there.
+
+2. Start the agent, in a console the first time so you see what it finds:
 
 ```bash
 python agent/quartermaster_agent.py --debug
@@ -67,14 +74,13 @@ docker compose up -d --build
    and open <http://127.0.0.1:8800/>. Rebuild after any edit under `ui/` (the page is baked into the
    image); the agent's own page at 8790 serves the live files.
 
-4. To start the agent at logon, put a `.cmd` in your Startup folder (`shell:startup`) with the absolute
-   paths of your checkout:
+3. To start the agent at logon, copy the `Quartermaster Agent.cmd` setup wrote into your Startup folder
+   (`shell:startup`); setup offers to do it.
 
-```bat
-start "" /D "C:\path\to\quartermaster\agent" pythonw.exe "C:\path\to\quartermaster\agent\quartermaster_agent.py"
-```
-
-After editing the inventory: `POST /api/reload` with the bearer, or restart the agent.
+After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
+variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory
+holding its own `inventory.json`, `presets.json` and `agent.key` (its logs go there too), and `QM_PORT`
+changes the port; `setup.py --home DIR` writes such a directory.
 
 ## The inventory
 
@@ -91,6 +97,7 @@ first time the agent loads it: the original is kept as `inventory.schema1.json` 
 | `engines[]` | one per runtime, in the order the bands appear: `id`, `kind` (`strata`, `maya`, `ollama`, …), `name`, optional `root`, and one version source: `version` (a string), `version_file`, `version_cmd` (argv; the first version-looking token of its output) or `version_url` + `version_path` (a dotted JSON path). All local; read on a click or a reload, cached ten minutes |
 | `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya` or `ollama`; `start.argv` and `cwd`; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
 | `shims[]` | small proxies that front a unit on another port (an Ollama-API shim for an OpenAI-style server, say) |
+| `clients[]` | programs that consume the units (Pi, Codex CLI, Claude Code): executable, version command, and the local URLs their configuration points at. Written by setup; the page's client strip is a later stage |
 | `openwebui` | optional tile; this driver runs three named Windows scheduled tasks (`tasks`) and reads health, version and two logs |
 | `comfyui` | optional tile: start argv, port, the command-line text that identifies the process, an optional `update` section |
 | `art` | optional queue of image batches that wait for the card (needs `comfyui`) |
@@ -108,7 +115,7 @@ legacy band), so a theme never needs to know an engine's name.
 python agent/qm.py status
 ```
 
-`qm resident <id>`, `qm unload <id>|all`, `qm start|stop|park|unpark <id>`, `qm context <n>`,
+`qm setup` and `qm detect` run `setup.py` (no agent needed). `qm resident <id>`, `qm unload <id>|all`, `qm start|stop|park|unpark <id>`, `qm context <n>`,
 `qm budget <n>`, `qm preset <id>`, `qm shim <id> [--stop]`, `qm comfy start|stop|free|update|rollback`,
 `qm art submit|list|run|drop`, `qm log <id>`, `qm history`, `qm cancel`. The docstring at the top of the
 file is the manual.

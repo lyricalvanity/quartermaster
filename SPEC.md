@@ -120,9 +120,14 @@ injects it), so the page's authority equals reach to its port. A page that could
 write argv, which is code execution as the owner. The inventory stays off the HTTP surface.
 
 ```
-python -m quartermaster setup      # first run: checklist of kinds, detect, review, write inventory.json
-python -m quartermaster detect     # later: re-scan, propose additions, accept at the prompt
+python agent/setup.py              # first run: checklist of kinds, detect, review, write inventory.json
+python agent/setup.py detect       # later: re-scan, propose additions, accept at the prompt
 ```
+
+**(built 2026-11-06.)** `qm setup` and `qm detect` are the same thing. `--yes`, `--kinds`, `--skip`,
+`--home DIR` (a separate home the agent reads with `QM_HOME`; `QM_PORT` picks its port) and `--force`
+cover scripted runs and tests. A fresh `setup` also writes `presets.json` (clear the card, and one
+"resident" preset per unit), the bearer key, the launchers, and offers the Startup copy and the scrub hook.
 
 Each kind ships a **detector** with two techniques:
 
@@ -136,12 +141,17 @@ Each kind ships a **detector** with two techniques:
 Host facts come from the OS: hostname, `nvidia-smi --query-gpu=name,memory.total`, total RAM, CPU name.
 
 Detection proposes; the owner confirms. What detection **cannot** do is invent an update recipe for a
-custom build: it proposes the conventional one for the kind and the owner keeps or replaces it. The
-installer also writes the bearer key, the launcher for the Startup folder (Windows) or a user unit (Linux),
-and offers to install the scrub hook if the checkout is a git repository.
+custom build: it proposes the conventional one for the kind and the owner keeps or replaces it. Nor can
+it measure a unit's footprint, context or quant: those stay blank for the owner. An engine found with no
+unit (llama.cpp installed, no server running) is reported, not proposed, so no band stands empty. A
+stale configuration file is proposed like any other: that is what the prompt is for. The installer also
+writes the bearer key, the launcher for the Startup folder (Windows) or a user unit (Linux), and offers to
+install the scrub hook if the checkout is a git repository.
 
 Acceptance test for the package: a clean Windows machine with only Ollama runs `setup` and gets a working
-dashboard showing Ollama and its models.
+dashboard showing Ollama and its models. **Passed 2026-11-06** in the form available here: `setup --kinds
+ollama --home <dir>` on the original workstation, a second agent on `QM_PORT=8791` against that home,
+state and page served, the installed agent untouched.
 
 ## 6. Presets
 
@@ -228,8 +238,8 @@ Each stage leaves the original workstation working.
 |---|---|---|
 | 1 | Scrub, `owner`/`host` tokens, example inventory, MIT, scrub check, repository | **done 2026-11-06** |
 | 2 | Schema 2 with migration; engine bands with version and menu; slot colours in the themes | **done 2026-11-06** |
-| 3 | `setup` and `detect`: host facts, the detectors, launcher and key | next |
-| 4 | Preset editor and Save-current; `presets.json` | |
+| 3 | `setup` and `detect`: host facts, the detectors, launcher and key | **done 2026-11-06** |
+| 4 | Preset editor and Save-current; `presets.json` | next |
 | 5 | Updaters and the clients strip with bindings | |
 | 6 | Platform module and the Linux implementation | |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |

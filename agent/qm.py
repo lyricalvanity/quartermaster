@@ -1,5 +1,6 @@
 """qm: the Quartermaster agent from a terminal.
 
+  qm setup | detect [--yes]      find what this machine runs and write the inventory (setup.py; no agent needed)
   qm status                      who holds the card, every server's state
   qm resident <id> [--force]     make <id> the resident model (unloads the others first)
   qm unload <id> | all           give the card back
@@ -163,6 +164,9 @@ def main(argv):
         print(__doc__)
         return 0
     cmd, rest = argv[0], argv[1:]
+    if cmd in ("setup", "detect"):                 # no agent needed: setup.py does its own work
+        import setup as _setup
+        return _setup.main([cmd, *rest])
     force = "--force" in rest
     rest = [r for r in rest if r != "--force"]
     if cmd == "status":
