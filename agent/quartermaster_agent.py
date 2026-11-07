@@ -37,6 +37,7 @@ import urllib.request
 import urllib.error
 
 import artqueue
+import platform_host as host
 import updaters
 
 HERE = Path(__file__).resolve().parent
@@ -56,12 +57,12 @@ UI_PORT = 8800                                   # the nginx container's page (d
 # nginx forwards Host as $host, which drops the port, so the bare names are the container's requests
 ALLOWED_HOSTS = {"127.0.0.1", "localhost"} | {f"{h}:{p}" for h in ("127.0.0.1", "localhost") for p in (PORT, UI_PORT)}
 ALLOWED_ORIGINS = {f"http://{h}:{p}" for h in ("127.0.0.1", "localhost") for p in (PORT, UI_PORT)}
-NVIDIA_SMI = r"C:\Windows\System32\nvidia-smi.exe"
-NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+NVIDIA_SMI = host.nvidia_smi() or "nvidia-smi"
+NO_WINDOW, NEW_GROUP = host.NO_WINDOW, host.NEW_GROUP
 DEBUG = "--debug" in sys.argv
-ENGINE_PROCS = ("strata.exe", "strata-dsv41.exe", "strata-vision.exe", "maya.exe", "maya-vision.exe",
-                "ollama.exe", "ollama_llama_server.exe", "ollama-runner.exe", "llama-server.exe")
+# engine processes as the OS names them (stem.exe on Windows); what the card's "apps" list is filtered to
+ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya", "maya-vision",
+                               "ollama", "ollama_llama_server", "ollama-runner", "llama-server"))
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
                 ".woff2": "font/woff2", ".ico": "image/x-icon", ".json": "application/json"}
@@ -319,24 +320,7 @@ def tail_file(path: str, lines: int = 80, exclude: str | None = None) -> list[st
     return out[-lines:]
 
 
-class _MemoryStatusEx(ctypes.Structure):
-    _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
-                ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
-                ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
-                ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
-                ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
-
-
-def ram_status():
-    m = _MemoryStatusEx()
-    m.dwLength = ctypes.sizeof(m)
-    ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
-    gib = 1024 ** 3
-    return {"total_gib": round(m.ullTotalPhys / gib, 1), "available_gib": round(m.ullAvailPhys / gib, 1),
-            "used_gib": round((m.ullTotalPhys - m.ullAvailPhys) / gib, 1), "used_percent": m.dwMemoryLoad,
-            "commit_total_gib": round(m.ullTotalPageFile / gib, 1),
-            "commit_used_gib": round((m.ullTotalPageFile - m.ullAvailPageFile) / gib, 1),
-            "commit_free_gib": round(m.ullAvailPageFile / gib, 1)}
+ram_status = host.ram_status
 
 
 GPU_FIELDS = ["memory.used", "memory.total", "utilization.gpu", "temperature.gpu", "power.draw", "power.limit",
@@ -373,35 +357,11 @@ def gpu_apps():
 
 
 def process_list():
-    """{name_lower: [pids]} for the engine processes only (one tasklist call)."""
-    rc, out, _ = run(["tasklist.exe", "/FO", "CSV", "/NH"], timeout=15)
-    found = {}
-    if rc == 0:
-        for line in out.splitlines():
-            if not line.startswith('"'):
-                continue
-            cols = [c.strip('"') for c in line.split('","')]
-            name = cols[0].lower()
-            if name in ENGINE_PROCS:
-                try:
-                    found.setdefault(name, []).append(int(cols[1]))
-                except (IndexError, ValueError):
-                    pass
-    return found
+    """{name_lower: [pids]} for the engine processes only."""
+    return host.process_list(ENGINE_PROCS)
 
 
-def pid_listening(port: int) -> list[int]:
-    rc, out, _ = run(["netstat.exe", "-ano", "-p", "tcp"], timeout=15)
-    pids = []
-    if rc == 0:
-        for line in out.splitlines():
-            parts = line.split()
-            if len(parts) >= 5 and parts[0] == "TCP" and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
-                try:
-                    pids.append(int(parts[4]))
-                except ValueError:
-                    pass
-    return sorted(set(pids))
+pid_listening = host.pid_listening
 
 
 # ---- state -------------------------------------------------------------------
@@ -871,16 +831,15 @@ def op_stop_process(p: Plan, sid: str):
             return
         for pid in pids:
             p.check()
-            rc, out, err = run(["taskkill.exe", "/T", "/F", "/PID", str(pid)], timeout=30)
-            p.say(st, f"taskkill {pid}: {(out or err).strip()[:120]}")
+            p.say(st, f"end {pid}: {host.kill_tree(pid)[:120]}")
         _wait(p, st, lambda: (not fresh_info(sid).get("up"), "port still open"), 60, what=f"{s['name']} to exit")
         # the engine child sometimes outlives the server (seen with maya.exe): one more sweep by name
-        names = {"maya": ("maya.exe", "maya-vision.exe"), "strata": ("strata-vision.exe",)}.get(s["kind"], ())
+        names = {"maya": host.exe_names(("maya", "maya-vision")), "strata": host.exe_names(("strata-vision",))}.get(s["kind"], ())
         procs = process_list()
         for n in names:
             for pid in procs.get(n, []):
                 if s["kind"] == "maya" or len(INV.servers) == 1:
-                    run(["taskkill.exe", "/F", "/PID", str(pid)], timeout=15)
+                    host.kill(pid)
                     p.say(st, f"swept {n} {pid}")
         p.done_step(st)
     finally:
@@ -901,19 +860,16 @@ def op_start_server(p: Plan, sid: str):
             out_path = LOG_DIR / f"{sid}.out.log"
             with out_path.open("ab") as out:
                 out.write(f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')} quartermaster start\n".encode())
-                proc = subprocess.Popen(argv, cwd=s["cwd"], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-                                        creationflags=NO_WINDOW | NEW_GROUP)
+                proc = host.popen_detached(argv, cwd=s["cwd"], stdout=out)
             # launch returns once it serves; we wait on health, not on the process
             _wait(p, st, lambda: (fresh_info(sid).get("up"), f"launch pid {proc.pid} {'alive' if proc.poll() is None else 'exited ' + str(proc.returncode)}"),
                   s["timeouts"]["start_s"], what=f"{s['name']} to open port {s['port']}")
         else:
-            argv = ["cmd.exe", "/c"] + list(s["start"]["argv"])
             p.say(st, " ".join(s["start"]["argv"]))
             out_path = LOG_DIR / f"{sid}.out.log"
             with out_path.open("ab") as out:
                 out.write(f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')} quartermaster start\n".encode())
-                proc = subprocess.Popen(argv, cwd=s["start"].get("cwd"), stdin=subprocess.DEVNULL, stdout=out,
-                                        stderr=subprocess.STDOUT, creationflags=NO_WINDOW | NEW_GROUP)
+                proc = host.popen_detached(s["start"]["argv"], cwd=s["start"].get("cwd"), stdout=out)
 
             def up():
                 if proc.poll() is not None:
@@ -1273,8 +1229,7 @@ def op_start_shim(p: Plan):
     st = p.step(f"Start {sh['name']}", " ".join(sh["start"]["argv"]))
     out_path = LOG_DIR / f"{p.target}.out.log"
     with out_path.open("ab") as out:
-        subprocess.Popen(["cmd.exe", "/c"] + list(sh["start"]["argv"]), cwd=sh["start"].get("cwd"), stdin=subprocess.DEVNULL,
-                         stdout=out, stderr=subprocess.STDOUT, creationflags=NO_WINDOW | NEW_GROUP)
+        host.popen_detached(sh["start"]["argv"], cwd=sh["start"].get("cwd"), stdout=out)
 
     def up():
         try:
@@ -1292,8 +1247,7 @@ def op_stop_shim(p: Plan):
         raise PlanFailed("unknown shim")
     st = p.step(f"Stop {sh['name']}", "")
     for pid in pid_listening(sh["port"]):
-        run(["taskkill.exe", "/T", "/F", "/PID", str(pid)], timeout=20)
-        p.say(st, f"taskkill {pid}")
+        p.say(st, f"end {pid}: {host.kill_tree(pid)}")
     p.done_step(st)
 
 
@@ -1344,6 +1298,8 @@ def owui_install_hint() -> str:
 
 def owui_task_state(verb: str) -> str:
     """'run': this process may run it. 'gated': it exists and Windows wants elevation. 'missing'."""
+    if not host.WINDOWS:
+        return "missing"                      # the scheduled-task driver is Windows only; a systemd driver is a later stage
     rc, out, err = run(["schtasks.exe", "/Query", "/TN", owui_tasks()[verb]], timeout=15)
     if rc == 0:
         return "run"
@@ -1363,16 +1319,7 @@ def owui_bridge(o: dict):
     ip, want = o.get("bridge_ip"), set(o.get("bridge_ports") or [])
     if not ip:
         return None, None
-    rc, out, _ = run(["netstat.exe", "-ano", "-p", "tcp"], timeout=15)
-    bound = set()
-    if rc == 0:
-        for line in out.splitlines():
-            parts = line.split()
-            if len(parts) >= 4 and parts[0] == "TCP" and parts[3] == "LISTENING" and parts[1].startswith(ip + ":"):
-                try:
-                    bound.add(int(parts[1].rsplit(":", 1)[1]))
-                except ValueError:
-                    pass
+    bound = host.ports_bound_on(ip)
     return len(bound & want), len(want)
 
 
@@ -1477,6 +1424,8 @@ def _owui_fire(p: Plan, st, verb: str) -> int:
         # ShellExecute "runas": Windows shows its consent prompt on the secure desktop and this call returns
         # when a person has answered it. Nothing this process sends can answer it.
         p.say(st, "waiting for your answer to the Windows elevation prompt")
+        if not host.WINDOWS:
+            raise PlanFailed("elevation through the consent prompt is Windows only")
         shell32 = ctypes.windll.shell32
         shell32.ShellExecuteW.restype = ctypes.c_void_p
         r = shell32.ShellExecuteW(None, "runas", "schtasks.exe", f'/Run /TN "{name}"', None, 0)
@@ -1575,28 +1524,11 @@ def op_owui_update(p: Plan):
 # or outputs. How much of the card it holds comes from Windows, not from ComfyUI.
 
 COMFY_HOLD_MIB = 1024          # dedicated VRAM above this counts as "ComfyUI holds part of the card" (idle is ~0.2 GiB)
-TYPEPERF = r"C:\Windows\System32\typeperf.exe"
 _COMFY_PID = {"pid": None, "at": 0.0}
-
-
-def gpu_dedicated_mib(pid: int):
-    """A process's dedicated GPU memory from Windows' own counter, in MiB; None if it has no GPU instance.
-    ComfyUI's /system_stats cannot be used for this: under DynamicVRAM it reported 64 MiB reserved with
-    27.4 GB on the card (2026-11-05), and nvidia-smi gives no per-process figure under WDDM."""
-    rc, out, _ = run([TYPEPERF, rf"\GPU Process Memory(pid_{int(pid)}_*)\Dedicated Usage", "-sc", "1"], timeout=15)
-    total, found = 0.0, False
-    for line in out.splitlines():
-        if line.startswith('"') and "PDH-CSV" not in line:
-            for v in [c.strip('"') for c in line.split('","')][1:]:
-                try:
-                    total += float(v)
-                    found = True
-                except ValueError:
-                    pass
-    return round(total / 2**20) if found else None
-
-
-POWERSHELL =r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+# A process's dedicated GPU memory, in MiB: Windows' own counter (ComfyUI's /system_stats cannot be used for this:
+# under DynamicVRAM it reported 64 MiB reserved with 27.4 GB on the card, 2026-11-05, and nvidia-smi gives no
+# per-process figure under WDDM); nvidia-smi's compute-apps list on Linux.
+gpu_dedicated_mib = host.gpu_dedicated_mib
 LOOPBACK = ("127.0.0.1", "[::1]")
 
 
@@ -1644,14 +1576,7 @@ def comfy_up() -> bool:
 
 def comfy_binds(port: int) -> list[str]:
     """Local addresses listening on the port, e.g. ['127.0.0.1:8188']."""
-    rc, out, _ = run(["netstat.exe", "-ano", "-p", "tcp"], timeout=15)
-    found = []
-    if rc == 0:
-        for line in out.splitlines():
-            parts = line.split()
-            if len(parts) >= 4 and parts[0] == "TCP" and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
-                found.append(parts[1])
-    return sorted(set(found))
+    return [f"{a}:{port}" for a in host.binds(port)]
 
 
 class ComfyWatch:
@@ -1757,10 +1682,7 @@ def comfy_release(p: Plan, force: bool) -> bool:
     return True
 
 
-def _cmdline(pid: int) -> str:
-    rc, out, _ = run([POWERSHELL, "-NoProfile", "-NonInteractive", "-Command",
-                      f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"], timeout=30)
-    return out.strip() if rc == 0 else ""
+_cmdline = host.cmdline
 
 
 def op_comfy_start(p: Plan):
@@ -1781,8 +1703,7 @@ def op_comfy_start(p: Plan):
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     with out_path.open("ab") as out:
         out.write(f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')} quartermaster start\n".encode())
-        proc = subprocess.Popen(argv, cwd=c["start"].get("cwd"), stdin=subprocess.DEVNULL, stdout=out,
-                                stderr=subprocess.STDOUT, env=env, creationflags=NO_WINDOW | NEW_GROUP)
+        proc = host.popen_detached(argv, cwd=c["start"].get("cwd"), stdout=out, env=env)
 
     def up():
         if proc.poll() is not None:
@@ -1816,8 +1737,7 @@ def comfy_kill(p: Plan):
             raise PlanFailed(f"pid {pid} on port {c['port']} is not ComfyUI ({cmd[:90] or 'no command line readable'}); left alone")
     for pid in pids:
         p.check()
-        rc, out, err = run(["taskkill.exe", "/T", "/F", "/PID", str(pid)], timeout=30)
-        p.say(st, f"taskkill {pid}: {(out or err).strip()[:120]}")
+        p.say(st, f"end {pid}: {host.kill_tree(pid)[:120]}")
     _wait(p, st, lambda: (not comfy_up() and not pid_listening(c["port"]), "port still open"),
           c.get("timeouts", {}).get("stop_s", 60), what="ComfyUI to exit")
     COMFY_WATCH.refresh()
@@ -1844,7 +1764,7 @@ def _upd_cfg() -> dict:
 def _upd_run(p: Plan, st, mode: str, *extra, timeout=900) -> dict:
     u = _upd_cfg()
     pins = ",".join(u.get("pins") or [])
-    argv = [sys.executable.replace("pythonw.exe", "python.exe"), str(HERE / "comfy_update.py"), mode, u["repo"], u["python"], *extra, pins]
+    argv = [host.python_console(), str(HERE / "comfy_update.py"), mode, u["repo"], u["python"], *extra, pins]
     rc, out, err = run(argv, timeout=timeout)
     last = (out.strip().splitlines() or [""])[-1]
     try:

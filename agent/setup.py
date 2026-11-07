@@ -607,7 +607,26 @@ def write_json(path: Path, data) -> None:
 
 def launchers(home: Path) -> None:
     if not WIN:
-        print("  launchers: on Linux start the agent with `python agent/quartermaster_agent.py` (a systemd unit is a later stage)")
+        dest = ROOT if home == HERE else home
+        unit = dest / "quartermaster.service"
+        env = f"Environment=QM_HOME={home}\n" if home != HERE else ""
+        unit.write_text(f"""[Unit]
+Description=Quartermaster host agent (loopback only)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={HERE}
+{env}ExecStart={sys.executable} {HERE / 'quartermaster_agent.py'}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+""", encoding="utf-8", newline="\n")
+        print(f"  wrote {unit.name}: a systemd user unit. To start the agent at login:\n"
+              f"    mkdir -p ~/.config/systemd/user && cp \"{unit}\" ~/.config/systemd/user/ && systemctl --user enable --now quartermaster\n"
+              f"  (loginctl enable-linger $USER keeps it running when you are logged out)")
         return
     pyw = Path(sys.executable).with_name("pythonw.exe")
     pyw = pyw if pyw.exists() else Path(sys.executable)

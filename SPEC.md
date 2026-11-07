@@ -261,6 +261,15 @@ with a Linux implementation to follow:
 
 Docker-based services get easier on Linux, not harder. The nginx container is unchanged.
 
+**(built 2026-11-06.)** `agent/platform_host.py` holds the table above as functions (`ram_status`,
+`nvidia_smi`, `gpu_dedicated_mib`, `process_list`, `pid_listening`, `binds`, `ports_bound_on`, `cmdline`,
+`kill_tree`, `kill`, `popen_detached`, `exe_names`, `python_console`); the agent calls those and nothing
+platform-specific of its own except the two Windows-only drivers (scheduled tasks, the consent prompt),
+which refuse plainly elsewhere. `setup.py` writes a systemd user unit on Linux. The Linux branches were
+run under WSL Ubuntu (memory, listeners, command lines, a detached session, a group kill); a Linux box with
+engines on it has not run the agent yet. Per-process VRAM on Linux comes from `nvidia-smi`'s compute-apps
+list, which, unlike the Windows counter, does not see graphics-only clients.
+
 ## 10. Repository hygiene
 
 The claim "nothing of the owner's machine is in the repository" is **enforced, not promised**:
@@ -285,8 +294,8 @@ Each stage leaves the original workstation working.
 | 3 | `setup` and `detect`: host facts, the detectors, launcher and key | **done 2026-11-06** |
 | 4 | Preset editor and Save-current; `presets.json` | **done 2026-11-06** |
 | 5 | Updaters as catalog recipes, and the clients strip with bindings | **done 2026-11-06** |
-| 6 | Platform module and the Linux implementation | next |
-| 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | |
+| 6 | Platform module and the Linux implementation | **done 2026-11-06** (WSL-tested; a real Linux host still owed) |
+| 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | next |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |
 
 ## 12. Decisions taken (2026-11-06)

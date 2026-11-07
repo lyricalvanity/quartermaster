@@ -6,9 +6,10 @@ own APIs (Strata, Maya, Ollama), starts and stops the processes you have told it
 OpenWebUI in view, runs **presets** (a whole working arrangement in one button), and dresses itself in
 nineteen themes because a status page you look at every day should be a pleasure to look at.
 
-It is being generalised from a single workstation into something you can install on yours. What ships today
-works on **Windows with one NVIDIA GPU**; the plan for detection, an installer, engine update buttons and
-Linux is in [SPEC.md](SPEC.md).
+It is being generalised from a single workstation into something you can install on yours. It runs on
+**Windows** (where it was built and is used daily) and, since 2026-11-06, on **Linux** through a platform
+module whose branches were exercised under WSL Ubuntu but not yet on a real Linux box with its engines; one
+NVIDIA GPU either way. The plan and its stages are in [SPEC.md](SPEC.md).
 
 ## How it is built
 
@@ -29,10 +30,11 @@ and a server id. What that means on this machine (which executable, which argume
 endpoint) is written in `agent/inventory.json` and nowhere else. The agent never starts anything that is not
 in the inventory, and arguments come from the file, never from the request.
 
-## Install (Windows, today)
+## Install
 
-Requirements: Windows 10 or 11, Python 3.11 or newer (nothing to `pip install`), an NVIDIA driver
-(`nvidia-smi` is how the card is read), and optionally Docker Desktop for the nginx container.
+Requirements: Windows 10 or 11, or Linux with `ss` (iproute2); Python 3.11 or newer (nothing to
+`pip install`); an NVIDIA driver (`nvidia-smi` is how the card is read); and optionally Docker for the
+nginx container. The commands below are the same on both; where a step differs, the Linux form follows.
 
 ```bash
 git clone https://github.com/lyricalvanity/quartermaster.git
@@ -74,8 +76,15 @@ docker compose up -d --build
    and open <http://127.0.0.1:8800/>. Rebuild after any edit under `ui/` (the page is baked into the
    image); the agent's own page at 8790 serves the live files.
 
-3. To start the agent at logon, copy the `Quartermaster Agent.cmd` setup wrote into your Startup folder
-   (`shell:startup`); setup offers to do it.
+3. To start the agent at logon: on Windows, copy the `Quartermaster Agent.cmd` setup wrote into your
+   Startup folder (`shell:startup`); setup offers to do it. On Linux, setup writes
+   `quartermaster.service`, a systemd user unit: copy it to `~/.config/systemd/user/` and
+   `systemctl --user enable --now quartermaster`.
+
+   What differs on Linux: per-process VRAM comes from `nvidia-smi --query-compute-apps` instead of the
+   Windows GPU counter; servers start in their own session and stop with a group signal; the OpenWebUI
+   scheduled-task driver does not exist there (a systemd driver is a later stage), so that tile reads
+   only health and version.
 
 After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
 variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory
