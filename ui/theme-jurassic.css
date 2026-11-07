@@ -1,0 +1,178 @@
+/* Jurassic Park (1993): the control room. Workstation windows of the day (grey, bevelled, a title bar on
+   each) over a dark jungle desktop ringed like a contour map, with the badge's red, yellow and black on top.
+   The groups are named for the park: the T. rex paddock, the raptor pen, the gallimimus enclosure, cold
+   storage for the folded legacy servers, the visitor centre for services. Each unit shows its perimeter
+   fence: 10,000 volts when the model is loaded, FENCE DOWN when the server is. A refused action is told it
+   didn't say the magic word. */
+@keyframes jp-zap { from { background-position: -70px 50%, 0 0, 0 0; } to { background-position: calc(100% + 70px) 50%, 0 0, 0 0; } }
+@keyframes jp-blink { 50% { opacity: .25; } }
+
+:root[data-theme="jurassic"] {
+  --m: #BFC3C6; --hi: #F2F4F5; --lo: #6c7174; --dk: #2b2e30; --tb: #3D5A80; --jr: #C8102E; --jy: #FFD100;
+  --up: inset 1px 1px 0 var(--hi), inset -1px -1px 0 var(--lo), 0 0 0 1px var(--dk);
+  --dn: inset 1px 1px 0 var(--lo), inset -1px -1px 0 var(--hi);
+  --bg: #12302c; --bg2: #BFC3C6; --bg3: #AEB3B6; --line: #8d9296; --line2: #6c7174;
+  --fg: #111314; --fg2: #33383b; --fg3: #585e62;
+  --strata: #C8102E; --maya: #1E5AA8; --ollama: #0a6b2a; --legacy: #585e62;
+  --ok: #0a6b2a; --warn: #8a5a00; --bad: #C8102E; --busy: #8a5a00; --idle: #585e62;
+  --mono: "Courier New", Consolas, monospace;
+  --sans: "Microsoft Sans Serif", Tahoma, Arial, sans-serif;
+  --hd: "Arial Black", Impact, Arial, sans-serif;
+  scrollbar-color: var(--lo) var(--bg);
+
+  body { font-size: 12.5px;
+    background:
+      repeating-radial-gradient(ellipse at 38% 55%, transparent 0 46px, rgba(160,220,150,.07) 47px 48px),
+      radial-gradient(ellipse at 38% 55%, #1c4a40, #0b1f1c 75%);
+    background-attachment: fixed; }
+  ::selection { background: var(--tb); color: #fff; }
+
+  /* ---- header: the badge ---- */
+  header { background: #000; border-bottom: 4px solid var(--jr); box-shadow: 0 2px 0 var(--jy); color: #fff; }
+  .mark { flex: none; width: 32px; height: 32px; border: 2px solid var(--jr); border-radius: 50%; background: var(--jy); }
+  .mark::after { content: "\1F996"; inset: 0; border-radius: 0; background: none; text-align: center; font: 18px/27px "Segoe UI Emoji", sans-serif; filter: grayscale(1) brightness(0); }
+  .title { font: 900 18px/1.1 var(--hd); letter-spacing: 1px; text-transform: uppercase; color: var(--jy); -webkit-text-stroke: 1px var(--jr); paint-order: stroke fill; white-space: nowrap; }
+  .sub { color: #b9c0c4; text-transform: uppercase; }
+  .sub::before { content: "Jurassic Park  \00B7  "; color: var(--jy); font-weight: 700; }
+  .gauge .g-label { color: var(--jy); font-weight: 700; letter-spacing: 1px; }
+  .gauge .g-val { color: #fff; font-weight: 700; }
+  .bar { height: 12px; border: 0; border-radius: 0; background: #1d1f20; box-shadow: var(--dn); }
+  .fill { background: var(--jr); }
+  .fill.ram { background: var(--jy); }
+  .mark-line { background: #fff; width: 2px; }
+  .g-foot { color: #9aa1a5; text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; background: #000; box-shadow: var(--dn); padding: 3px 8px; }
+  .rounds .r-v { font: 700 24px/1 var(--mono); color: #46f06a; letter-spacing: 1px; }
+  .rounds .r-k { font: 700 9px var(--mono); color: #2c9a45; text-transform: uppercase; }
+  #resident-line { border-left: 2px solid var(--jy) !important; }
+  .r-label { color: var(--jy); font-weight: 700; letter-spacing: 1px; }
+  .r-main { color: #fff; font-weight: 700; }
+  .r-sub { color: #b9c0c4; }
+  .conn.on { color: #46f06a; }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections: where in the park ---- */
+  h2 { display: flex; align-items: center; gap: 10px; margin: 18px 0 9px; font: 700 12px var(--sans); letter-spacing: 2px; color: #d8e6d2; }
+  h2::before { font: 900 11px var(--hd); letter-spacing: 1px; background: var(--jy); color: #000; padding: 3px 9px; border: 2px solid var(--jr); }
+  .group[data-group="strata"] h2::before { content: "T. REX PADDOCK"; }
+  .group[data-group="maya"] h2::before { content: "RAPTOR PEN"; }
+  .group[data-group="ollama"] h2::before { content: "GALLIMIMUS ENCLOSURE"; }
+  .group[data-group="legacy"] h2::before { content: "COLD STORAGE"; }
+  .group[data-group="services"] h2::before { content: "VISITOR CENTER"; }
+  .group:not([data-group]) h2::before { content: "TOUR PROGRAM"; }
+
+  /* ---- windows ---- */
+  .card, .panel, .preset, .modal-box { background: var(--m); border: 0; border-radius: 0; box-shadow: var(--up), 3px 4px 0 rgba(0,0,0,.35); color: var(--fg); }
+  .card { padding: 2px 10px 10px; }
+  .card::before { display: none; }
+  .c-top { background: var(--tb); margin: 0 -8px 6px; padding: 4px 8px 5px; align-items: center; box-shadow: inset 1px 1px 0 #6f8fb8, inset -1px -1px 0 #233850; }
+  .card.resident .c-top { background: var(--jr); box-shadow: inset 1px 1px 0 #ef5a6f, inset -1px -1px 0 #7a0a1c; }
+  .card.down .c-top { background: #6c7174; box-shadow: inset 1px 1px 0 #9aa0a3, inset -1px -1px 0 #45494c; }
+  .card.down { opacity: 1; }
+  .card.will-unload { box-shadow: var(--up), 0 0 0 3px var(--jr); }
+  .c-name { font: 700 13.5px Arial, sans-serif; color: #fff; }
+  .card.resident .c-name { color: var(--jy); }
+  .card.resident .c-name::after { content: "\2014  clever girl"; margin-left: 8px; font-weight: 400; font-style: italic; color: #fff; }
+  .c-model { color: rgba(255,255,255,.9); }
+  .c-source { font-family: var(--mono); color: rgba(255,255,255,.7); }
+  .tag { border-radius: 0; background: #fff; color: #000; font-weight: 700; box-shadow: var(--dn); padding: 2px 7px; }
+  .tag.vision { color: var(--maya); }
+  .tag.bad { background: var(--jr); color: #fff; }
+  .c-live { color: var(--fg2); font-weight: 700; }
+  .c-live b { color: var(--jr); }
+  /* status lamps */
+  .pill { border: 0; border-radius: 0; padding: 2px 6px; background: rgba(0,0,0,.28); color: #fff; font: 700 10.5px var(--sans); letter-spacing: 1px; text-transform: uppercase; }
+  .pill::before { content: ""; display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: -1px; border-radius: 50%; background: #3a3d3f; box-shadow: inset 0 0 0 1px #000; }
+  .pill.ready::before { background: #46f06a; box-shadow: 0 0 6px #46f06a; }
+  .pill.busy::before { background: var(--jy); box-shadow: 0 0 6px var(--jy); animation: jp-blink .7s steps(1) infinite; }
+  .pill.idle::before { background: #9fd0ff; }
+  .pill.starting::before, .pill.loading::before, .pill.unloading::before, .pill.stopping::before, .pill.reloading::before { background: var(--jy); animation: jp-blink .7s steps(1) infinite; }
+  .pill.parked::before { background: #ff4a4a; box-shadow: 0 0 6px #ff4a4a; }
+  .will { font: 700 10.5px var(--sans); letter-spacing: 1px; text-transform: uppercase; color: #fff; background: var(--jr); padding: 3px 7px; }
+
+  /* the perimeter fence */
+  .vitals { display: flex; align-items: center; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "FENCE"; font: 700 10px var(--sans); letter-spacing: 1.5px; color: var(--fg3); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 14px;
+    background: linear-gradient(90deg, transparent, var(--jy) 50%, transparent) -70px 50% / 70px 100% no-repeat,
+                repeating-linear-gradient(90deg, #111 0 3px, transparent 3px 34px),                       /* posts */
+                repeating-linear-gradient(0deg, transparent 0 3px, #33383b 3px 4px, transparent 4px 5px);     /* wires */ }
+  .v-s { order: 2; min-width: 74px; text-align: right; font: 700 10px var(--sans); letter-spacing: 1px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="alive"] .v-s, .vitals[data-mode="flat"] .v-s { font-size: 0; }
+  .vitals[data-mode="alive"] .v-s::after { content: "10,000 V"; font-size: 10px; color: var(--ok); }
+  .vitals[data-mode="active"]::before { animation: jp-zap .8s linear infinite; }
+  .vitals[data-mode="active"] .v-s { color: var(--jr); }
+  .vitals[data-mode="flat"]::before { opacity: .45; background: repeating-linear-gradient(90deg, #111 0 3px, transparent 3px 34px), repeating-linear-gradient(0deg, transparent 0 3px, var(--jr) 3px 4px, transparent 4px 5px); }
+  .vitals[data-mode="flat"] .v-s::after { content: "FENCE DOWN"; font-size: 10px; color: var(--jr); animation: jp-blink 1s steps(1) infinite; }
+
+  /* ---- controls: raised, and they go in when pressed ---- */
+  .btn { position: relative; border: 0; border-radius: 0; background: var(--m); color: #000; box-shadow: var(--up); font: 700 11.5px var(--sans); padding: 5px 11px; }
+  .btn.small { padding: 4px 9px; font-size: 11px; }
+  .btn:not(:disabled):hover { background: #d3d7d9; filter: none; border-color: transparent; }
+  .btn:not(:disabled):active { box-shadow: var(--dn), 0 0 0 1px var(--dk); }
+  .btn:disabled { opacity: 1; color: #7d8387; text-shadow: 1px 1px 0 var(--hi); }
+  .btn:disabled:hover::after { content: "ah ah ah!"; position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); z-index: 5;
+    background: var(--jy); color: #000; border: 1px solid #000; padding: 1px 6px; font: 700 10.5px var(--sans); white-space: nowrap; text-shadow: none; }
+  .btn.primary { background: var(--jy); color: #000; }
+  .btn.primary:not(:disabled):hover { background: #ffe24d; }
+  .btn.ghost { background: var(--m); }
+  .btn.danger { background: var(--jr); color: #fff; box-shadow: inset 1px 1px 0 #ef5a6f, inset -1px -1px 0 #7a0a1c, 0 0 0 1px var(--dk); }
+  .btn.danger:not(:disabled):hover { background: #e01a3a; }
+  .btn.danger:disabled { background: var(--m); box-shadow: var(--up); color: #7d8387; }
+  select, input { border: 0; border-radius: 0; background: #fff; color: #000; box-shadow: var(--dn); font-weight: 700; }
+  .preset { padding: 9px 13px; }
+  .preset:hover { background: #d3d7d9; }
+  .preset .n { font: 700 12.5px Arial, sans-serif; color: #000; }
+  .preset .d { color: var(--fg3); }
+
+  /* ---- side panels ---- */
+  .panel { padding: 2px 10px 10px; }
+  .p-head { background: var(--tb); color: #fff; margin: 0 -8px 8px; padding: 4px 8px 5px; font: 700 12px Arial, sans-serif; letter-spacing: 1px;
+    box-shadow: inset 1px 1px 0 #6f8fb8, inset -1px -1px 0 #233850; }
+  .p-head .p-status { color: #dbe6f3; }
+  .kpi { background: #000; border-radius: 0; box-shadow: var(--dn); }
+  .kpi .k { color: #2c9a45; font-weight: 700; }
+  .kpi .v { color: #46f06a; font-family: var(--mono); font-weight: 700; }
+  .kpi .u { color: #2c9a45; }
+  #spark, #gpu-spark { background: #000; box-shadow: var(--dn); }
+  .reqs th { color: var(--fg2); border-bottom-color: var(--lo); font-weight: 700; }
+  .reqs td { color: var(--fg); font-weight: 700; }
+  .history li { color: var(--fg); font-weight: 700; }
+  .history .ok { color: var(--ok); }
+  .history .failed { background: var(--jr); color: #fff; padding: 0 4px; }
+  .stepper .d, .stepper .t, .stepper .lines { color: var(--fg3); }
+  .stepper .dot { border-radius: 50%; box-shadow: inset 0 0 0 1px #000; }
+  .plan-err { background: var(--jr); color: #fff; padding: 3px 8px; font-weight: 700; }
+
+  /* ---- messages ---- */
+  .warn { background: var(--jy); border: 2px solid #000; border-radius: 0; color: #000; font: 700 12.5px var(--sans); }
+  .warn::after { content: "   Life, uh, finds a way."; font-style: italic; font-weight: 400; }
+  .toast { border: 0; border-radius: 0; background: var(--m); color: #000; box-shadow: var(--up), 3px 4px 0 rgba(0,0,0,.4); font: 700 12.5px var(--sans); }
+  .toast.ok::after { content: "   Spared no expense."; font-weight: 400; font-style: italic; color: var(--fg3); }
+  .toast.bad { color: var(--jr); }
+  .toast.bad::after { content: "\A AH AH AH! YOU DIDN'T SAY THE MAGIC WORD!\A AH AH AH! YOU DIDN'T SAY THE MAGIC WORD!\A AH AH AH! YOU DIDN'T SAY THE MAGIC WORD!";
+    white-space: pre; display: block; font: 700 11px var(--mono); color: #000; }
+  .modal { background: rgba(4,14,12,.72); }
+  .modal-box { padding: 2px 12px 12px; }
+  .m-head { background: var(--tb); color: #fff; margin: 0 -10px 10px; padding: 4px 8px 5px; font: 700 13px Arial, sans-serif; box-shadow: inset 1px 1px 0 #6f8fb8, inset -1px -1px 0 #233850; }
+  .m-head input { box-shadow: var(--dn); }
+  .modal-box.small .m-head { background: var(--jr); color: var(--jy); box-shadow: inset 1px 1px 0 #ef5a6f, inset -1px -1px 0 #7a0a1c; }
+  #confirm-text { color: #000; font-size: 13.5px; font-weight: 700; }
+  #log-body { background: #000; border: 0; border-radius: 0; box-shadow: var(--dn); color: #c8d0d4; }
+
+  /* ---- start-up: the security interface ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; background: #000; cursor: pointer;
+    align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-height: 300px; font: 700 min(17px, 3.6vw)/1.8 var(--mono); color: #e8ecee; }
+  .bootscreen .boot-h { font: 900 min(52px, 11vw)/1.3 var(--hd); letter-spacing: 1px; text-transform: uppercase; color: var(--jy); -webkit-text-stroke: 2px var(--jr); paint-order: stroke fill; }
+  .bootscreen pre::after { content: "\2588"; animation: jp-blink .9s steps(1) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="jurassic"] .vitals::before, :root[data-theme="jurassic"] .pill::before { animation: none; }
+}

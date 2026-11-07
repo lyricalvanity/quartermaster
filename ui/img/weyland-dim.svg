@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520">
+<defs>
+<pattern id="raster" width="8" height="7" patternUnits="userSpaceOnUse"><rect width="8" height="5" fill="#fff"/></pattern>
+<mask id="lines"><rect width="1100" height="520" fill="url(#raster)"/></mask>
+<filter id="glow" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="9"/></filter>
+<g id="mark" transform="translate(95 40)">
+<polygon points="0,0 110,0 255,188.5 400,0 510,0 655,188.5 800,0 910,0 710,260 600,260 455,71.5 310,260 200,260"/><polygon points="144,0 366,0 255,144.3"/><polygon points="544,0 766,0 655,144.3"/><polygon points="344,260 566,260 455,115.7"/>
+</g>
+<g id="words" font-family="Consolas, 'Lucida Console', 'Courier New', monospace" font-weight="700" text-anchor="middle">
+<text x="550.0" y="388" font-size="58" textLength="820" lengthAdjust="spacingAndGlyphs">WEYLAND-YUTANI CORP</text>
+<text x="550.0" y="462" font-size="34" textLength="620" lengthAdjust="spacingAndGlyphs">BUILDING BETTER WORLDS</text>
+</g>
+</defs>
+<g opacity="0.2" fill="#7CF29C">
+<g filter="url(#glow)" opacity=".5"><use href="#mark"/><use href="#words"/></g>
+<g mask="url(#lines)"><use href="#mark"/><use href="#words"/></g>
+</g>
+</svg>

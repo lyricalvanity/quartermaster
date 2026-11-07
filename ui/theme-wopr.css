@@ -1,0 +1,163 @@
+/* WOPR, after WarGames (1983). David's terminal for the type (pale blue capitals on black, buttons in square
+   brackets) and NORAD's big board for the rest: vector blue, missile tracks arcing across the background,
+   and the DEFCON board. The board is real: #defcon carries a level from 5 to 1 set by app.js from how full
+   the card is (5 under a fifth, 1 at four fifths and over). Each unit has a row of WOPR's lamps; they
+   twinkle while the model works and go dark when the server is down. The resident model is Joshua. */
+@keyframes wp-lamps { to { -webkit-mask-position: 112px 0; mask-position: 112px 0; } }
+@keyframes wp-blink { 50% { opacity: .25; } }
+
+:root[data-theme="wopr"] {
+  --p: #A8ECFF; --p2: #5fa9c9; --p3: #3d7391; --vec: #2f8cff; --amb: #FFB000; --red: #FF3B30;
+  --arcs: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 520' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%232f8cff' stroke-opacity='.22'%3E%3Cpath d='M60 430Q380 -60 760 300'/%3E%3Cpath d='M140 470Q520 20 980 260'/%3E%3Cpath d='M1150 440Q820 -40 420 330'/%3E%3Cpath d='M1080 480Q700 60 240 290' stroke-dasharray='6 8'/%3E%3C/g%3E%3Cg fill='%23ff3b30' fill-opacity='.5'%3E%3Ccircle cx='760' cy='300' r='4'/%3E%3Ccircle cx='980' cy='260' r='4'/%3E%3Ccircle cx='420' cy='330' r='4'/%3E%3Ccircle cx='240' cy='290' r='4'/%3E%3C/g%3E%3C/svg%3E");
+  --bg: #00040a; --bg2: rgba(0,10,22,.88); --bg3: #041426; --line: #0d2f52; --line2: #1d5fa8;
+  --fg: #A8ECFF; --fg2: #5fa9c9; --fg3: #3d7391;
+  --strata: #A8ECFF; --maya: #A8ECFF; --ollama: #A8ECFF; --legacy: #3d7391;
+  --ok: #A8ECFF; --warn: #FFB000; --bad: #FF3B30; --busy: #fff; --idle: #5fa9c9;
+  --mono: Consolas, "Lucida Console", monospace;
+  --sans: Consolas, "Lucida Console", monospace;
+  scrollbar-color: var(--line2) var(--bg);
+
+  body { font-size: 13.5px; text-transform: uppercase; letter-spacing: .6px; text-shadow: 0 0 6px rgba(120,220,255,.35);
+    background: var(--arcs) 50% 60% / 100% 78% no-repeat,
+      repeating-linear-gradient(0deg, rgba(47,140,255,.06) 0 1px, transparent 1px 60px),
+      repeating-linear-gradient(90deg, rgba(47,140,255,.06) 0 1px, transparent 1px 60px), var(--bg);
+    background-attachment: fixed; }
+  ::selection { background: var(--p); color: #000; text-shadow: none; }
+  .c-source, #log-body, #log-filter, input { text-transform: none; }
+
+  /* ---- header ---- */
+  header { background: rgba(0,4,10,.88); border-bottom: 1px solid var(--line2); }
+  .mark { flex: none; border: 1px solid var(--line2); border-radius: 2px; background: radial-gradient(circle, var(--amb) 0 2px, transparent 2.6px) 1px 1px / 8px 8px;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 16px, #000 16px 32px, transparent 32px 40px);
+            mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 16px, #000 16px 32px, transparent 32px 40px);
+    animation: wp-lamps 2.4s steps(8) infinite; }
+  .mark::after { display: none; }
+  .title { font-weight: 700; font-size: 17px; letter-spacing: 4px; color: #fff; }
+  .sub { color: var(--fg2); }
+  .sub::before { content: "WOPR // "; color: var(--amb); }
+  .gauge .g-label { color: var(--fg2); letter-spacing: 2px; }
+  .gauge .g-val { color: #fff; }
+  .bar { height: 9px; border-radius: 0; border-color: var(--line2); background: #000; }
+  .fill { background: var(--vec); }
+  .fill.ram { background: var(--p); }
+  .mark-line { background: var(--red); width: 2px; }
+  .g-foot { color: var(--fg3); }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  /* the DEFCON board */
+  .defcon { display: grid; grid-template-columns: repeat(5, 22px); gap: 3px; grid-column: 2; grid-row: 1 / span 3; text-shadow: none; }
+  .defcon::before { content: "DEFCON"; grid-column: 1 / -1; font: 700 9px var(--mono); letter-spacing: 4px; color: var(--fg2); text-align: center; }
+  .defcon span { display: grid; place-items: center; height: 26px; border: 1px solid var(--line); font: 700 17px var(--mono); color: #17324d; background: #000; }
+  .defcon[data-level="5"] span:nth-child(1) { background: #2f8cff; border-color: #2f8cff; color: #000; box-shadow: 0 0 12px #2f8cff; }
+  .defcon[data-level="4"] span:nth-child(2) { background: #35d06a; border-color: #35d06a; color: #000; box-shadow: 0 0 12px #35d06a; }
+  .defcon[data-level="3"] span:nth-child(3) { background: #ffd23a; border-color: #ffd23a; color: #000; box-shadow: 0 0 12px #ffd23a; }
+  .defcon[data-level="2"] span:nth-child(4) { background: #ff7a1a; border-color: #ff7a1a; color: #000; box-shadow: 0 0 12px #ff7a1a; }
+  .defcon[data-level="1"] span:nth-child(5) { background: var(--red); border-color: var(--red); color: #fff; box-shadow: 0 0 14px var(--red); animation: wp-blink 1.2s steps(1) infinite; }
+  #resident-line { border-left: 1px solid var(--line2) !important; }
+  .r-label { color: var(--fg2); letter-spacing: 2px; }
+  .r-main { font-weight: 700; font-size: 15px; color: #fff; }
+  .r-main::after { content: "\2588"; margin-left: 4px; animation: wp-blink 1s steps(1) infinite; }
+  .r-sub { color: var(--fg2); }
+  .conn.on { color: var(--amb); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections ---- */
+  h2 { width: fit-content; font-weight: 700; font-size: 13px; letter-spacing: 4px; color: #fff; border-bottom: 1px solid var(--vec); padding: 0 24px 3px 0; margin: 18px 0 10px; }
+
+  /* ---- units ---- */
+  .card, .panel, .preset { background: var(--bg2); border: 1px solid var(--line2); border-radius: 0; box-shadow: none; }
+  .card::before { display: none; }
+  .card.resident { border-color: #fff; box-shadow: 0 0 18px -7px var(--p); }
+  .card.will-unload { border-color: var(--red); }
+  .c-name { font-weight: 700; font-size: 15px; letter-spacing: 1.5px; color: #fff; }
+  .card.resident .c-name::after { content: "  [JOSHUA]"; color: var(--amb); font-size: 12px; }
+  .c-model { color: var(--fg); }
+  .c-source { color: var(--fg3); }
+  .tag { background: none; border-radius: 0; border: 1px solid var(--line); color: var(--fg); }
+  .tag.vision { color: #fff; border-color: var(--line2); }
+  .tag.bad { background: var(--red); color: #000; border-color: var(--red); text-shadow: none; }
+  .c-live { color: var(--fg2); }
+  .c-live b { color: #fff; }
+  .pill { border-radius: 0; border-color: var(--line2); color: var(--fg2); letter-spacing: 1.5px; }
+  .pill.ready { background: var(--p); border-color: var(--p); color: #000; text-shadow: none; }
+  .pill.busy { background: #fff; border-color: #fff; color: #000; text-shadow: none; animation: wp-blink 1s steps(1) infinite; }
+  .pill.down { border-style: dashed; color: var(--fg3); }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { border-color: var(--amb); color: var(--amb); }
+  .pill.parked { background: var(--red); border-color: var(--red); color: #000; text-shadow: none; }
+  .will { color: #fff; background: var(--red); padding: 2px 8px; text-shadow: none; }
+
+  /* WOPR's lamps */
+  .vitals { display: flex; align-items: center; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "WOPR"; font: 10.5px var(--mono); letter-spacing: 2px; color: var(--fg3); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 10px; text-shadow: none;
+    background: radial-gradient(circle, var(--amb) 0 3px, transparent 3.6px) 0 50% / 14px 10px repeat-x;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 14px, transparent 14px 28px, #000 28px 56px, transparent 56px 84px, #000 84px 98px, transparent 98px 112px);
+            mask: repeating-linear-gradient(90deg, #000 0 14px, transparent 14px 28px, #000 28px 56px, transparent 56px 84px, #000 84px 98px, transparent 98px 112px); }
+  .v-s { order: 2; min-width: 72px; text-align: right; font: 10.5px var(--mono); letter-spacing: 1.5px; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="flat"]::before { background: radial-gradient(circle, #24303c 0 3px, transparent 3.6px) 0 50% / 14px 10px repeat-x; -webkit-mask: none; mask: none; }
+  .vitals[data-mode="flat"] .v-s { color: var(--red); }
+  .vitals[data-mode="standby"]::before { opacity: .4; }
+  .vitals[data-mode="alive"]::before { animation: wp-lamps 6s steps(8) infinite; }
+  .vitals[data-mode="alive"] .v-s { color: var(--p); }
+  .vitals[data-mode="active"]::before { animation: wp-lamps .9s steps(8) infinite;
+    background: radial-gradient(circle, #fff 0 3px, transparent 3.6px) 0 50% / 42px 10px repeat-x,
+                radial-gradient(circle, var(--red) 0 3px, transparent 3.6px) 14px 50% / 70px 10px repeat-x,
+                radial-gradient(circle, var(--amb) 0 3px, transparent 3.6px) 0 50% / 14px 10px repeat-x; }
+  .vitals[data-mode="active"] .v-s { color: #fff; }
+
+  /* ---- controls: square brackets, as typed ---- */
+  .btn { border: 0; border-radius: 0; background: none; color: var(--p); font: 700 12.5px var(--mono); letter-spacing: 1px; text-transform: uppercase; padding: 4px 2px; }
+  .btn::before { content: "[ "; color: var(--fg3); } .btn::after { content: " ]"; color: var(--fg3); }
+  .btn:not(:disabled):hover { background: var(--p); color: #000; text-shadow: none; filter: none; }
+  .btn:not(:disabled):hover::before, .btn:not(:disabled):hover::after { color: #000; }
+  .btn:disabled { opacity: .35; }
+  .btn.primary { background: none; color: #fff; }
+  .btn.primary::before { content: "> [ "; color: var(--amb); }
+  .btn.danger { color: var(--red); background: none; }
+  .btn.danger:not(:disabled):hover { background: var(--red); color: #000; }
+  select, input { border-radius: 0; background: #000; border-color: var(--line2); color: var(--p); text-transform: uppercase; }
+  .preset { padding: 10px 14px; text-transform: uppercase; }
+  .preset:hover { border-color: #fff; }
+  .preset .n { font-weight: 700; color: #fff; letter-spacing: 1px; }
+  .preset .d { color: var(--fg3); }
+
+  /* ---- side panels ---- */
+  .p-head { font-weight: 700; font-size: 12px; letter-spacing: 3px; color: #fff; border-bottom: 1px solid var(--line2); padding-bottom: 5px; }
+  .p-head .p-status { color: var(--fg2); text-transform: uppercase; }
+  .kpi { background: #000; border-radius: 0; border: 1px solid var(--line); }
+  .kpi .k { color: var(--fg3); letter-spacing: 1.5px; }
+  .kpi .v { color: #fff; }
+  .reqs th { color: var(--fg2); border-bottom-color: var(--line2); }
+  .history .failed { background: var(--red); color: #000; padding: 0 4px; text-shadow: none; }
+  .stepper .dot { border-radius: 0; }
+  .plan-err { background: var(--red); color: #000; padding: 3px 8px; text-shadow: none; }
+
+  /* ---- notices ---- */
+  .warn { background: #000; border: 1px solid var(--red); border-radius: 0; color: var(--red); }
+  .warn::before { content: "FLASH  \25B6  "; }
+  .toast { border-radius: 0; background: #000; border: 1px solid var(--line2); color: var(--p); }
+  .toast.ok { border-color: var(--p); }
+  .toast.bad { border-color: var(--red); color: var(--red); }
+  .toast.bad::after { content: "  --REQUEST REFUSED--"; }
+  .modal { background: rgba(0,2,6,.84); }
+  .modal-box { background: #000; border: 1px solid var(--p); border-radius: 0; }
+  .modal-box.small { padding: 20px 22px; }
+  .m-head { font-size: 17px; color: #fff; letter-spacing: 1px; }
+  .modal-box.small .m-head::after { content: "\2588"; margin-left: 6px; animation: wp-blink 1s steps(1) infinite; }
+  #confirm-text { color: var(--fg); }
+  #log-body { background: #000; border-color: var(--line2); border-radius: 0; color: var(--fg2); text-shadow: none; }
+
+  /* ---- start-up ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; background: #000; cursor: pointer;
+    align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-width: min(480px, 88vw); min-height: 200px; font: 700 min(21px, 4.3vw)/1.9 var(--mono); letter-spacing: 1.5px; color: var(--p); text-shadow: 0 0 10px rgba(120,220,255,.5); }
+  .bootscreen pre::after { content: "\2588"; animation: wp-blink .9s steps(1) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="wopr"] .mark, :root[data-theme="wopr"] .vitals::before, :root[data-theme="wopr"] .pill.busy,
+  :root[data-theme="wopr"] .defcon span { animation: none; }
+}

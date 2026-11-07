@@ -1,0 +1,22 @@
+/* Display fonts the themes rely on, served by the page itself.
+   Some browsers hide every font that did not ship with Windows from web pages (Firefox does this under
+   strict tracking protection and in private windows), and these five arrived with Office. Each face
+   tries the installed copy first and falls back to a file in fonts/, if the owner has copied one there from
+   their own Windows Fonts folder. They are Microsoft's fonts: they are not in the repository (.gitignore),
+   and a missing file costs nothing but a 404 and the next family in the stack. */
+/* Michroma (Vernon Adams, SIL Open Font License 1.1), drawn after extended Eurostile: the Armored Core themes.
+   One file from github.com/google/fonts ofl/michroma, fetched 2026-11-05,
+   sha256 B62301163788BC5B7F8FCAC0B74B184E34E1827E577B499ECB724DA065098F87. It has one weight; the range
+   stops the browser smearing a fake bold over it. */
+@font-face { font-family: "Michroma"; font-weight: 100 900; font-display: swap;
+  src: url("fonts/Michroma-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Agency FB"; font-weight: 400; font-display: swap;
+  src: local("Agency FB"), url("fonts/AGENCYR.TTF") format("truetype"); }
+@font-face { font-family: "Agency FB"; font-weight: 700; font-display: swap;
+  src: local("Agency FB Bold"), url("fonts/AGENCYB.TTF") format("truetype"); }
+@font-face { font-family: "OCR A Extended"; font-display: swap;
+  src: local("OCR A Extended"), url("fonts/OCRAEXT.TTF") format("truetype"); }
+@font-face { font-family: "Old English Text MT"; font-display: swap;
+  src: local("Old English Text MT"), url("fonts/OLDENGL.TTF") format("truetype"); }
+@font-face { font-family: "Felix Titling"; font-display: swap;
+  src: local("Felix Titling"), url("fonts/FELIXTI.TTF") format("truetype"); }

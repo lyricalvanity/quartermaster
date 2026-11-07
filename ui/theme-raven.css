@@ -1,0 +1,234 @@
+/* Armored Core, PlayStation 2 era: the garage. One structure, two brokers.
+     cortex  = Global Cortex (Armored Core 3, Silent Line): maroon ground, amber bars, cyan for the selected item.
+     concord = Nerves Concord (Armored Core 2, Another Age): navy ground, teal bars, orange for the selected item.
+   From the games: the rotated GARAGE strip down each side, capped header bars, stat rows ruled underneath,
+   the help bar along the bottom, the green weapon box (here: what is on the card), AP as the big number
+   (here: free VRAM), an EN gauge per unit, and the NOTICE box. Drawn from reference screenshots, not copied. */
+@keyframes rv-sweep { to { transform: rotate(360deg); } }
+@keyframes rv-charge { from { background-position: -90px 0, 0 0; } to { background-position: calc(100% + 90px) 0, 0 0; } }
+@keyframes rv-blink { 50% { opacity: .45; } }
+
+:root:is([data-theme="cortex"], [data-theme="concord"]) {
+  /* palette: Global Cortex. Nerves Concord overrides these at the foot of the file. */
+  --g0: #0b0202; --grid: rgba(255,110,30,.13); --halo: rgba(255,120,30,.20);
+  --panel: rgba(58,11,11,.78); --pline: rgba(255,150,70,.38); --rule: rgba(237,230,244,.22);
+  --bar1: #D96A12; --bar2: #F7A63A; --bartext: #fff;
+  --sel: #58C8FF; --selbg: rgba(88,200,255,.20);
+  --strip: rgba(126,107,176,.62); --striptext: #E4DAF6;
+  --ap: #FF7A30; --weapon: #6FE08A;
+  --bg: var(--g0); --bg2: #1c0707; --bg3: #2a0c0c; --line: rgba(255,150,70,.22); --line2: rgba(255,150,70,.42);
+  --fg: #EDE6F4; --fg2: #C9B6C0; --fg3: #9a7a84;
+  --strata: #F7A63A; --maya: #A892E0; --ollama: #E8C070; --legacy: #9a7a84;
+  --ok: #6FE08A; --warn: #F7C04A; --bad: #FF4A3A; --busy: #58C8FF; --idle: #C9B6C0;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --sans: "Segoe UI", Tahoma, sans-serif;
+  --ac: "Michroma", Verdana, "DejaVu Sans", sans-serif;       /* the games use an extended Eurostile */
+  --lcd: "OCR A Extended", "Cascadia Mono", Consolas, monospace;
+  --side: 30px;
+  --art: url("img/cortex.svg");      /* drawn for this page (see README); its strength is the opacity on the file's outer <g> */
+  scrollbar-color: var(--line2) var(--g0);
+
+  /* The ground is painted on the root, and the body is clear, so that #pulse (z-index -1) shows between the two. */
+  background:
+      radial-gradient(ellipse at 50% 38%, var(--halo), transparent 58%),
+      radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,.6) 100%),
+      repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px),
+      var(--art) 50% 54% / max(900px, min(150vh, 100vw)) auto no-repeat,   /* the broker's emblem, under the grid and the scan lines */
+      var(--g0);
+  background-attachment: fixed;
+  body { background: transparent; }
+  ::selection { background: var(--sel); color: #000; }
+
+  /* ---- header ---- */
+  header { background: linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.25)); border-bottom: 1px solid var(--pline); }
+  .mark { border: 1px solid var(--ap); border-radius: 50%; position: relative; box-shadow: 0 0 10px -2px var(--ap);
+    background:
+      linear-gradient(var(--ap), var(--ap)) 50% 50% / 100% 1px no-repeat,
+      linear-gradient(var(--ap), var(--ap)) 50% 50% / 1px 100% no-repeat,
+      conic-gradient(from 0deg, color-mix(in srgb, var(--ap) 70%, transparent), transparent 30%);
+    animation: rv-sweep 3s linear infinite; }
+  .mark::after { inset: 11px; background: var(--fg); }
+  .title { font: 700 14px/1.2 var(--ac); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; text-shadow: 0 0 9px var(--sel); }
+  .sub { color: var(--fg3); text-transform: uppercase; font-size: 10px; }
+  .gauge .g-label { font: 700 9.5px var(--ac); letter-spacing: 1px; color: var(--fg2); align-items: baseline; }
+  .gauge .g-val { font: 12px var(--lcd); color: var(--fg); letter-spacing: .5px; }
+  .bar { height: 7px; border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; background: rgba(255,255,255,.07); }
+  .fill { background: linear-gradient(90deg, var(--bar1), var(--bar2)); box-shadow: 0 0 8px var(--bar2); }
+  .fill.ram { background: linear-gradient(90deg, color-mix(in srgb, var(--sel) 55%, #000), var(--sel)); box-shadow: 0 0 8px var(--sel); }
+  .mark-line { background: #fff; }
+  .g-foot { color: var(--fg3); text-transform: uppercase; font-size: 10px; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  /* AP: the big number top left of the cockpit display */
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; }
+  .rounds .r-v { font: 27px/1 var(--lcd); color: var(--ap); letter-spacing: 1px; text-shadow: 0 0 10px color-mix(in srgb, var(--ap) 60%, transparent); }
+  .rounds .r-k { font: 700 7.5px var(--ac); letter-spacing: 1px; color: var(--ap); text-transform: uppercase; opacity: .8; }
+  .rounds .r-k::before { content: "AP  \00B7  "; }
+  /* the weapon box holds what is on the card */
+  #resident-line { border: 1px solid var(--weapon) !important; background: color-mix(in srgb, var(--weapon) 12%, transparent);
+    padding: 4px 12px; box-shadow: inset 0 0 14px -6px var(--weapon); }
+  .r-label { font: 700 8px var(--ac); letter-spacing: 1.5px; color: var(--weapon); }
+  .r-main { font: 700 12.5px/1.35 var(--ac); letter-spacing: .5px; text-transform: uppercase; color: #eaffee; }
+  .r-sub { color: color-mix(in srgb, var(--weapon) 70%, #fff); text-transform: uppercase; font-size: 10px; }
+  .conn.on { color: var(--weapon); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections: the capped header bar ---- */
+  h2 { width: fit-content; min-width: 190px; margin: 16px 0 10px; padding: 4px 46px 4px 10px; border-radius: 2px 11px 11px 2px;
+    background: linear-gradient(90deg, var(--bar1), var(--bar2) 70%, color-mix(in srgb, var(--bar2) 55%, transparent));
+    font: 700 11px/1.2 var(--ac); letter-spacing: 2px; color: var(--bartext); text-shadow: 0 1px 2px rgba(0,0,0,.6);
+    box-shadow: 0 0 12px -4px var(--bar2); }
+
+  /* ---- cards: translucent plates; the resident one is the selected tile ---- */
+  .card, .panel, .preset { background: var(--panel); border: 1px solid var(--pline); border-radius: 3px;
+    box-shadow: inset 0 0 26px -14px var(--bar2); backdrop-filter: blur(4px); }   /* the plates are heavier than they were, so text holds over the emblem */
+  .card::before { top: 8px; bottom: 8px; width: 3px; box-shadow: 0 0 8px var(--accent); }
+  .card.service { --accent: var(--fg); }
+  .card.resident { border-color: var(--sel); background: color-mix(in srgb, var(--sel) 12%, var(--panel));
+    box-shadow: 0 0 20px -5px var(--sel), inset 0 0 30px -14px var(--sel); }
+  .card.resident::before { background: var(--sel); box-shadow: 0 0 8px var(--sel); }
+  .card.will-unload { border-color: var(--bad); }
+  .c-name { font: 400 13.5px/1.25 var(--ac); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+  .card.resident .c-name::after { content: "NOW EQUIPPED"; display: block; width: fit-content; margin: 5px 0 1px; padding: 2px 10px;
+    border-radius: 999px; background: var(--selbg); border: 1px solid var(--sel); color: #fff; font: 700 7px var(--ac); letter-spacing: 1.5px; }
+  .c-model { color: var(--fg2); }
+  .c-source { font-family: var(--mono); color: var(--fg3); }
+  .tag { background: none; border-radius: 0; border-bottom: 1px solid var(--rule); padding: 0 3px 1px; color: var(--fg); text-transform: uppercase; }
+  .tag.vision { color: var(--sel); border-bottom-color: var(--sel); }
+  .tag.bad { background: var(--bad); color: #000; border-bottom-color: var(--bad); }
+  .c-live { color: var(--fg2); text-transform: uppercase; }
+  .c-live b { color: var(--ap); }
+  .pill { border-radius: 999px; font: 700 7.5px/1 var(--ac); letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 10px 3px;
+    border-color: var(--rule); color: var(--fg2); }
+  .pill.ready { color: #eaffee; border-color: var(--weapon); background: color-mix(in srgb, var(--weapon) 18%, transparent); }
+  .pill.busy { color: #000; border-color: var(--sel); background: var(--sel); animation: rv-blink 1s steps(1) infinite; }
+  .pill.idle { color: var(--fg2); }
+  .pill.down { color: var(--fg3); border-style: dashed; }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { color: var(--warn); border-color: var(--warn); }
+  .pill.parked { color: #000; background: var(--bad); border-color: var(--bad); }
+  .will { font: 700 7.5px var(--ac); letter-spacing: 1.5px; text-transform: uppercase; color: var(--bad); background: #120404; border: 1px solid var(--bad); border-radius: 999px; padding: 3px 9px; }
+
+  /* EN gauge: empty when the server is down, part charged on standby, full when loaded, a pulse runs through it while it works */
+  .vitals { display: flex; align-items: center; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "EN"; font: 700 8px var(--ac); letter-spacing: 1.5px; color: var(--fg2); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 5px; border-bottom: 1px solid var(--rule);
+    background: linear-gradient(90deg, transparent, #fff 50%, transparent) -90px 0 / 90px 100% no-repeat,
+                linear-gradient(90deg, var(--bar1), var(--bar2)) 0 0 / var(--en, 100%) 100% no-repeat, rgba(255,255,255,.07); }
+  .v-s { order: 2; min-width: 66px; text-align: right; font: 700 7.5px var(--ac); letter-spacing: 1.2px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="flat"] { --en: 0%; }
+  .vitals[data-mode="flat"] .v-s { color: var(--bad); }
+  .vitals[data-mode="standby"] { --en: 34%; }
+  .vitals[data-mode="alive"] .v-s { color: var(--weapon); }
+  .vitals[data-mode="active"]::before { animation: rv-charge 1.1s linear infinite; }
+  .vitals[data-mode="active"] .v-s { color: var(--sel); }
+
+  /* ---- controls: menu bars; the one under the cursor takes the selection colour ---- */
+  .btn { border-radius: 2px; border: 1px solid var(--pline); background: color-mix(in srgb, var(--bar2) 16%, transparent); color: var(--fg);
+    font: 700 8px/1 var(--ac); letter-spacing: 1.3px; text-transform: uppercase; padding: 8px 12px 7px; box-shadow: inset 0 0 10px -4px var(--bar2); }
+  .btn.small { padding: 7px 10px 6px; font-size: 7.5px; }
+  .btn:not(:disabled):hover { background: var(--selbg); border-color: var(--sel); color: #fff; box-shadow: 0 0 12px -2px var(--sel); filter: none; }
+  .btn:disabled { opacity: .38; }
+  .btn.primary { background: linear-gradient(90deg, var(--bar1), var(--bar2)); border-color: var(--bar2); color: var(--bartext); text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  .btn.primary:not(:disabled):hover { background: var(--sel); border-color: var(--sel); color: #000; text-shadow: none; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { border-color: color-mix(in srgb, var(--bad) 70%, transparent); color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); box-shadow: none; }
+  .btn.danger:not(:disabled):hover { background: var(--bad); border-color: var(--bad); color: #000; box-shadow: 0 0 12px -2px var(--bad); }
+  select, input { border-radius: 2px; background: rgba(0,0,0,.45); border-color: var(--pline); color: var(--fg); }
+  .preset { padding: 9px 14px; }
+  .preset:hover { border-color: var(--sel); box-shadow: 0 0 14px -4px var(--sel); }
+  .preset .n { font: 700 9.5px var(--ac); letter-spacing: 1.3px; text-transform: uppercase; color: #fff; }
+  .preset .d { color: var(--fg3); margin-top: 4px; }
+
+  /* ---- side panels: a capped bar for the name, ruled stat rows under it ---- */
+  .p-head { font: 700 9px var(--ac); letter-spacing: 1.5px; color: var(--fg2); }
+  .p-head > span:first-child, .p-head > #plan-title { background: linear-gradient(90deg, var(--bar1), var(--bar2)); color: var(--bartext);
+    padding: 3px 26px 3px 8px; border-radius: 2px 9px 9px 2px; text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+  .p-head .p-status { font: 10.5px var(--mono); letter-spacing: 0; text-transform: uppercase; color: var(--fg2); }
+  .kpi { background: none; border-radius: 0; border-bottom: 1px solid var(--rule); padding: 4px 4px 5px; }
+  .kpi .k { font: 700 7.5px var(--ac); letter-spacing: 1.2px; color: var(--ap); }
+  .kpi .v { font: 21px/1.2 var(--lcd); color: #fff; }
+  .kpi .v.small { font: 400 10.5px var(--ac); text-transform: uppercase; letter-spacing: 1px; }
+  .kpi .u { color: var(--fg3); text-transform: uppercase; }
+  .reqs th { color: var(--ap); border-bottom-color: var(--pline); text-transform: uppercase; }
+  .reqs td { border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent); color: var(--fg); }
+  .history li { border-bottom: 1px solid color-mix(in srgb, var(--rule) 45%, transparent); padding-bottom: 1px; }
+  .history .failed { background: var(--bad); color: #000; padding: 0 4px; }
+  .plan-err { background: var(--bad); color: #000; padding: 3px 8px; }
+  .stepper .dot { border-radius: 1px; }
+
+  /* ---- the NOTICE box: warnings, toasts, dialogs ---- */
+  .warn, .toast { position: relative; background: rgba(52,92,122,.86); border: 1px solid #a6d6ee; border-radius: 2px; color: #fff;
+    font: 12px var(--mono); padding: 8px 14px 7px; box-shadow: 0 0 16px -6px #a6d6ee; }
+  .warn { margin-top: 8px; border-color: var(--warn); box-shadow: 0 0 16px -6px var(--warn); }
+  .warn::before, .toast::before { content: "NOTICE"; position: absolute; left: 8px; top: -8px; padding: 1px 6px; background: #0b1a24; border: 1px solid #a6d6ee;
+    font: 700 6.5px var(--ac); letter-spacing: 1.5px; color: #dff3ff; }
+  .warn::before { content: "WARNING"; border-color: var(--warn); color: var(--warn); }
+  .toast.ok { border-color: var(--weapon); }
+  .toast.bad { background: rgba(120,20,14,.9); border-color: var(--bad); color: #fff; }
+  .modal { background: rgba(0,0,0,.72); }
+  .modal-box { background: color-mix(in srgb, var(--panel) 70%, #000); border: 1px solid var(--pline); border-radius: 3px; box-shadow: 0 0 40px -10px var(--bar2); }
+  .m-head { font: 700 11px var(--ac); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+  .modal-box.small .m-head { background: linear-gradient(90deg, var(--bar1), var(--bar2) 70%, transparent); margin: -12px -14px 12px; padding: 7px 14px; border-radius: 2px 2px 0 0; }
+  #confirm-text { color: var(--fg); font-size: 14px; }
+  #log-body { background: rgba(0,0,0,.5); border-color: var(--pline); border-radius: 2px; color: var(--fg2); }
+
+  /* ---- help bar: says what is under the cursor, as the garage does ---- */
+  #helpbar { display: block; flex: none; margin: 0 18px 10px; padding: 5px 14px 4px; min-height: 26px; border-radius: 2px;
+    background: linear-gradient(90deg, var(--bar1), var(--bar2) 55%, var(--bar1)); color: var(--bartext);
+    font: 13px/1.3 var(--mono); text-shadow: 0 1px 2px rgba(0,0,0,.6); box-shadow: 0 0 16px -5px var(--bar2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---- start-up screen ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer;
+    background: var(--art) 50% 50% / max(900px, min(150vh, 100vw)) auto no-repeat, var(--g0);
+    align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-height: 290px; font: min(13px, 2.4vw)/2 var(--ac); letter-spacing: 2px; text-transform: uppercase; color: var(--fg); }
+  .bootscreen .boot-h { font-size: min(34px, 6.4vw); font-weight: 700; letter-spacing: 4px; color: #fff; text-shadow: 0 0 18px var(--bar2), 0 0 4px var(--bar2); }
+  .bootscreen pre::after { content: "_"; color: var(--sel); animation: rv-blink .9s steps(1) infinite; }
+
+  /* ---- the rotated strips down each side: wide windows only ---- */
+  @media (min-width: 1101px) {
+    body { padding: 0 var(--side); }
+    body::before, body::after { content: ""; position: fixed; top: 0; bottom: 0; width: var(--side); z-index: 3; pointer-events: none;
+      background: var(--strip); border-inline: 1px solid color-mix(in srgb, var(--striptext) 35%, transparent); }
+    body::before { content: "GARAGE"; left: 0; writing-mode: vertical-rl; text-orientation: sideways; padding-top: 14px;
+      font: 700 15px/30px var(--ac); letter-spacing: 6px; color: var(--striptext); text-shadow: 0 0 8px rgba(255,255,255,.35); }
+    body::after { right: 0; }
+  }
+}
+
+/* Nerves Concord: the same garage in Armored Core 2's colours */
+:root[data-theme="concord"] {
+  --g0: #020a10; --grid: rgba(40,200,210,.10); --halo: rgba(30,170,190,.16);
+  --panel: rgba(7,46,58,.76); --pline: rgba(90,220,230,.36); --rule: rgba(214,242,244,.22);
+  --bar1: #0C6474; --bar2: #1BA8B8; --bartext: #E8FDFF;
+  --sel: #F59A23; --selbg: rgba(245,154,35,.22);
+  --strip: rgba(20,110,126,.62); --striptext: #D6F6F8;
+  --ap: #D8D048;
+  --bg2: #04161d; --bg3: #072430; --line: rgba(90,220,230,.20); --line2: rgba(90,220,230,.42);
+  --fg: #DDF5F6; --fg2: #9CC8CC; --fg3: #6b9aa0;
+  --strata: #35C8D8; --maya: #7FD0A0; --ollama: #D8D048; --legacy: #6b9aa0;
+  --busy: #F59A23;
+  --art: url("img/concord.svg");
+
+  /* Two lamps that app.js (pulseSync) moves onto honeycomb cells, one at a time each, and fades up and down.
+     Only opacity changes, so nothing behind them is repainted. */
+  #pulse { display: block; position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  #pulse i { position: absolute; left: 0; top: 0; opacity: 0; will-change: opacity; filter: drop-shadow(0 0 14px rgba(95,224,255,.85)); }
+  #pulse i::before { content: ""; display: block; width: 100%; height: 100%;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px),
+      radial-gradient(circle at 50% 42%, #D2F8FF, #55CDEE 55%, #1A8DB6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:is([data-theme="cortex"], [data-theme="concord"]) .mark,
+  :root:is([data-theme="cortex"], [data-theme="concord"]) .pill.busy,
+  :root:is([data-theme="cortex"], [data-theme="concord"]) .vitals[data-mode="active"]::before { animation: none; }
+}

@@ -1,0 +1,173 @@
+/* Aperture Science, after Portal (2007). The one light theme: white wall panels, black sign lettering, and
+   colour kept for the two portals (orange for the card's memory and the thing you press, blue for RAM and
+   the hover). Every card is a test-chamber sign with its number set large and faint behind it. The card
+   holding the resident model stands between an orange edge and a blue one. On each card a cube travels
+   from the orange portal to the blue; faster while the model works, and the portals close when the server
+   is down. The notices are in GLaDOS's voice. */
+@keyframes ap-cube { from { background-position: 0 50%, 0 50%, 100% 50%, 0 50%; } to { background-position: 100% 50%, 0 50%, 100% 50%, 0 50%; } }
+@keyframes ap-blink { 50% { opacity: .35; } }
+
+:root[data-theme="aperture"] {
+  --ink: #1A1D1F; --or: #F26B00; --bl: #0090E0; --rd: #D9261C;
+  --shutter: repeating-conic-gradient(from 12deg, #1A1D1F 0 39deg, transparent 39deg 45deg);
+  --bg: #E4E7E9; --bg2: #FFFFFF; --bg3: #EEF1F2; --line: #D2D8DB; --line2: #AEB7BC;
+  --fg: #1A1D1F; --fg2: #4c555b; --fg3: #7b858b;
+  --strata: #F26B00; --maya: #0090E0; --ollama: #4c555b; --legacy: #9aa3a8;
+  --ok: #1E8E46; --warn: #B87A00; --bad: #D9261C; --busy: #F26B00; --idle: #7b858b;
+  --mono: Consolas, "Lucida Console", monospace;
+  --sans: "Segoe UI", Arial, sans-serif;
+  --sign: "Bahnschrift", "Segoe UI", Arial, sans-serif;
+  scrollbar-color: var(--line2) var(--bg);
+
+  body { font-size: 13.5px;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.10) 100%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,.055) 0 1px, transparent 1px 180px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.055) 0 1px, transparent 1px 180px),
+      var(--bg);
+    background-attachment: fixed; }
+  ::selection { background: var(--or); color: #fff; }
+
+  /* ---- header ---- */
+  header { background: #fff; border-bottom: 2px solid var(--ink); }
+  .mark { flex: none; border: 0; border-radius: 50%; width: 30px; height: 30px; background: var(--shutter);
+    -webkit-mask: radial-gradient(circle, transparent 0 5px, #000 5.6px); mask: radial-gradient(circle, transparent 0 5px, #000 5.6px); }
+  .mark::after { display: none; }
+  .title { font: 700 17px var(--sign); letter-spacing: 2px; text-transform: uppercase; color: var(--ink); }
+  .sub { color: var(--fg3); text-transform: uppercase; }
+  .sub::before { content: "Aperture Science  \00B7  "; color: var(--ink); font-weight: 700; }
+  .gauge .g-label { font: 700 11px var(--sign); letter-spacing: 2px; color: var(--ink); }
+  .gauge .g-val { color: var(--ink); }
+  .bar { height: 8px; border: 0; border-radius: 0; background: var(--line); }
+  .fill { background: var(--or); }
+  .fill.ram { background: var(--bl); }
+  .mark-line { background: var(--ink); width: 2px; }
+  .g-foot { color: var(--fg3); text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 16px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; }
+  .rounds .r-v { font: 200 32px/1 var(--sans); color: var(--ink); letter-spacing: 1px; }
+  .rounds .r-k { font: 700 9px var(--sign); letter-spacing: 2px; color: var(--fg3); text-transform: uppercase; }
+  #resident-line { border-left: 2px solid var(--ink) !important; }
+  .r-label { font: 700 10.5px var(--sign); letter-spacing: 2px; color: var(--fg3); }
+  .r-main { font-weight: 600; font-size: 16px; color: var(--ink); }
+  .r-sub { color: var(--fg2); }
+  .conn { color: var(--rd); }
+  .conn.on { color: var(--or); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections ---- */
+  h2 { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; font: 700 13px var(--sign); letter-spacing: 3px; color: var(--ink); }
+  h2::after { content: ""; flex: 1; height: 2px; background: linear-gradient(90deg, var(--ink) 0 64px, var(--line2) 64px); }
+
+  /* ---- test-chamber signs ---- */
+  #cards { counter-reset: chamber; }
+  .card, .panel, .preset { background: #fff; border: 1px solid var(--line2); border-radius: 3px; box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 8px 18px -14px rgba(0,0,0,.5); }
+  .card { counter-increment: chamber; overflow: hidden; }
+  .card::after { content: counter(chamber, decimal-leading-zero); position: absolute; right: 10px; bottom: -14px; z-index: 0;
+    font: 200 92px/1 var(--sans); letter-spacing: -3px; color: rgba(0,0,0,.065); pointer-events: none; }
+  .card > * { position: relative; z-index: 1; }
+  .card > .will { position: absolute; }
+  .card::before { top: 0; bottom: 0; width: 4px; border-radius: 0; z-index: 2; }
+  .card.service { --accent: var(--ink); }
+  /* the portals are open either side of the resident */
+  .card.resident { border-color: var(--ink); box-shadow: -7px 0 20px -7px var(--or), 7px 0 20px -7px var(--bl), 0 0 0 1px var(--ink); }
+  .card.resident::before { background: var(--or); }
+  .card.resident::after { color: rgba(242,107,0,.14); }
+  .card.will-unload { border-color: var(--rd); }
+  .card.down { opacity: .72; }
+  .c-name { font: 700 16px var(--sign); letter-spacing: 1px; text-transform: uppercase; color: var(--ink); }
+  .card.resident .c-name::after { content: "\2014  still alive"; margin-left: 8px; font: 400 12.5px var(--sans); letter-spacing: 0; text-transform: none; color: var(--or); }
+  .c-model { color: var(--fg2); }
+  .c-source { font-family: var(--mono); color: var(--fg3); }
+  .tag { border-radius: 3px; background: var(--ink); color: #fff; padding: 1px 7px; }      /* pictograms: lit */
+  .tag.vision { background: var(--bl); }
+  .tag.bad { background: var(--rd); }
+  .c-live { color: var(--fg2); }
+  .c-live b { color: var(--ink); }
+  .pill { border-radius: 3px; border: 1.5px solid var(--line2); color: var(--fg2); font: 700 10.5px var(--sign); letter-spacing: 1.5px; text-transform: uppercase; padding: 2px 8px 1px; background: #fff; }
+  .pill.ready { border-color: var(--ink); color: var(--ink); }
+  .pill.ready::before { content: "\2713  "; color: var(--ok); }
+  .pill.busy { background: var(--or); border-color: var(--or); color: #fff; animation: ap-blink 1s steps(1) infinite; }
+  .pill.down { border-style: dashed; color: var(--fg3); }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { border-color: var(--bl); color: var(--bl); }
+  .pill.parked { background: var(--rd); border-color: var(--rd); color: #fff; }
+  .will { font: 700 10.5px var(--sign); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; background: var(--rd); border-radius: 3px; padding: 3px 8px; }
+
+  /* thinking with portals: orange on the left, blue on the right, a cube in transit */
+  .vitals { display: flex; align-items: center; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "PORTALS"; font: 700 9.5px var(--sign); letter-spacing: 2px; color: var(--fg3); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 18px;
+    background:
+      linear-gradient(var(--ink), var(--ink)) 0 50% / 7px 7px no-repeat,                                              /* the cube */
+      radial-gradient(ellipse 5px 9px at 5px 50%, transparent 0 55%, var(--or) 60% 100%, transparent 101%) 0 50% / 12px 18px no-repeat,
+      radial-gradient(ellipse 5px 9px at 7px 50%, transparent 0 55%, var(--bl) 60% 100%, transparent 101%) 100% 50% / 12px 18px no-repeat,
+      linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat;
+    animation: ap-cube 3.2s linear infinite; }
+  .v-s { order: 2; min-width: 66px; text-align: right; font: 700 9.5px var(--sign); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="alive"] .v-s { color: var(--ink); }
+  .vitals[data-mode="active"]::before { animation-duration: .7s; }
+  .vitals[data-mode="active"] .v-s { color: var(--or); }
+  .vitals[data-mode="standby"]::before { animation: none; opacity: .5; }
+  .vitals[data-mode="flat"]::before { animation: none; background: linear-gradient(var(--line2), var(--line2)) 0 50% / 100% 1px no-repeat; }
+  .vitals[data-mode="flat"] .v-s { color: var(--rd); }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 3px; background: #fff; border: 1.5px solid var(--ink); color: var(--ink); font: 700 11.5px var(--sign); letter-spacing: 1.5px; text-transform: uppercase; padding: 6px 12px 5px; }
+  .btn.small { padding: 4px 9px 3px; font-size: 11px; }
+  .btn:not(:disabled):hover { background: var(--bl); border-color: var(--bl); color: #fff; filter: none; }
+  .btn:disabled { opacity: .35; }
+  .btn.primary { background: var(--or); border-color: var(--or); color: #fff; }
+  .btn.ghost { border-color: var(--line2); color: var(--fg2); }
+  .btn.danger { border-color: var(--rd); color: var(--rd); background: #fff; }
+  .btn.danger:not(:disabled):hover { background: var(--rd); border-color: var(--rd); color: #fff; }
+  select, input { border-radius: 3px; background: #fff; border: 1.5px solid var(--line2); color: var(--ink); }
+  .preset { padding: 10px 16px; color: var(--ink); }
+  .preset:hover { border-color: var(--bl); }
+  .preset .n { font: 700 13.5px var(--sign); letter-spacing: 1px; text-transform: uppercase; }
+  .preset .d { color: var(--fg3); }
+
+  /* ---- side panels ---- */
+  .p-head { font: 700 12px var(--sign); letter-spacing: 2.5px; color: var(--ink); border-bottom: 2px solid var(--ink); padding-bottom: 5px; }
+  .p-head .p-status { color: var(--fg2); }
+  .kpi { background: var(--bg3); border-radius: 3px; }
+  .kpi .k { font: 700 9.5px var(--sign); letter-spacing: 1.5px; color: var(--fg3); }
+  .kpi .v { font: 200 27px/1.1 var(--sans); color: var(--ink); }
+  .kpi .v.small { font: 600 14px var(--sans); }
+  .kpi .u { color: var(--fg3); }
+  .reqs th { color: var(--fg3); border-bottom-color: var(--line2); }
+  .reqs td { color: var(--fg2); }
+  .history li { color: var(--fg2); }
+  .history .failed { background: var(--rd); color: #fff; padding: 0 4px; }
+  .plan-err { background: var(--rd); color: #fff; padding: 3px 8px; }
+
+  /* ---- GLaDOS ---- */
+  .warn { background: #fff; border: 1.5px solid var(--warn); border-left-width: 6px; border-radius: 3px; color: var(--ink); font-family: var(--sans); font-size: 13px; }
+  .warn::before { content: "The Enrichment Center reminds you:  "; font-weight: 700; }
+  .toast { border-radius: 3px; background: #fff; border: 1.5px solid var(--ink); color: var(--ink); font: 13px var(--sans); box-shadow: 0 10px 24px -12px rgba(0,0,0,.6); }
+  .toast.ok { border-color: var(--ok); }
+  .toast.ok::after { content: "  Huge success."; color: var(--fg3); }
+  .toast.bad { border-color: var(--rd); color: var(--rd); }
+  .toast.bad::after { content: "  Nice job breaking it, hero."; color: var(--ink); }
+  .modal { background: rgba(228,231,233,.84); }
+  .modal-box { background: #fff; border: 2px solid var(--ink); border-radius: 3px; box-shadow: 0 20px 50px -20px rgba(0,0,0,.6); }
+  .modal-box.small { padding: 20px 22px; box-shadow: -9px 0 26px -9px var(--or), 9px 0 26px -9px var(--bl), 0 20px 50px -20px rgba(0,0,0,.6); }
+  .m-head { font: 700 16px var(--sign); letter-spacing: 1px; color: var(--ink); }
+  #confirm-text { color: var(--fg2); font-size: 14.5px; }
+  #log-body { background: #fff; border-color: var(--line2); border-radius: 3px; color: var(--fg2); }
+
+  /* ---- start-up ---- */
+  .bootscreen { display: flex; flex-direction: column; gap: 26px; position: fixed; inset: 0; z-index: 40; background: #fff; cursor: pointer;
+    align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen::before { content: ""; width: min(120px, 26vw); aspect-ratio: 1; border-radius: 50%; background: var(--shutter);
+    -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 23%); mask: radial-gradient(circle, transparent 0 22%, #000 23%); }
+  .bootscreen pre { margin: 0; min-height: 210px; max-width: 90vw; white-space: pre-wrap; text-align: center; font: min(15px, 3.3vw)/1.85 var(--sans); color: var(--fg2); }
+  .bootscreen .boot-h { font: 200 min(46px, 9.6vw)/1.3 var(--sans); letter-spacing: min(6px, 1vw); text-transform: uppercase; color: var(--ink); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="aperture"] .vitals::before, :root[data-theme="aperture"] .pill.busy { animation: none; }
+}

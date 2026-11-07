@@ -1,0 +1,154 @@
+/* The codec, after Metal Gear Solid (1998). Black screen, green frames, white subtitle text. Each unit is a
+   contact tuned to a frequency, and the frequency is real: `.freq` holds the server's port divided by 100
+   (8100 reads 81.00), written by app.js and hidden in every other theme. Beside it is the codec's signal
+   meter, the rising staircase of bars, which fills over and over while the model is talking. The
+   resident model is the one on the line. Warnings carry the alert mark. */
+@keyframes cd-talk { from { background-size: 0% 100%, 100% 100%; } to { background-size: 100% 100%, 100% 100%; } }
+@keyframes cd-blink { 50% { opacity: .25; } }
+
+:root[data-theme="codec"] {
+  --g: #4EE08A; --g2: #2A9C5C; --g3: #17633a; --gd: #0a2a18; --w: #EEFFF4; --r: #FF3B30;
+  --bg: #000; --bg2: #030f08; --bg3: #08200f; --line: #124a2a; --line2: #2A9C5C;
+  --fg: #EEFFF4; --fg2: #8fe0b0; --fg3: #4f9a6e;
+  --strata: #4EE08A; --maya: #4EE08A; --ollama: #4EE08A; --legacy: #4f9a6e;
+  --ok: #4EE08A; --warn: #FFD23A; --bad: #FF3B30; --busy: #EEFFF4; --idle: #8fe0b0;
+  --mono: Consolas, "Lucida Console", monospace;
+  --sans: Tahoma, Verdana, "Segoe UI", sans-serif;
+  --seg: "OCR A Extended", Consolas, monospace;
+  scrollbar-color: var(--line2) #000;
+
+  body { font-size: 12.5px;
+    background: repeating-linear-gradient(0deg, rgba(78,224,138,.045) 0 1px, transparent 1px 3px), #000; background-attachment: fixed; }
+  ::selection { background: var(--g); color: #000; }
+
+  /* ---- header ---- */
+  header { background: #000; border-bottom: 2px solid var(--g2); }
+  .mark { flex: none; border: 0; border-radius: 0; background: repeating-linear-gradient(90deg, var(--g) 0 4px, transparent 4px 6px);
+    clip-path: polygon(0 100%, 100% 0, 100% 100%); }
+  .mark::after { display: none; }
+  .title { font-weight: 700; font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: var(--w); white-space: nowrap; }
+  .sub { color: var(--fg3); text-transform: uppercase; }
+  .sub::before { content: "CODEC 140.85  \00B7  "; color: var(--g); }
+  .gauge .g-label { color: var(--g); font-weight: 700; letter-spacing: 2px; }
+  .gauge .g-val { color: var(--w); }
+  .bar { height: 10px; border-radius: 0; border-color: var(--line2); background: #000; }
+  .fill, .fill.ram { background: var(--g);
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px); mask: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px); }
+  .mark-line { background: var(--w); width: 2px; }
+  .g-foot { color: var(--fg3); text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; background: var(--gd); border: 1px solid var(--g2); padding: 2px 8px; }
+  .rounds .r-v { font: 26px/1.05 var(--seg); color: var(--g); letter-spacing: 2px; text-shadow: 0 0 8px rgba(78,224,138,.6); }
+  .rounds .r-k { font: 700 8.5px var(--sans); letter-spacing: 1.5px; color: var(--g2); text-transform: uppercase; }
+  #resident-line { border-left: 2px solid var(--g) !important; }
+  .r-label { color: var(--g); font-weight: 700; letter-spacing: 2px; }
+  .r-main { font-weight: 700; font-size: 15px; color: var(--w); }
+  .r-sub { color: var(--fg2); }
+  .conn.on { color: var(--g); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections ---- */
+  h2 { display: flex; align-items: center; gap: 10px; margin: 18px 0 9px; font-weight: 700; font-size: 12px; letter-spacing: 3px; color: var(--g); }
+  h2::before { content: "MEMORY"; font-size: 9px; letter-spacing: 2px; background: var(--g); color: #000; padding: 2px 6px; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line2); }
+
+  /* ---- contacts ---- */
+  .card, .panel, .preset { background: var(--bg2); border: 2px solid var(--g2); border-radius: 0; box-shadow: inset 0 0 0 1px #000, inset 0 0 22px -10px var(--g); }
+  .card::before { display: none; }
+  .card.resident { border-color: var(--g); box-shadow: inset 0 0 0 1px #000, inset 0 0 26px -8px var(--g), 0 0 18px -6px var(--g); }
+  .card.will-unload { border-color: var(--r); }
+  .card.down { opacity: .7; }
+  /* the tuner: frequency on the left, PTT and MEMORY beside it */
+  .freq { display: flex; align-items: baseline; gap: 12px; margin: -2px 0 2px; font: 34px/1 var(--seg); letter-spacing: 3px; color: var(--g2); }
+  .freq::after { content: "PTT        MEMORY"; white-space: pre; font: 700 8.5px var(--sans); letter-spacing: 1.5px; color: var(--g3); }
+  .card.resident .freq { color: var(--g); text-shadow: 0 0 12px rgba(78,224,138,.75); }
+  .card.resident .freq::after { content: "PTT  \25C0  ON THE LINE"; color: var(--g); }
+  .card.down .freq { color: var(--g3); }
+  .c-name { font-weight: 700; font-size: 14.5px; letter-spacing: 1px; color: var(--w); }
+  .c-model { color: var(--fg2); }
+  .c-source { color: var(--fg3); }
+  .tag { border-radius: 0; background: var(--gd); color: var(--fg2); }
+  .tag.vision { color: var(--w); }
+  .tag.bad { background: var(--r); color: #000; }
+  .c-live { color: var(--fg2); }
+  .c-live b { color: var(--w); }
+  .pill { border-radius: 0; border-color: var(--g2); color: var(--fg2); font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
+  .pill.ready { background: var(--g); border-color: var(--g); color: #000; }
+  .pill.busy { background: var(--w); border-color: var(--w); color: #000; animation: cd-blink .8s steps(1) infinite; }
+  .pill.down { border-style: dashed; color: var(--fg3); }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { border-color: var(--warn); color: var(--warn); }
+  .pill.parked { background: var(--r); border-color: var(--r); color: #000; }
+  .will { font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #000; background: var(--r); padding: 2px 7px; }
+
+  /* the signal meter: a staircase of bars */
+  .vitals { display: flex; align-items: flex-end; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "SIGNAL"; font: 700 9px var(--sans); letter-spacing: 2px; color: var(--fg3); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 18px; clip-path: polygon(0 100%, 100% 0, 100% 100%);
+    background: linear-gradient(var(--g), var(--g)) 0 0 / 55% 100% no-repeat, linear-gradient(var(--g3), var(--g3));
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 8px); mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 8px); }
+  .v-s { order: 2; min-width: 78px; text-align: right; font: 700 9px var(--sans); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="flat"]::before { background: var(--gd); }
+  .vitals[data-mode="flat"] .v-s { font-size: 0; }
+  .vitals[data-mode="flat"] .v-s::after { content: "NO RESPONSE"; font-size: 9px; color: var(--r); }
+  .vitals[data-mode="standby"]::before { background: linear-gradient(var(--g2), var(--g2)) 0 0 / 18% 100% no-repeat, linear-gradient(var(--gd), var(--gd)); }
+  .vitals[data-mode="alive"] .v-s { color: var(--g); }
+  .vitals[data-mode="active"]::before { background: linear-gradient(var(--w), var(--w)) 0 0 / 0% 100% no-repeat, linear-gradient(var(--g3), var(--g3));
+    animation: cd-talk .55s steps(12) infinite alternate; }
+  .vitals[data-mode="active"] .v-s { color: var(--w); }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 0; background: #000; border: 1px solid var(--g2); color: var(--g); font: 700 11px var(--sans); letter-spacing: 1.5px; text-transform: uppercase; }
+  .btn:not(:disabled):hover { background: var(--g); border-color: var(--g); color: #000; filter: none; }
+  .btn:disabled { opacity: .35; }
+  .btn.primary { background: var(--g); border-color: var(--g); color: #000; }
+  .btn.primary:not(:disabled):hover { background: var(--w); border-color: var(--w); }
+  .btn.danger { border-color: var(--r); color: var(--r); }
+  .btn.danger:not(:disabled):hover { background: var(--r); border-color: var(--r); color: #000; }
+  select, input { border-radius: 0; background: #000; border-color: var(--g2); color: var(--g); }
+  .preset { padding: 10px 14px; }
+  .preset:hover { border-color: var(--w); }
+  .preset .n { font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--w); }
+  .preset .d { color: var(--fg3); }
+
+  /* ---- side panels ---- */
+  .p-head { font-weight: 700; font-size: 12px; letter-spacing: 3px; color: var(--g); border-bottom: 1px solid var(--line2); padding-bottom: 5px; }
+  .p-head .p-status { color: var(--fg2); }
+  .kpi { background: var(--gd); border-radius: 0; border: 1px solid var(--line); }
+  .kpi .k { color: var(--g2); font-weight: 700; letter-spacing: 1.5px; }
+  .kpi .v { font-family: var(--seg); font-weight: 400; color: var(--g); text-shadow: 0 0 8px rgba(78,224,138,.5); }
+  .kpi .v.small { font: 700 12.5px var(--sans); text-transform: uppercase; text-shadow: none; }
+  .kpi .u { color: var(--g3); }
+  .reqs th { color: var(--g2); border-bottom-color: var(--line2); }
+  .history .failed { background: var(--r); color: #000; padding: 0 4px; }
+  .stepper .dot { border-radius: 0; }
+  .plan-err { background: var(--r); color: #000; padding: 3px 8px; font-weight: 700; }
+
+  /* ---- the alert mark, and what the Colonel says ---- */
+  .warn { background: #000; border: 2px solid var(--r); border-radius: 0; color: var(--w); font: 700 13px var(--sans); }
+  .warn::before { content: "!"; display: inline-block; margin-right: 12px; font: 900 22px/1 "Arial Black", Impact, sans-serif; color: var(--r); vertical-align: -3px; animation: cd-blink .5s steps(1) 6; }
+  .toast { border-radius: 0; background: #000; border: 2px solid var(--g2); color: var(--w); font: 700 12.5px var(--sans); }
+  .toast.ok::after { content: "   Excellent, Snake."; color: var(--g); font-weight: 400; }
+  .toast.bad { border-color: var(--r); }
+  .toast.bad::after { content: "   Snake? Snake?! SNAAAAKE!"; color: var(--r); }
+  .modal { background: rgba(0,0,0,.84); }
+  .modal-box { background: #000; border: 2px solid var(--g2); border-radius: 0; box-shadow: inset 0 0 30px -12px var(--g); }
+  .modal-box.small { border-color: var(--r); box-shadow: inset 0 0 30px -12px var(--r); padding: 20px 22px; }
+  .m-head { font-size: 15px; letter-spacing: 1px; color: var(--w); }
+  .modal-box.small .m-head { font: 900 20px "Arial Black", Impact, sans-serif; letter-spacing: 2px; color: var(--r); }
+  #confirm-text { color: var(--fg); font-size: 13.5px; }
+  #log-body { background: #000; border-color: var(--line2); border-radius: 0; color: var(--fg2); }
+
+  /* ---- start-up ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer; align-items: center; justify-content: center; transition: opacity .35s;
+    background: repeating-linear-gradient(0deg, rgba(78,224,138,.06) 0 1px, transparent 1px 3px), #000; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-height: 280px; text-align: center; font: 700 min(16px, 3.4vw)/1.9 var(--sans); color: var(--w); }
+  .bootscreen .boot-h { font: min(76px, 16vw)/1.25 var(--seg); letter-spacing: 6px; color: var(--g); text-shadow: 0 0 18px rgba(78,224,138,.7); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="codec"] .vitals::before, :root[data-theme="codec"] .pill.busy, :root[data-theme="codec"] .warn::before { animation: none; }
+}

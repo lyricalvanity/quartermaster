@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quartermaster</title>
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="theme-muthur.css">
+<link rel="stylesheet" href="theme-castlevania.css">
+<link rel="stylesheet" href="theme-lcars.css">
+<link rel="stylesheet" href="theme-cyberpunk.css">
+<link rel="stylesheet" href="theme-raven.css">
+<link rel="stylesheet" href="theme-matrix.css">
+<link rel="stylesheet" href="theme-precrime.css">
+<link rel="stylesheet" href="theme-ocp.css">
+<link rel="stylesheet" href="theme-magi.css">
+<link rel="stylesheet" href="theme-hal.css">
+<link rel="stylesheet" href="theme-gits.css">
+<link rel="stylesheet" href="theme-wopr.css">
+<link rel="stylesheet" href="theme-aperture.css">
+<link rel="stylesheet" href="theme-jurassic.css">
+<link rel="stylesheet" href="theme-t800.css">
+<link rel="stylesheet" href="theme-codec.css">
+<link rel="stylesheet" href="theme-tron.css">
+<link rel="stylesheet" href="theme-bladerunner.css">
+<script src="theme.js"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2312161c'/%3E%3Crect x='3' y='3' width='10' height='10' rx='1' fill='none' stroke='%2366d9a3' stroke-width='1.5'/%3E%3Ccircle cx='8' cy='8' r='2' fill='%2366d9a3'/%3E%3C/svg%3E">
+</head>
+<body>
+<canvas id="rain"></canvas>
+<div id="pulse"><i></i><i></i></div>
+<header id="hdr">
+  <div class="brand">
+    <div class="mark"></div>
+    <div><div class="title">Quartermaster</div><div class="sub"><span id="host-line">—</span> · <span id="clock">—</span></div></div>
+  </div>
+  <div class="gauge" id="g-gpu">
+    <div class="g-label">VRAM <span class="g-val" id="gpu-val">—</span></div>
+    <div class="bar"><div class="fill" id="gpu-fill"></div><div class="mark-line" id="gpu-free"></div></div>
+    <div class="g-foot"><span id="gpu-util">—</span><span id="gpu-temp">—</span><span id="gpu-power">—</span></div>
+    <div class="rounds" title="free VRAM, MiB"><span class="r-v" id="gpu-rounds">-----</span><span class="r-k">MiB free</span></div>
+    <div class="defcon" id="defcon" title="how full the card is: 5 = under a fifth, 1 = four fifths or more"><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span></div>
+  </div>
+  <div class="gauge" id="g-ram">
+    <div class="g-label">RAM <span class="g-val" id="ram-val">—</span></div>
+    <div class="bar"><div class="fill ram" id="ram-fill"></div></div>
+    <div class="g-foot"><span id="ram-free">—</span><span id="ram-commit">—</span></div>
+  </div>
+  <div class="resident" id="resident-line">
+    <div class="r-label">Resident</div>
+    <div class="r-main" id="resident-main">nothing on the card</div>
+    <div class="r-sub" id="resident-sub"></div>
+  </div>
+  <div class="hdr-actions">
+    <select id="theme-sel" title="theme"></select>
+    <span class="conn" id="conn" title="stream">●</span>
+    <button class="btn danger" id="btn-killall" title="Unload every model and give the card back">Clear the card</button>
+  </div>
+</header>
+
+<div id="warnings"></div>
+
+<main>
+  <section id="cards">
+    <div class="group" data-group="strata"><h2>Strata</h2><div class="grid" id="grp-strata"></div></div>
+    <div class="group" data-group="maya"><h2>Maya</h2><div class="grid" id="grp-maya"></div></div>
+    <div class="group" data-group="ollama"><h2>Ollama</h2><div class="grid" id="grp-ollama"></div></div>
+    <div class="group collapsed" data-group="legacy"><h2 class="toggle" id="legacy-toggle">Legacy Strata servers <span class="chev">▸</span></h2><div class="grid" id="grp-legacy"></div></div>
+    <div class="group" data-group="services" id="grp-services-wrap" hidden><h2>Services</h2><div class="grid" id="grp-services"></div></div>
+    <div class="group"><h2>Presets</h2><div class="presets" id="presets"></div></div>
+  </section>
+
+  <aside id="side">
+    <div class="panel" id="plan-panel" hidden>
+      <div class="p-head"><span id="plan-title">Plan</span><span class="p-status" id="plan-status"></span><button class="btn small ghost" id="plan-cancel">Cancel</button></div>
+      <ol class="stepper" id="plan-steps"></ol>
+    </div>
+    <div class="panel" id="telemetry">
+      <div class="p-head"><span>Telemetry</span><span class="p-status" id="tele-name"></span></div>
+      <div class="tele-grid">
+        <div class="kpi"><div class="k">decode</div><div class="v" id="t-toks">—</div><div class="u">tok/s</div></div>
+        <div class="kpi"><div class="k">prefill</div><div class="v" id="t-prefill">—</div><div class="u">tok/s</div></div>
+        <div class="kpi"><div class="k">state</div><div class="v small" id="t-state">—</div><div class="u" id="t-phase"></div></div>
+        <div class="kpi"><div class="k">context</div><div class="v small" id="t-ctx">—</div><div class="u" id="t-kv"></div></div>
+      </div>
+      <svg id="spark" viewBox="0 0 300 60" preserveAspectRatio="none"></svg>
+      <div class="facts" id="t-facts"></div>
+      <table class="reqs"><thead><tr><th>prompt</th><th>out</th><th>prefill</th><th>decode</th><th>finish</th></tr></thead><tbody id="t-reqs"></tbody></table>
+    </div>
+    <div class="panel" id="gpu-panel">
+      <div class="p-head"><span>Card</span><span class="p-status" id="gpu-apps"></span></div>
+      <svg id="gpu-spark" viewBox="0 0 300 50" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="panel" id="history-panel">
+      <div class="p-head"><span>Activity</span><button class="btn small ghost" id="hist-refresh">refresh</button></div>
+      <ul class="history" id="history"></ul>
+    </div>
+  </aside>
+</main>
+<div id="helpbar"></div>
+
+<div class="modal" id="log-modal" hidden>
+  <div class="modal-box">
+    <div class="m-head"><span id="log-title">log</span>
+      <input id="log-filter" placeholder="exclude (regex)" value="answering|thinking">
+      <button class="btn small" id="log-refresh">refresh</button>
+      <button class="btn small ghost" id="log-close">close</button></div>
+    <pre id="log-body"></pre>
+  </div>
+</div>
+
+<div class="modal" id="confirm-modal" hidden>
+  <div class="modal-box small">
+    <div class="m-head"><span id="confirm-title">Confirm</span></div>
+    <p id="confirm-text"></p>
+    <div class="m-foot"><button class="btn ghost" id="confirm-no">No</button><button class="btn danger" id="confirm-yes">Yes</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

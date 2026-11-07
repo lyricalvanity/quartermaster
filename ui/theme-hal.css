@@ -1,0 +1,170 @@
+/* HAL 9000, after the displays aboard Discovery in 2001: A Space Odyssey (1968). Black console, flat colour
+   screens, white lettering, a three-letter code on every screen, and the eye. No glow, no scanlines: this
+   is 1968's idea of the future, and it is clean. Each card is a screen with a coloured header; the trace
+   on it is the hibernation monitor, which reads LIFE FUNCTIONS TERMINATED when a server is down. HAL
+   speaks in the notices. The name in them is the owner's (inventory "owner"; Dave without one): it is their console. */
+@keyframes hl-trace { from { stroke-dashoffset: 300; } to { stroke-dashoffset: 0; } }
+@keyframes hl-blink { 50% { opacity: .2; } }
+@keyframes hl-eye { 50% { filter: brightness(1.25); } }
+
+:root[data-theme="hal"] {
+  --blue: #1B4FD8; --red: #D81B1B; --green: #1E9E4A; --purple: #7B3FC8; --amber: #E0A000; --eye: #FF2A00;
+  --bg: #000; --bg2: #060606; --bg3: #141414; --line: #262626; --line2: #4a4a4a;
+  --fg: #F2F2EE; --fg2: #B4B4AC; --fg3: #7c7c76;
+  --strata: #1B4FD8; --maya: #1E9E4A; --ollama: #7B3FC8; --legacy: #55554f;
+  --ok: #35c265; --warn: #E0A000; --bad: #FF3B30; --busy: #fff; --idle: #B4B4AC;
+  --mono: Consolas, "Lucida Console", monospace;
+  --sans: "Franklin Gothic Medium", "Segoe UI", Arial, sans-serif;
+  --code: "Michroma", Verdana, sans-serif;
+  --iris: radial-gradient(circle, #fff9c4 0 7%, #ffd21a 8% 15%, #ff3a00 16% 30%, #a30c00 31% 50%, #2a0000 51% 66%, #6a6a6a 67% 72%, #151515 73% 100%);
+  scrollbar-color: var(--line2) #000;
+
+  body { font-size: 13.5px; }
+  ::selection { background: #fff; color: #000; }
+
+  /* ---- header ---- */
+  header { background: #000; border-bottom: 1px solid var(--line2); }
+  .mark { flex: none; border: 0; border-radius: 50%; width: 34px; height: 34px; background: var(--iris);
+    box-shadow: 0 0 14px rgba(255,42,0,.55); animation: hl-eye 4s ease-in-out infinite; }
+  .mark::after { display: none; }
+  .title { font: 400 12.5px/1.3 var(--code); letter-spacing: 1.2px; text-transform: uppercase; color: #fff; white-space: nowrap; }
+  .sub { color: var(--fg3); text-transform: uppercase; }
+  .sub::before { content: "HAL 9000  \00B7  "; color: #6fa0ff; }
+  .gauge .g-label { font: 400 9px var(--code); letter-spacing: 2px; color: var(--fg2); align-items: baseline; }
+  .gauge .g-val { color: #fff; }
+  .bar { height: 9px; border: 0; border-radius: 0; background: var(--bg3); }
+  .fill { background: var(--blue); }
+  .fill.ram { background: var(--green); }
+  .mark-line { background: #fff; width: 2px; }
+  .g-foot { color: var(--fg3); text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  /* free memory, on a screen of its own */
+  .rounds { display: flex; flex-direction: column; align-items: flex-start; grid-column: 2; grid-row: 1 / span 3; background: var(--blue); border-radius: 5px; padding: 3px 10px 4px; }
+  .rounds::before { content: "MEM"; font: 400 12px/1.2 var(--code); letter-spacing: 2px; color: #fff; }
+  .rounds .r-v { font: 400 17px/1.15 var(--code); color: #fff; letter-spacing: 1px; }
+  .rounds .r-k { font: 9px var(--mono); color: #d6e2ff; text-transform: uppercase; }
+  #resident-line { border-left: 1px solid var(--line2) !important; }
+  .r-label { font: 400 8.5px var(--code); letter-spacing: 2px; color: var(--fg3); }
+  .r-main { font: 400 13px/1.4 var(--code); letter-spacing: .5px; text-transform: uppercase; color: #fff; }
+  .r-sub { color: var(--fg2); text-transform: uppercase; }
+  .conn { color: var(--bad); }
+  .conn.on { color: var(--eye); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections: a three-letter screen, then the name ---- */
+  h2 { display: flex; align-items: center; gap: 12px; margin: 18px 0 10px; font: 400 10px var(--code); letter-spacing: 3px; color: var(--fg2); }
+  h2::before { display: grid; place-items: center; width: 58px; height: 34px; border-radius: 5px; background: var(--hc, #55554f);
+    font: 400 15px var(--code); letter-spacing: 2px; color: #fff; }
+  .group[data-group="strata"] { --hc: var(--blue); }     .group[data-group="strata"] h2::before { content: "STR"; }
+  .group[data-group="maya"] { --hc: var(--green); }      .group[data-group="maya"] h2::before { content: "MAY"; }
+  .group[data-group="ollama"] { --hc: var(--purple); }   .group[data-group="ollama"] h2::before { content: "OLL"; }
+  .group[data-group="legacy"] h2::before { content: "HIB"; }
+  .group[data-group="services"] { --hc: var(--red); }    .group[data-group="services"] h2::before { content: "COM"; }
+  .group:not([data-group]) { --hc: var(--amber); }       .group:not([data-group]) h2::before { content: "NAV"; }
+
+  /* ---- screens ---- */
+  .card, .panel, .preset { background: var(--bg2); border: 1px solid var(--line); border-radius: 6px; box-shadow: none; }
+  .card { padding: 0 14px 12px; overflow: hidden; }
+  .card::before { display: none; }
+  .card.service { --accent: var(--red); }
+  .c-top { background: var(--accent); margin: 0 -14px 4px; padding: 9px 14px 8px; align-items: center; }
+  .card.down .c-top { background: color-mix(in srgb, var(--accent) 38%, #111); }
+  .card.down { opacity: 1; }
+  .card.resident { border-color: #fff; }
+  .card.will-unload { border-color: var(--bad); }
+  .c-name { font: 400 12.5px/1.3 var(--code); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+  .card.resident .c-name::before { content: ""; display: inline-block; width: 13px; height: 13px; margin-right: 8px; vertical-align: -2px; border-radius: 50%;
+    background: var(--iris); box-shadow: 0 0 8px rgba(255,42,0,.8); }
+  .c-model { color: rgba(255,255,255,.88); }
+  .c-source { font-family: var(--mono); color: rgba(255,255,255,.6); }
+  .tag { border-radius: 2px; background: var(--bg3); color: var(--fg); text-transform: uppercase; }
+  .tag.vision { color: #8fb4ff; }
+  .tag.bad { background: var(--bad); color: #000; }
+  .c-live { color: var(--fg2); text-transform: uppercase; }
+  .c-live b { color: #fff; }
+  .pill { border-radius: 3px; border: 1px solid rgba(255,255,255,.75); background: rgba(0,0,0,.28); color: #fff; font: 400 8px var(--code); letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 8px 3px; }
+  .pill.ready { background: #fff; color: #000; border-color: #fff; }
+  .pill.busy { background: #fff; color: var(--red); border-color: #fff; animation: hl-blink 1s steps(1) infinite; }
+  .pill.down { border-style: dashed; color: rgba(255,255,255,.7); background: transparent; }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { color: #fff; border-color: #fff; animation: hl-blink 1s steps(1) infinite; }
+  .pill.parked { background: var(--bad); border-color: var(--bad); color: #000; }
+  .will { font: 400 8px var(--code); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; background: var(--bad); border-radius: 3px; padding: 4px 8px; }
+
+  /* the hibernation monitor */
+  .vitals { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
+  .vitals svg { width: 100%; height: 20px; display: block; overflow: hidden; }
+  .vitals path { fill: none; stroke: #fff; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+  .v-base { opacity: .3; }
+  .v-sweep { stroke-dasharray: 46 254; animation: hl-trace 3s linear infinite; }
+  .v-k { font-size: 0; }
+  .v-k::before { content: "LIFE FUNCTIONS"; font: 400 7.5px var(--code); letter-spacing: 1.5px; color: var(--fg3); }
+  .v-s { font: 400 7.5px var(--code); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg2); min-width: 62px; text-align: right; white-space: nowrap; }
+  .vitals[data-mode="active"] .v-s { color: #fff; }
+  .vitals[data-mode="standby"] .v-s, .vitals[data-mode="flat"] .v-s { font-size: 0; }
+  .vitals[data-mode="standby"] .v-s::after { content: "HIBERNATING"; font-size: 7.5px; color: var(--fg3); }
+  .vitals[data-mode="flat"] path { stroke: var(--bad); }
+  .vitals[data-mode="flat"] .v-base { opacity: .8; }
+  .vitals[data-mode="flat"] .v-s::after { content: "TERMINATED"; font-size: 7.5px; color: var(--bad); animation: hl-blink 1.2s steps(1) infinite; }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 4px; background: var(--bg3); border: 1px solid var(--line2); color: #fff; font: 400 8px var(--code); letter-spacing: 1.5px; text-transform: uppercase; padding: 8px 12px 7px; }
+  .btn.small { padding: 7px 10px 6px; font-size: 7.5px; }
+  .btn:not(:disabled):hover { background: #fff; border-color: #fff; color: #000; filter: none; }
+  .btn:disabled { opacity: .35; }
+  .btn.primary { background: var(--accent, var(--blue)); border-color: var(--accent, var(--blue)); color: #fff; font-weight: 400; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+  .btn.danger:not(:disabled):hover { background: var(--bad); border-color: var(--bad); color: #000; }
+  #btn-killall { background: var(--red); border-color: var(--red); color: #fff; }
+  select, input { border-radius: 4px; background: #000; border-color: var(--line2); color: #fff; }
+  .preset { padding: 10px 14px; border-left: 5px solid var(--amber); }
+  .preset:hover { border-color: #fff; border-left-color: #fff; }
+  .preset .n { font: 400 10px var(--code); letter-spacing: 1.5px; text-transform: uppercase; color: #fff; }
+  .preset .d { color: var(--fg3); margin-top: 4px; }
+
+  /* ---- side panels ---- */
+  .p-head { font: 400 10px var(--code); letter-spacing: 3px; color: #fff; border-bottom: 1px solid var(--line); padding-bottom: 7px; }
+  .p-head .p-status { font: 11px var(--mono); letter-spacing: 0; text-transform: uppercase; color: var(--fg2); }
+  .kpi { border-radius: 5px; background: var(--blue); }
+  .kpi:nth-child(2) { background: var(--green); } .kpi:nth-child(3) { background: var(--purple); } .kpi:nth-child(4) { background: var(--red); }
+  .kpi .k { font: 400 7.5px var(--code); letter-spacing: 1.5px; color: rgba(255,255,255,.85); }
+  .kpi .v { font: 400 17px/1.3 var(--code); color: #fff; }
+  .kpi .v.small { font-size: 10px; text-transform: uppercase; }
+  .kpi .u { color: rgba(255,255,255,.75); }
+  .reqs th { color: var(--fg3); border-bottom-color: var(--line2); text-transform: uppercase; }
+  .history .failed { background: var(--bad); color: #000; padding: 0 4px; }
+  .plan-err { background: var(--bad); color: #000; padding: 3px 8px; }
+
+  /* ---- HAL speaks ---- */
+  .warn { background: #000; border: 1px solid var(--eye); border-radius: 6px; color: #fff; font-family: var(--sans); font-size: 14px; padding: 8px 14px; }
+  .warn::before { content: "I've just picked up a fault.  "; color: var(--eye); }
+  .toast { border-radius: 6px; background: #000; border: 1px solid var(--line2); color: #fff; font: 14px var(--sans); padding: 10px 16px; }
+  .toast::before { content: ""; display: inline-block; width: 13px; height: 13px; margin-right: 10px; vertical-align: -2px; border-radius: 50%;
+    background: var(--iris); box-shadow: 0 0 8px rgba(255,42,0,.8); }
+  .toast.ok::after { content: "  Affirmative."; color: var(--fg3); }
+  .toast.bad { border-color: var(--eye); color: #fff; }
+  .toast.bad::after { content: "  I'm sorry, " var(--owner, "Dave") ". I'm afraid I can't do that."; color: var(--eye); }
+  .modal { background: rgba(0,0,0,.84); }
+  .modal-box { background: #000; border: 1px solid var(--line2); border-radius: 8px; }
+  .modal-box.small { border-color: var(--eye); padding: 20px 22px; }
+  .modal-box.small .m-head::before { content: ""; display: inline-block; width: 30px; height: 30px; margin-right: 12px; vertical-align: middle; border-radius: 50%;
+    background: var(--iris); box-shadow: 0 0 16px rgba(255,42,0,.8); flex: none; }
+  .m-head { font: 17px var(--sans); color: #fff; }
+  #confirm-text { color: var(--fg2); font-size: 14.5px; }
+  #log-body { background: #000; border-color: var(--line2); border-radius: 5px; color: var(--fg2); }
+
+  /* ---- start-up: the eye ---- */
+  .bootscreen { display: flex; flex-direction: column; gap: 34px; position: fixed; inset: 0; z-index: 40; background: #000; cursor: pointer;
+    align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen::before { content: ""; width: min(210px, 42vw); aspect-ratio: 1; border-radius: 50%; background: var(--iris);
+    box-shadow: 0 0 60px rgba(255,42,0,.55), 0 0 0 9px #1b1b1b, 0 0 0 11px #5a5a5a; animation: hl-eye 3s ease-in-out infinite; }
+  .bootscreen pre { margin: 0; min-height: 150px; text-align: center; font: min(17px, 3.6vw)/1.8 var(--sans); color: var(--fg); }
+  .bootscreen .boot-h { font: 400 min(15px, 3.2vw) var(--code); letter-spacing: 6px; color: #6fa0ff; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="hal"] .mark, :root[data-theme="hal"] .v-sweep, :root[data-theme="hal"] .pill.busy,
+  :root[data-theme="hal"] .bootscreen::before { animation: none; }
+}

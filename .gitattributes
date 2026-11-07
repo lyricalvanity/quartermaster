@@ -1,0 +1,8 @@
+# LF in the repository and in checkouts on every platform; Windows batch files are the exception.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ttf binary
+*.TTF binary
+*.jpg binary
+*.png binary

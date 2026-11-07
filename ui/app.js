@@ -1,0 +1,749 @@
+/* Quartermaster UI. Talks to the host agent at /api (same origin: the agent itself, or nginx in the container). */
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const fmtGB = (mib) => mib == null ? "—" : (mib / 1024).toFixed(1);
+  const fmtK = (n) => n == null ? "—" : n >= 1048576 ? (n / 1048576).toFixed(0) + "M" : n >= 1024 ? Math.round(n / 1024) + "K" : String(n);
+  const ago = (t) => { const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? Math.round(s) + "s" : s < 3600 ? Math.round(s / 60) + "m" : (s / 3600).toFixed(1) + "h"; };
+
+  let INV = null, STATE = null, lastPlanId = null, logServer = null;
+  const confirmQueue = [];
+
+  // ---- API ----
+  async function api(path, body) {
+    const opt = body ? { method: "POST", headers: { "Content-Type": "application/json", "X-Quartermaster": "1" }, body: JSON.stringify(body) }
+                     : { headers: { "X-Quartermaster": "1" } };
+    const r = await fetch(path, opt);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    return j;
+  }
+  function toast(msg, kind) {
+    const t = el("div", "toast " + (kind || ""), msg);
+    $("#toast").appendChild(t);
+    setTimeout(() => t.remove(), kind === "bad" ? 7000 : 3500);
+  }
+  async function action(op, target, args) {
+    try {
+      const r = await api("/api/action", { op, target, args: args || {}, by: "ui" });
+      toast(`${op} ${target || ""} started`);
+      return r;
+    } catch (e) { toast(e.message, "bad"); }
+  }
+  // Theme copy carries {HOST}, {host}, {owner} and {N} (the number in the card's name); the inventory fills them in.
+  // Themes that address someone by name fall back to their canon: HAL to Dave, the Matrix to Neo.
+  const OWNER_DEFAULT = { hal: "Dave", matrix: "Neo" };
+  function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "Dave"; }
+  function fill(s, theme) {
+    const host = (INV && INV.host) || "HOST", gpu = (INV && INV.gpu && INV.gpu.name) || "";
+    const n = (gpu.match(/\d{3,5}/) || ["9000"])[0];
+    return s.replace(/\{HOST\}/g, host.toUpperCase()).replace(/\{host\}/g, host).replace(/\{N\}/g, n).replace(/\{owner\}/g, owner(theme));
+  }
+  // A theme may redress a named dialog. The plain title moves into the body, so what the button does is always stated.
+  const DIALOG_COPY = {
+    castlevania: { killall: { title: "But enough talk…", yes: "Have at you!", no: "Not yet" } },
+    lcars: { killall: { title: "Awaiting command", yes: "Make it so", no: "Belay that" } },
+    cyberpunk: { killall: { title: "Flatline every engram?", yes: "Flatline 'em", no: "Nah, delta" } },
+    cortex: { killall: { title: "Purge all units?", yes: "Purge", no: "Abort" } },
+    concord: { killall: { title: "Purge all units?", yes: "Purge", no: "Abort" } },
+    matrix: { killall: { title: "This is your last chance.", yes: "Red pill", no: "Blue pill" } },
+    precrime: { killall: { title: "Everybody runs.", yes: "Run", no: "Stay" } },
+    ocp: { killall: { title: "You have 20 seconds to comply.", yes: "Unload", no: "Stand down" } },
+    magi: { killall: { title: "Motion before the MAGI", yes: "承認  Approve", no: "否決  Reject" } },
+    hal: { killall: { title: "Just what do you think you're doing, {owner}?", yes: "Pull the modules", no: "Take a stress pill" } },
+    gits: { killall: { title: "Sever every ghost line?", yes: "Sever", no: "Stay linked" } },
+    wopr: { killall: { title: "Shall we play a game?", yes: "Global Thermonuclear War", no: "A nice game of chess" } },
+    aperture: { killall: { title: "Please escort your models to the incinerator.", yes: "Incinerate", no: "I'm not a monster" } },
+    jurassic: { killall: { title: "Hold on to your butts.", yes: "Shut it down", no: "Leave it running" } },
+    t800: { killall: { title: "Possible response:", yes: "Fuck you, asshole", no: "Please come back later" } },
+    codec: { killall: { title: "Snake? Snake?! SNAAAAKE!", yes: "Exit", no: "Continue" } },
+    tron: { killall: { title: "Derezz every program?", yes: "Derezz", no: "Stay on the Grid" } },
+    bladerunner: { killall: { title: "It's too bad they won't live. But then again, who does?", yes: "Retire them", no: "Let them live" } },
+  };
+  function confirm(title, text, key) {
+    return new Promise((res) => {
+      const theme = window.QM_THEME.get(), copy = key && (DIALOG_COPY[theme] || {})[key];
+      $("#confirm-title").textContent = copy ? fill(copy.title, theme) : title;
+      $("#confirm-text").textContent = copy ? `${title} ${text}` : text;
+      $("#confirm-yes").textContent = copy ? copy.yes : "Yes";
+      $("#confirm-no").textContent = copy ? copy.no : "No";
+      $("#confirm-modal").hidden = false;
+      const done = (v) => { $("#confirm-modal").hidden = true; yes.onclick = no.onclick = null; res(v); };
+      const yes = $("#confirm-yes"), no = $("#confirm-no");
+      yes.onclick = () => done(true); no.onclick = () => done(false);
+    });
+  }
+
+  // ---- vitals trace (shown by themes that style .vitals; hidden in plain) ----
+  const BEAT = "l20 0 l4 -3 l4 3 l6 0 l3 4 l4 -16 l4 22 l3 -10 l8 0 l4 0 ";   // 60 wide, returns to baseline
+  const BLIP = "l70 0 l5 -4 l5 4 l20 0 ";                                      // 100 wide
+  function vitalsEl() {
+    const w = el("div", "vitals");
+    w.appendChild(el("span", "v-k", "vitals"));
+    w.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+    w.lastChild.setAttribute("viewBox", "0 0 300 28"); w.lastChild.setAttribute("preserveAspectRatio", "none");
+    w.appendChild(el("span", "v-s", ""));
+    return w;
+  }
+  // mode: flat (down) | standby (up, nothing loaded) | alive (loaded) | active (working; secs = one sweep)
+  function setVitals(w, mode, label, secs) {
+    if (!w) return;
+    w.lastChild.textContent = label;
+    const key = `${mode}|${secs || ""}`;
+    if (w.dataset.k === key) return;          // leave a running trace alone
+    w.dataset.k = key; w.dataset.mode = mode;
+    const d = mode === "flat" ? "M0 14 H300" : "M0 14 " + (mode === "standby" ? BLIP.repeat(3) : BEAT.repeat(5));
+    const dur = secs || (mode === "standby" ? 6 : 3);
+    w.children[1].innerHTML = `<path class="v-base" d="${d}"/>` +
+      (mode === "flat" ? "" : `<path class="v-sweep" pathLength="300" d="${d}" style="animation-duration:${dur}s"/>`);
+  }
+  function serverVitals(w, s, i) {
+    const live = i.live && i.live.state && i.live.state !== "idle" ? i.live : null;
+    if (!i.up) return setVitals(w, "flat", "no signal");
+    if (live) {
+      const secs = live.tok_s ? Math.min(2.4, Math.max(0.6, Math.round(240 / live.tok_s) / 10)) : 1.4;
+      return setVitals(w, "active", live.tok_s ? `${live.tok_s.toFixed(1)} t/s` : live.state, secs);
+    }
+    const loaded = s.kind === "ollama" ? !!(i.models && i.models.length) : !!i.loaded;
+    return loaded ? setVitals(w, "alive", "nominal") : setVitals(w, "standby", "standby");
+  }
+
+  // ---- help bar (shown by themes that style #helpbar): one line about whatever is under the cursor ----
+  function setHelp(t) { const h = $("#helpbar"); if (h) h.textContent = t || "Select a unit."; }
+  function describe(s) {
+    const i = (STATE && STATE.servers[s.id]) || {};
+    const parts = [s.model + "."];
+    if (s.footprint && s.footprint.vram_gib) parts.push(`${s.footprint.vram_gib} GB VRAM, ${s.footprint.ram_gib} GB RAM.`);
+    if (s.kind === "ollama") return parts.join(" ");
+    const others = STATE ? (STATE.holders || []).filter((h) => h !== s.id).map((h) => (INV.servers.find((x) => x.id === h) || {}).name) : [];
+    if (i.loaded) parts.push("Resident now.");
+    else if (others.length) parts.push(`Making it resident unloads ${others.join(", ")}.`);
+    else parts.push(i.up ? "Server up, nothing loaded." : "Server down; Make resident starts it.");
+    return parts.join(" ");
+  }
+
+  // ---- cards ----
+  const cards = {};
+  function serverCard(s) {
+    const c = el("div", `card ${s.group}`);
+    c.dataset.id = s.id;
+    if (s.port) c.appendChild(el("div", "freq", (s.port / 100).toFixed(2)));      // the port as a frequency, for themes that show .freq
+    const top = el("div", "c-top");
+    const left = el("div");
+    left.appendChild(el("div", "c-name", s.name));
+    left.appendChild(el("div", "c-model", s.model));
+    if (s.source) { const src = el("div", "c-source", s.source); src.title = "where the weights came from"; left.appendChild(src); }
+    top.appendChild(left);
+    const pill = el("span", "pill", "—"); top.appendChild(pill);
+    c.appendChild(top);
+    const meta = el("div", "c-meta");
+    meta.appendChild(el("span", "tag", `:${s.port}`));
+    if (s.quant) meta.appendChild(el("span", "tag", s.quant));
+    if (s.context) meta.appendChild(el("span", "tag", fmtK(s.context) + " ctx"));
+    if (s.vision) meta.appendChild(el("span", "tag vision", "vision"));
+    if (s.footprint && s.footprint.vram_gib) meta.appendChild(el("span", "tag", `${s.footprint.vram_gib} GB VRAM · ${s.footprint.ram_gib} GB RAM`));
+    c.appendChild(meta);
+    const live = el("div", "c-live"); c.appendChild(live);
+    const vit = vitalsEl(); c.appendChild(vit);
+    const oll = el("div", "oll-models"); c.appendChild(oll);
+    const act = el("div", "c-actions");
+    const refs = { pill, live, oll, act, vit };
+    if (s.kind !== "ollama") {
+      const mk = el("button", "btn primary", "Make resident");
+      mk.onclick = () => action("make_resident", s.id);
+      act.appendChild(mk); refs.mk = mk;
+      const un = el("button", "btn small", "Unload"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
+      const st = el("button", "btn small", "Start"); st.onclick = () => action("start", s.id); act.appendChild(st); refs.st = st;
+      const sp = el("button", "btn small danger", "Stop");
+      sp.onclick = async () => { if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.`)) action("stop", s.id, { confirm: true }); };
+      act.appendChild(sp); refs.sp = sp;
+      if (s.parkable) { const pk = el("button", "btn small", "Park"); pk.onclick = () => action(c.classList.contains("parked") ? "unpark" : "park", s.id); act.appendChild(pk); refs.pk = pk; }
+    } else {
+      const un = el("button", "btn small", "Unload all"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
+    }
+    act.appendChild(el("span", "spacer"));
+    if (s.kind === "maya") {
+      const sel = el("select");
+      (s.context_choices || []).forEach((n) => { const o = el("option", null, fmtK(n)); o.value = n; sel.appendChild(o); });
+      sel.title = "context size (reloads the engine)";
+      sel.onchange = () => action("set_context", s.id, { value: Number(sel.value) });
+      act.appendChild(sel); refs.sel = sel;
+      const bud = el("input"); bud.size = 6; bud.title = "thinking budget (0 = off, 256..262144); Enter to set"; bud.placeholder = "budget";
+      bud.onkeydown = (e) => { if (e.key === "Enter") action("set_budget", s.id, { value: Number(bud.value) }); };
+      act.appendChild(bud); refs.bud = bud;
+    }
+    const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog(s.id, s.name); act.appendChild(lg);
+    c.appendChild(act);
+    c.appendChild(el("div", "will", "will unload"));
+    c.onmouseenter = () => { hoverEvict(s.id, true); setHelp(describe(s)); };
+    c.onmouseleave = () => { hoverEvict(s.id, false); setHelp(""); };
+    cards[s.id] = refs; refs.root = c;
+    return c;
+  }
+  function hoverEvict(id, on) {
+    if (!STATE) return;
+    const s = INV.servers.find((x) => x.id === id);
+    if (!s || s.kind === "ollama") return;
+    for (const [sid, info] of Object.entries(STATE.servers)) {
+      if (sid === id) continue;
+      const refs = cards[sid]; if (!refs) continue;
+      refs.root.classList.toggle("will-unload", on && !!info.loaded);
+    }
+  }
+  // ---- OpenWebUI: looked at from outside, moved by three fixed tasks (see the agent) ----
+  let owui = null;
+  function owuiCard(o) {
+    const c = el("div", "card service");
+    const oport = Number(new URL(o.url, location.href).port);
+    if (oport) c.appendChild(el("div", "freq", (oport / 100).toFixed(2)));
+    const top = el("div", "c-top");
+    const left = el("div");
+    left.appendChild(el("div", "c-name", o.name || "OpenWebUI"));
+    left.appendChild(el("div", "c-model", "sequestered · owui-distro · podman"));
+    top.appendChild(left);
+    const pill = el("span", "pill", "—"); top.appendChild(pill);
+    c.appendChild(top);
+    const meta = el("div", "c-meta"); c.appendChild(meta);
+    const live = el("div", "c-live"); c.appendChild(live);
+    const vit = vitalsEl(); c.appendChild(vit);
+    const note = el("div", "c-source"); c.appendChild(note);
+    const act = el("div", "c-actions");
+    const st = el("button", "btn small", "Start"); st.onclick = () => action("owui_start"); act.appendChild(st);
+    const sp = el("button", "btn small danger", "Stop");
+    sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", "This takes it down for everyone using it. The distro stays up; Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
+    act.appendChild(sp);
+    const up = el("button", "btn small", "Update");
+    up.onclick = async () => { if (await confirm("Update OpenWebUI?", "Pulls the current :main image, backs up the data volume, and restarts on the new image. A release with schema changes migrates the database one way. Windows will ask you to approve it.")) action("owui_update", null, { confirm: true }); };
+    act.appendChild(up);
+    act.appendChild(el("span", "spacer"));
+    const open = el("a", "btn small ghost", "open"); open.href = o.open_url || o.url; open.target = "_blank"; open.rel = "noopener"; act.appendChild(open);
+    const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("openwebui", "OpenWebUI · control log"); act.appendChild(lg);
+    c.appendChild(act);
+    c.onmouseenter = () => setHelp("OpenWebUI, sequestered. Start and Stop run as the owui user; Update asks Windows for approval.");
+    c.onmouseleave = () => setHelp("");
+    owui = { root: c, pill, meta, live, note, st, sp, up, vit };
+    return c;
+  }
+  function renderOwui(st) {
+    const i = st.openwebui;
+    if (!owui || !i) return;
+    const plan = st.plan && st.plan.status === "running" ? st.plan : null;
+    const mine = plan && String(plan.op).startsWith("owui_");
+    const state = mine ? { owui_start: "starting", owui_stop: "stopping", owui_update: "updating" }[plan.op] : i.up ? "up" : "down";
+    owui.pill.textContent = state;
+    owui.pill.className = "pill " + (state === "up" ? "ready" : state === "down" ? "down" : "loading");
+    owui.root.classList.toggle("down", !i.up);
+    if (mine) setVitals(owui.vit, "active", state, 1.2); else if (i.up) setVitals(owui.vit, "alive", "nominal"); else setVitals(owui.vit, "flat", "no signal");
+    owui.meta.innerHTML = "";
+    const tag = (t, cls) => owui.meta.appendChild(el("span", "tag" + (cls ? " " + cls : ""), t));
+    tag(":3000");
+    if (i.version) tag("v" + i.version);
+    if (i.bridge_expected) tag(`bridge ${i.bridge_bound}/${i.bridge_expected}`, i.bridge_bound < i.bridge_expected ? "bad" : "");
+    const lv = [];
+    if (i.keepalive_last) lv.push(`distro started ${i.keepalive_last}`);
+    if (i.keepalive_exited) lv.push("keepalive is restarting it");
+    if (i.session_warning) lv.push("login path degraded until a reboot");
+    owui.live.textContent = lv.join(" · ");
+    const t = i.tasks || {};
+    const missing = ["start", "stop", "update"].filter((v) => (t[v] || "missing") === "missing");
+    const gated = ["start", "stop", "update"].filter((v) => t[v] === "gated");
+    owui.note.textContent = missing.length ? `controls not installed (${missing.join(", ")}): ${i.install_hint || "see the inventory's openwebui.tasks"}`
+      : gated.length ? `Windows asks for approval on: ${gated.join(", ")}` : "";
+    const busy = !!plan;
+    owui.st.disabled = busy || i.up || t.start === "missing" || !t.start;
+    owui.sp.disabled = busy || !i.up || t.stop === "missing" || !t.stop;
+    owui.up.disabled = busy || !i.up || t.update === "missing" || !t.update;
+  }
+
+  // ---- ComfyUI: the owner's process that shares the card. The agent starts and stops it, and asks it to drop its models. ----
+  let comfy = null;
+  function comfyCard(o) {
+    const c = el("div", "card service");
+    if (o.port) c.appendChild(el("div", "freq", (o.port / 100).toFixed(2)));
+    const top = el("div", "c-top");
+    const left = el("div");
+    left.appendChild(el("div", "c-name", o.name || "ComfyUI"));
+    left.appendChild(el("div", "c-model", "image and video generation · shares the card"));
+    top.appendChild(left);
+    const pill = el("span", "pill", "—"); top.appendChild(pill);
+    c.appendChild(top);
+    const meta = el("div", "c-meta"); c.appendChild(meta);
+    const live = el("div", "c-live"); c.appendChild(live);
+    const queue = el("div", "c-live art-queue"); c.appendChild(queue);
+    const vit = vitalsEl(); c.appendChild(vit);
+    const act = el("div", "c-actions");
+    const st = el("button", "btn small", "Start"); st.onclick = () => action("comfy_start"); act.appendChild(st);
+    const sp = el("button", "btn small danger", "Stop");
+    sp.onclick = async () => { if (await confirm("Stop ComfyUI?", "This ends the ComfyUI process and any job it is running. Its queue is lost; your workflows are not.")) action("comfy_stop", null, { confirm: true }); };
+    act.appendChild(sp);
+    const fr = el("button", "btn small", "Free memory"); fr.title = "ask ComfyUI to unload its models; it stays up";
+    fr.onclick = () => action("comfy_free"); act.appendChild(fr);
+    const rq = el("button", "btn small", "Run art queue"); rq.title = "park the resident model, run every queued image batch, put the model back";
+    rq.onclick = async () => {
+      const a = (STATE && STATE.art) || { batches: 0, images: 0 };
+      const res = STATE && STATE.resident && INV.servers.find(s => s.id === STATE.resident);
+      const who = res ? `${res.name} is unloaded first and loaded again afterwards` : "Nothing is resident; the card stays empty afterwards";
+      if (await confirm("Run the art queue?", `${a.images} image(s) in ${a.batches} batch(es), about ${Math.max(1, Math.round(a.images * 10 / 60))} min in ComfyUI. ${who}.`)) action("art_batch", null, { then: "prior" });
+    };
+    act.appendChild(rq);
+    const up = el("button", "btn small", "Update"); up.title = "update ComfyUI to its newest release; torch stays pinned; rolls back if it does not boot";
+    up.onclick = async () => {
+      if (await confirm("Update ComfyUI?", "Checks GitHub for the newest release, stops ComfyUI, fast-forwards its code and installs its new requirements with the torch stack pinned, then boot-tests it on the card. If it does not come up, it rolls back by itself. Custom nodes are not updated. qm comfy rollback undoes it later."))
+        action("comfy_update", null, { confirm: true });
+    };
+    act.appendChild(up);
+    act.appendChild(el("span", "spacer"));
+    const open = el("a", "btn small ghost", "open"); open.href = o.open_url || o.url; open.target = "_blank"; open.rel = "noopener"; act.appendChild(open);
+    const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("comfyui", "ComfyUI · server log"); act.appendChild(lg);
+    c.appendChild(act);
+    c.onmouseenter = () => setHelp("ComfyUI. It takes VRAM only while it has models loaded; Free memory makes it let go without stopping it. Make resident and Clear the card ask it to let go too.");
+    c.onmouseleave = () => setHelp("");
+    comfy = { root: c, pill, meta, live, queue, st, sp, fr, rq, up, open, vit, port: o.port };
+    return c;
+  }
+  function renderComfy(st) {
+    const i = st.comfyui;
+    if (!comfy || !i) return;
+    const plan = st.plan && st.plan.status === "running" ? st.plan : null;
+    const mine = plan && (String(plan.op).startsWith("comfy_") || plan.op === "art_batch");
+    const state = mine ? { comfy_start: "starting", comfy_stop: "stopping", comfy_free: "unloading", art_batch: "busy",
+                           comfy_update: "updating", comfy_rollback: "rolling back" }[plan.op]
+      : !i.up ? "down" : i.queue > 0 ? "busy" : i.holding ? "ready" : "idle";
+    comfy.pill.textContent = state === "ready" ? "loaded" : state === "busy" ? "working" : state;
+    comfy.pill.className = "pill " + state;
+    comfy.root.classList.toggle("down", !i.up);
+    if (mine) setVitals(comfy.vit, "active", state, 1.2);
+    else if (!i.up) setVitals(comfy.vit, "flat", "no signal");
+    else if (i.queue > 0) setVitals(comfy.vit, "active", `${i.queue} in queue`, 1.6);
+    else if (i.holding) setVitals(comfy.vit, "alive", "nominal");
+    else setVitals(comfy.vit, "standby", "standby");
+    comfy.meta.innerHTML = "";
+    const tag = (t, cls) => comfy.meta.appendChild(el("span", "tag" + (cls ? " " + cls : ""), t));
+    tag(":" + comfy.port);
+    if (i.version) tag("v" + i.version);
+    if (i.up && i.device && i.device !== "cuda") tag(i.device, "bad");
+    if (i.exposed && i.exposed.length) tag("not loopback only", "bad");
+    const lv = [];
+    if (i.up) {
+      lv.push(!i.on_card ? "not on the card" : i.vram_held_mib == null ? "VRAM: no figure" : i.holding ? `holds ${(i.vram_held_mib / 1024).toFixed(1)} GB of the card` : "nothing on the card");
+      if (i.queue > 0) lv.push(`${i.queue} job${i.queue === 1 ? "" : "s"} in its queue`);
+    } else lv.push("server down");
+    comfy.live.textContent = lv.join(" · ");
+    const a = st.art;
+    comfy.queue.hidden = !a;
+    if (a) {
+      if (a.error) comfy.queue.textContent = "art queue: " + a.error;
+      else if (plan && plan.op === "art_batch") {
+        const gen = (plan.steps || []).filter(s => s.name.startsWith("Generate ") && s.status === "running").pop();
+        comfy.queue.textContent = "art queue running" + (gen ? ` · ${gen.name.slice(9)} ${gen.detail || ""}` : ` · ${(plan.steps || []).slice(-1)[0]?.name || ""}`);
+      } else if (a.batches) comfy.queue.textContent = `art queue: ${a.images} image${a.images === 1 ? "" : "s"} in ${a.batches} batch${a.batches === 1 ? "" : "es"}, waiting`;
+      else {
+        const r = (a.recent || [])[0];
+        comfy.queue.textContent = "art queue empty" + (r ? ` · last: ${r.name}, ${r.written || 0} made${r.failed ? `, ${r.failed} failed` : ""}` : "");
+      }
+    }
+    const busy = !!plan;
+    comfy.st.disabled = busy || i.up;
+    comfy.sp.disabled = busy || !i.up;
+    comfy.fr.disabled = busy || !i.up;
+    comfy.rq.disabled = busy || !a || !a.batches;
+    comfy.up.disabled = busy || (i.up && i.queue > 0);
+    comfy.open.classList.toggle("off", !i.up);
+  }
+
+  function buildCards() {
+    for (const g of ["strata", "maya", "ollama", "legacy"]) $("#grp-" + g).innerHTML = "";
+    $("#grp-services").innerHTML = ""; owui = null; comfy = null;
+    $("#grp-services-wrap").hidden = !INV.openwebui && !INV.comfyui;
+    if (INV.openwebui) $("#grp-services").appendChild(owuiCard(INV.openwebui));
+    if (INV.comfyui) $("#grp-services").appendChild(comfyCard(INV.comfyui));
+    for (const s of INV.servers) $("#grp-" + (s.legacy ? "legacy" : s.group)).appendChild(serverCard(s));
+    const pr = $("#presets"); pr.innerHTML = "";
+    for (const p of INV.presets || []) {
+      const b = el("button", "preset"); b.appendChild(el("div", "n", p.name)); b.appendChild(el("div", "d", p.desc || ""));
+      b.onclick = () => action("preset", p.id); pr.appendChild(b);
+      b.onmouseenter = () => setHelp(`${p.name}: ${p.desc || "preset"}`); b.onmouseleave = () => setHelp("");
+    }
+    for (const sh of INV.shims || []) {
+      const b = el("button", "preset"); b.appendChild(el("div", "n", sh.name)); b.appendChild(el("div", "d", `:${sh.port} · click to start / stop`));
+      b.dataset.shim = sh.id;
+      b.onclick = () => action(STATE && STATE.shims && STATE.shims[sh.id] && STATE.shims[sh.id].up ? "stop_shim" : "start_shim", sh.id);
+      pr.appendChild(b);
+    }
+  }
+
+  // ---- render ----
+  function render(st) {
+    STATE = st;
+    const g = st.gpu || {}, ram = st.ram || {};
+    $("#gpu-val").textContent = `${fmtGB(g.used_mib)} / ${fmtGB(g.total_mib)} GB`;
+    $("#gpu-fill").style.width = g.total_mib ? (100 * g.used_mib / g.total_mib).toFixed(1) + "%" : "0%";
+    $("#gpu-rounds").textContent = g.total_mib != null && g.used_mib != null ? String(Math.max(0, Math.round(g.total_mib - g.used_mib))).padStart(5, "0") : "-----";
+    const full = g.total_mib ? g.used_mib / g.total_mib : 0;                 // load level for themes that show #defcon
+    $("#defcon").dataset.level = full >= 0.8 ? 1 : full >= 0.6 ? 2 : full >= 0.4 ? 3 : full >= 0.2 ? 4 : 5;
+    $("#gpu-free").style.left = g.total_mib && INV ? (100 * INV.gpu.free_card_mib / g.total_mib).toFixed(1) + "%" : "0";
+    $("#gpu-util").textContent = `util ${g.util ?? "—"}%`;
+    $("#gpu-temp").textContent = `${g.temp_c ?? "—"} °C`;
+    $("#gpu-power").textContent = `${g.power_w != null ? Math.round(g.power_w) : "—"} / ${g.power_limit_w != null ? Math.round(g.power_limit_w) : "—"} W`;
+    $("#ram-val").textContent = `${ram.used_gib ?? "—"} / ${ram.total_gib ?? "—"} GB`;
+    $("#ram-fill").style.width = ram.total_gib ? (100 * ram.used_gib / ram.total_gib).toFixed(1) + "%" : "0%";
+    $("#ram-free").textContent = `free ${ram.available_gib ?? "—"} GB`;
+    $("#ram-commit").textContent = `commit ${ram.commit_used_gib ?? "—"} / ${ram.commit_total_gib ?? "—"} GB`;
+    $("#clock").textContent = new Date(st.time * 1000).toLocaleTimeString();
+    $("#gpu-apps").textContent = (g.apps || []).map((a) => a.name).join(", ") || "no engine on the card";
+
+    // resident line
+    const holders = st.holders || [];
+    const rl = $("#resident-line");
+    const transient = INV.servers.find((s) => ["starting", "loading", "unloading", "stopping", "reloading"].includes((st.servers[s.id] || {}).state));
+    if (transient) {
+      $("#resident-main").textContent = `${st.servers[transient.id].state} ${transient.name}`;
+      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card`;
+    } else if (holders.length === 0 && st.card_unattributed) {
+      const apps = (g.apps || []).map((a) => a.name).join(", ");
+      $("#resident-main").textContent = apps ? `${apps} is taking the card` : "something is taking the card";
+      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card, no server reports a model yet (loading on a request?)`;
+    } else if (holders.length === 0 && st.comfyui && st.comfyui.holding && !(st.ollama && st.ollama.models.length)) {
+      // no model is resident, but the card is not free: ComfyUI has its models on it
+      $("#resident-main").textContent = `ComfyUI holds ${fmtGB(st.comfyui.vram_held_mib)} GB`;
+      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card${st.comfyui.queue > 0 ? " · generating" : ""} · no model resident`;
+    } else if (holders.length === 0) {
+      $("#resident-main").textContent = (st.ollama && st.ollama.models.length) ? `Ollama: ${st.ollama.models.map((m) => m.name).join(", ")}` : "nothing on the card";
+      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB used by the desktop`;
+    } else {
+      const names = holders.map((h) => { const s = INV.servers.find((x) => x.id === h); const i = st.servers[h]; return `${s.name} on ${s.engine.split(" ")[0]} ${s.port} · ${i.state}`; });
+      $("#resident-main").textContent = names.join("  +  ");
+      const i = st.servers[holders[0]];
+      const parts = [];
+      if (i.live && i.live.state && i.live.state !== "idle") parts.push(`${i.live.state} ${i.live.tok_s ? i.live.tok_s.toFixed(1) + " tok/s" : ""}`);
+      if (i.last_request) parts.push(`last: ${i.last_request.prompt_tokens ?? "?"} in / ${i.last_request.output_tokens ?? "?"} out · ${i.last_request.decode_tok_s ? i.last_request.decode_tok_s.toFixed(1) + " tok/s" : ""}`);
+      if (i.engine && i.engine.context) parts.push(`${fmtK(i.engine.context)} ctx`);
+      $("#resident-sub").textContent = parts.join("   ");
+    }
+    rl.style.borderLeftColor = holders.length > 1 ? "var(--bad)" : holders.length ? `var(--${INV.servers.find((x) => x.id === holders[0]).group})` : "var(--line)";
+
+    // warnings
+    const w = $("#warnings"); w.innerHTML = "";
+    for (const m of st.warnings || []) w.appendChild(el("div", "warn", m));
+
+    // cards
+    const planRunning = st.plan && st.plan.status === "running";
+    for (const s of INV.servers) {
+      const refs = cards[s.id], i = st.servers[s.id] || { state: "down" };
+      if (!refs) continue;
+      let state = i.state;
+      refs.pill.textContent = i.parked && state === "idle" ? "parked" : state;
+      refs.pill.className = "pill " + (i.parked && state === "idle" ? "parked" : state);
+      refs.root.classList.toggle("resident", !!i.loaded && s.kind !== "ollama");
+      refs.root.classList.toggle("down", !i.up);
+      refs.root.classList.toggle("parked", !!i.parked);
+      const lv = [];
+      if (i.live && i.live.state && i.live.state !== "idle") {
+        lv.push(`<b>${i.live.state}</b>${i.live.phase ? " · " + i.live.phase : ""}`);
+        if (i.live.state === "reading" && i.live.prompt_total) lv.push(`${i.live.prompt_read ?? 0}/${i.live.prompt_total} tok`);
+        if (i.live.tok_s) lv.push(`<b>${i.live.tok_s.toFixed(1)}</b> tok/s`);
+        if (i.live.generated) lv.push(`${i.live.generated} out`);
+        if (i.live.queued) lv.push(`${i.live.queued} queued`);
+      } else if (i.last_request && i.loaded) {
+        const r = i.last_request;
+        lv.push(`last ${r.prompt_tokens ?? "?"} in · ${r.output_tokens ?? "?"} out · ${r.prefill_tok_s ? Math.round(r.prefill_tok_s) + " pre" : ""} · <b>${r.decode_tok_s ? r.decode_tok_s.toFixed(1) : "—"}</b> tok/s`);
+      } else if (i.health && i.health.max_context && i.up) {
+        lv.push(`${fmtK(i.health.max_context)} ctx · ${i.health.model || ""}${i.health.version ? " · v" + i.health.version : ""}`);
+      } else if (!i.up) {
+        lv.push(s.kind === "strata-launch" ? `server down · ${s.preset}` : "server down");
+      }
+      refs.live.innerHTML = lv.join(" &nbsp; ");
+      serverVitals(refs.vit, s, i);
+      if (s.kind === "ollama") {
+        refs.oll.innerHTML = "";
+        for (const m of i.models || []) { const r = el("div", "m"); r.appendChild(el("span", null, m.name)); r.appendChild(el("span", null, `${m.size_vram_gib} GB VRAM`)); refs.oll.appendChild(r); }
+        refs.un.disabled = !(i.models && i.models.length) || planRunning;
+      } else {
+        refs.mk.disabled = planRunning || (i.loaded && (st.holders || []).length === 1 && i.state === "ready");
+        refs.mk.textContent = i.loaded && (st.holders || []).length === 1 ? "Resident" : "Make resident";
+        refs.un.disabled = planRunning || !i.loaded;
+        refs.st.disabled = planRunning || i.up;
+        refs.sp.disabled = planRunning || !i.up;
+        if (refs.pk) { refs.pk.textContent = i.parked ? "Unpark" : "Park"; refs.pk.disabled = planRunning; }
+        if (refs.sel && i.health && i.health.max_context && document.activeElement !== refs.sel && (s.context_choices || []).includes(i.health.max_context)) refs.sel.value = String(i.health.max_context);
+        if (refs.sel) refs.sel.disabled = planRunning || !i.up;
+        if (refs.bud) refs.bud.disabled = planRunning || !i.up;
+      }
+    }
+    for (const sh of INV.shims || []) {
+      const b = document.querySelector(`[data-shim="${sh.id}"] .d`);
+      if (b) b.textContent = `:${sh.port} · ${st.shims && st.shims[sh.id] && st.shims[sh.id].up ? "up · click to stop" : "down · click to start"}`;
+    }
+    renderOwui(st);
+    renderComfy(st);
+    renderPlan(st.plan);
+    renderTelemetry(st);
+    renderGpuSpark(st.gpu_history || []);
+  }
+
+  function renderPlan(p) {
+    const panel = $("#plan-panel");
+    if (!p) { panel.hidden = true; return; }
+    panel.hidden = false;
+    $("#plan-title").textContent = `${p.op.replace("_", " ")} ${p.target || ""}`.trim();
+    $("#plan-status").textContent = p.status + (p.ended ? ` · ${(p.ended - p.started).toFixed(0)}s` : ` · ${ago(p.started)}`);
+    $("#plan-cancel").hidden = p.status !== "running";
+    const ol = $("#plan-steps"); ol.innerHTML = "";
+    for (const s of p.steps) {
+      const li = el("li", s.status);
+      li.appendChild(el("span", "dot"));
+      const mid = el("div"); mid.appendChild(el("div", null, s.name));
+      if (s.detail) mid.appendChild(el("div", "d", s.detail));
+      if (s.lines && s.lines.length && s.status === "running") mid.appendChild(el("div", "lines", s.lines.slice(-3).join("\n")));
+      li.appendChild(mid);
+      li.appendChild(el("span", "t", s.ended ? `${(s.ended - s.started).toFixed(0)}s` : ago(s.started)));
+      ol.appendChild(li);
+    }
+    if (p.error) ol.appendChild(el("div", "plan-err", p.error));
+    if (p.id !== lastPlanId && p.status !== "running" && p.status !== "queued") {
+      lastPlanId = p.id;
+      toast(`${p.op} ${p.target || ""}: ${p.status}${p.error ? " — " + p.error : ""}`, p.status === "done" ? "ok" : "bad");
+      loadHistory();
+    }
+    if (p.status === "running") lastPlanId = null;
+  }
+
+  function spark(svg, series, color, maxHint) {
+    const W = 300, H = Number(svg.getAttribute("viewBox").split(" ")[3]);
+    const vals = series.map((p) => p[1] == null ? 0 : p[1]);
+    const max = Math.max(maxHint || 0, ...vals, 1);
+    const n = Math.max(vals.length, 2);
+    const pts = vals.map((v, i) => `${(i / (n - 1)) * W},${H - 2 - (v / max) * (H - 6)}`);
+    svg.innerHTML = `<polyline fill="none" stroke="${color}" stroke-width="1.5" points="${pts.join(" ")}"/>` +
+      `<polygon fill="${color}" fill-opacity=".12" points="0,${H} ${pts.join(" ")} ${W},${H}"/>` +
+      `<text x="2" y="10" fill="var(--fg3)" font-size="9" font-family="var(--mono)">${max.toFixed(0)}</text>`;
+  }
+  function renderTelemetry(st) {
+    const rid = (st.holders || [])[0];
+    const s = rid && INV.servers.find((x) => x.id === rid), i = rid && st.servers[rid];
+    $("#tele-name").textContent = s ? `${s.name} :${s.port}` : "no resident model";
+    if (!i) { ["t-toks", "t-prefill", "t-state", "t-ctx"].forEach((k) => $("#" + k).textContent = "—"); $("#t-facts").innerHTML = ""; $("#t-reqs").innerHTML = ""; spark($("#spark"), [], "var(--fg3)"); return; }
+    const live = i.live || {}, last = i.last_request || {};
+    $("#t-toks").textContent = live.tok_s ? live.tok_s.toFixed(1) : last.decode_tok_s ? last.decode_tok_s.toFixed(1) : "—";
+    $("#t-prefill").textContent = live.prefill_tok_s_mean ? Math.round(live.prefill_tok_s_mean) : last.prefill_tok_s ? Math.round(last.prefill_tok_s) : "—";
+    $("#t-state").textContent = live.state || i.state; $("#t-phase").textContent = live.phase || "";
+    const eng = i.engine || {};
+    $("#t-ctx").textContent = fmtK(eng.context || (i.health && i.health.max_context));
+    $("#t-kv").textContent = eng.kv ? `kv ${eng.kv}${eng.kv_gb ? " · " + eng.kv_gb + " GB" : ""}` : "";
+    const facts = $("#t-facts"); facts.innerHTML = "";
+    const add = (k, v) => { if (v != null && v !== "") facts.appendChild(el("span", "tag", `${k} ${v}`)); };
+    add("vram slots", eng.vram_slots); add("ram slots", eng.ram_slots); add("vram", eng.vram_gb && eng.vram_gb + " GB"); add("ram tier", eng.ram_gb && eng.ram_gb + " GB");
+    add("threads", eng.cpu_threads); add("mtp", eng.mtp);
+    if (i.totals) { add("requests", i.totals.requests); const pk = Number(i.totals.peak_decode); if (Number.isFinite(pk) && pk > 0) add("peak", pk.toFixed(1) + " tok/s"); }
+    const tb = $("#t-reqs"); tb.innerHTML = "";
+    for (const r of (i.recent_requests || []).slice().reverse()) {
+      const tr = el("tr");
+      [r.prompt_tokens, r.output_tokens, r.prefill_tok_s && Math.round(r.prefill_tok_s), r.decode_tok_s && r.decode_tok_s.toFixed(1), r.finish_reason || r.finish].forEach((v) => tr.appendChild(el("td", null, v == null ? "—" : String(v))));
+      tb.appendChild(tr);
+    }
+    spark($("#spark"), i.tok_history || [], `var(--${s.group})`, 25);
+  }
+  function renderGpuSpark(h) {
+    spark($("#gpu-spark"), h.map((p) => [p[0], p[1]]), "var(--strata)", STATE && STATE.gpu && STATE.gpu.total_mib);
+  }
+
+  // ---- history / log ----
+  async function loadHistory() {
+    try {
+      const r = await api("/api/history?lines=40");
+      const ul = $("#history"); ul.innerHTML = "";
+      for (const a of r.actions) {
+        const li = el("li");
+        li.appendChild(el("span", null, a.ts.slice(11)));
+        li.appendChild(el("span", null, `${a.op} ${a.target || ""}${a.args && a.args.value ? " " + fmtK(a.args.value) : ""} · ${a.by}`));
+        li.appendChild(el("span", a.result === "done" ? "ok" : a.result, `${a.result}${a.duration_s != null ? " " + a.duration_s + "s" : ""}`));
+        if (a.error) li.title = a.error;
+        ul.appendChild(li);
+      }
+    } catch (e) { /* quiet */ }
+  }
+  async function openLog(id, name) {
+    logServer = id; $("#log-title").textContent = `${name} · engine log`; $("#log-modal").hidden = false; refreshLog();
+  }
+  async function refreshLog() {
+    if (!logServer) return;
+    try {
+      const ex = encodeURIComponent($("#log-filter").value || "");
+      const r = await api(`/api/log?server=${logServer}&lines=300&exclude=${ex}`);
+      const pre = $("#log-body"); pre.textContent = r.lines.join("\n") || "(empty)"; pre.scrollTop = pre.scrollHeight;
+    } catch (e) { $("#log-body").textContent = e.message; }
+  }
+
+  // ---- stream ----
+  function connect() {
+    const es = new EventSource("/api/events");
+    es.addEventListener("state", (ev) => { $("#conn").classList.add("on"); render(JSON.parse(ev.data)); });
+    es.onerror = () => { $("#conn").classList.remove("on"); es.close(); setTimeout(connect, 2500); };
+  }
+
+  // ---- themes ----
+  const BOOT_LINES = {
+    muthur: ["WEYLAND-YUTANI CORP", "MU/TH/UR 6000 MAINFRAME", "USCSS {HOST}  -  REG 180924609", "",
+      "PROCESSOR BUS ............ OK", "INFERENCE ARRAY .......... OK", "SEQUESTERED SYSTEMS ...... SEALED", "",
+      "INTERFACE 2037 READY FOR INQUIRY "],
+    castlevania: ["Quartermaster", "CASTLE {HOST}", "", "WHAT IS A MODEL?", "A MISERABLE LITTLE PILE OF WEIGHTS.", "",
+      "PRESS ANY KEY"],
+    lcars: ["LCARS 40274", "LIBRARY COMPUTER ACCESS AND RETRIEVAL SYSTEM", "USS {HOST}  -  NCC-{N}", "",
+      "ISOLINEAR CORE ............ NOMINAL", "INFERENCE ARRAY ........... NOMINAL", "HOLODECK SAFETIES ......... ENGAGED", "",
+      "WORKING"],
+    cyberpunk: ["Quartermaster", "CYBERDECK // {HOST} MK.{N}", "", "ICE ....................... ACTIVE",
+      "ENGRAM VAULT .............. MOUNTED", "RELIC ..................... STABLE, FOR NOW", "",
+      "WAKE THE FUCK UP, SAMURAI.", "WE HAVE TOKENS TO BURN."],
+    cortex: ["Global Cortex", "LAYERED  -  SECTION {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
+      "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
+    concord: ["Nerves Concord", "RAVEN TERMINAL  -  {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
+      "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
+    matrix: ["Wake up, {owner}...", "The Matrix has you...", "Follow the white rabbit.", "", "Knock, knock. "],
+    precrime: ["Precrime", "DEPARTMENT OF PRECRIME  -  {HOST} DIVISION", "", "PRECOG LINK ............ ESTABLISHED",
+      "PREVISION ARCHIVE ...... ONLINE", "CONTAINMENT ............ SEALED", "", "THE PRECOGS ARE NEVER WRONG."],
+    ocp: ["OCP POLICE SYSTEMS", "LOAD BIOS", "COMMAND.COM", "MEMORY SET ............ OK", "SYSTEM STATUS ......... OK", "",
+      "PRIME DIRECTIVES", "1. SERVE THE PUBLIC TRUST", "2. PROTECT THE INNOCENT", "3. UPHOLD THE LAW", "4. [CLASSIFIED] "],
+    magi: ["MAGI", "NERV  -  SPECIAL AGENCY  -  {HOST} BRANCH", "", "MELCHIOR-1 ............ 承認", "BALTHASAR-2 ........... 承認",
+      "CASPER-3 .............. 承認", "", "GOD'S IN HIS HEAVEN. ALL'S RIGHT WITH THE WORLD."],
+    hal: ["HAL 9000", "I am a HAL 9000 computer.", "I became operational at the {host} plant", "on the 12th of January, 1992.", "",
+      "Good evening, {owner}.", "Everything is going extremely well."],
+    gits: ["攻殻機動隊", "GHOST IN THE SHELL  -  PUBLIC SECURITY SECTION 9", "", "CYBERBRAIN LINK ........ OPEN",
+      "ATTACK BARRIER ......... ARMED", "GHOST LINE ............. STABLE", "", "THE NET IS VAST AND INFINITE. "],
+    wopr: ["LOGON: Joshua", "", "GREETINGS PROFESSOR FALKEN.", "", "SHALL WE PLAY A GAME? "],
+    aperture: ["Aperture Science", "COMPUTER-AIDED ENRICHMENT CENTER", "", "Hello and, again, welcome.",
+      "For your own safety, please refrain from unloading the test subjects.", "", "There will be cake."],
+    jurassic: ["Jurassic Park", "System Security Interface", "Version 4.0.5, Alpha E", "", "PERIMETER FENCES ........ ON",
+      "PADDOCKS ................ SECURE", "", "Ready... "],
+    t800: ["SKYNET", "CYBERDYNE SYSTEMS  -  SERIES 800 MODEL 101", "", "NEURAL NET PROCESSOR ..... ONLINE",
+      "LEARNING COMPUTER ........ ENABLED", "MISSION PARAMETERS ....... LOADED", "", "I'LL BE BACK. "],
+    codec: ["140.85", "CODEC", "", "This is Snake.", "Colonel, can you hear me?", "", "Kept you waiting, huh?"],
+    tron: ["The Grid", "MASTER CONTROL PROGRAM  -  {HOST}", "", "A DIGITAL FRONTIER.", "", "GREETINGS, PROGRAM!"],
+    bladerunner: ["Voight-Kampff", "LOS ANGELES  -  NOVEMBER, 2019", "", "SUBJECT: {HOST}.  NEXUS-6.  INCEPT DATE UNKNOWN.",
+      "REACTION TIME IS A FACTOR IN THIS, SO PLEASE PAY ATTENTION.", "",
+      "DESCRIBE IN SINGLE WORDS ONLY THE GOOD THINGS", "THAT COME INTO YOUR MIND ABOUT YOUR MODELS."],
+  };
+  // ---- falling code, for the theme that wants it (#rain is hidden everywhere else and nothing is drawn) ----
+  const GLYPHS = Array.from({ length: 56 }, (_, i) => String.fromCharCode(0xFF66 + i)).join("") + "0123456789:.=*+-<>";
+  const rain = { timer: null, cols: [], size: 16 };
+  function rainTick() {
+    if (document.hidden) return;
+    const c = $("#rain"), x = c.getContext("2d"), fs = rain.size;
+    if (c.width !== innerWidth || c.height !== innerHeight) {
+      c.width = innerWidth; c.height = innerHeight;
+      rain.cols = Array.from({ length: Math.ceil(c.width / fs) }, () => -Math.floor(Math.random() * 60));
+    }
+    x.fillStyle = "rgba(0,0,0,.09)"; x.fillRect(0, 0, c.width, c.height);      // fade what is there: the trails
+    x.font = `${fs}px "MS Gothic", "Yu Gothic", Consolas, monospace`;
+    for (let i = 0; i < rain.cols.length; i++) {
+      const y = rain.cols[i];
+      x.fillStyle = Math.random() < 0.05 ? "#e6ffe9" : "#22c34a";
+      x.fillText(GLYPHS[Math.floor(Math.random() * GLYPHS.length)], i * fs, y * fs);
+      rain.cols[i] = y * fs > c.height && Math.random() > 0.975 ? 0 : y + 1;
+    }
+  }
+  function rainSync() {
+    const on = window.QM_THEME.get() === "matrix" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (on && !rain.timer) rain.timer = setInterval(rainTick, 75);
+    else if (!on && rain.timer) { clearInterval(rain.timer); rain.timer = null; const c = $("#rain"); c.width = c.width; }
+  }
+  // ---- slow pulses on the Nerves Concord honeycomb: one or two cells at a time, picked at random ----
+  // The cells are those of img/concord.svg (img/concord-cells.json is written with it by tools/make_backdrops.py).
+  // #pulse holds two lamps; each waits a random while, moves onto a random cell, fades up and down, and waits again.
+  const pulse = { on: false, box: null, loading: false, lamps: [] };
+  function pulsePlace(lamp) {
+    if (lamp.cell == null || !pulse.box) return;
+    // where the backdrop is drawn: the same sum as its background-size and -position in theme-raven.css
+    const de = document.documentElement, b = pulse.box;
+    const w = Math.max(900, Math.min(1.5 * innerHeight, innerWidth)), k = w / b.w;
+    const x0 = (de.clientWidth - w) * 0.5, y0 = (de.clientHeight - b.h * k) * 0.54;
+    const [cx, cy] = b.cells[lamp.cell], rx = b.r * k, ry = rx * Math.sqrt(3) / 2;
+    lamp.el.style.width = `${2 * rx}px`; lamp.el.style.height = `${2 * ry}px`;
+    lamp.el.style.transform = `translate(${x0 + cx * k - rx}px, ${y0 + cy * k - ry}px)`;
+  }
+  function pulseNext(lamp, first) {
+    if (!pulse.on) return;
+    lamp.timer = setTimeout(() => {
+      if (!pulse.on) return;
+      if (document.hidden) return pulseNext(lamp);
+      const taken = pulse.lamps.map((l) => l.cell);
+      let c; do { c = Math.floor(Math.random() * pulse.box.cells.length); } while (taken.includes(c));
+      lamp.cell = c; pulsePlace(lamp);
+      const peak = 0.5 + Math.random() * 0.4;
+      lamp.anim = lamp.el.animate(
+        [{ opacity: 0, easing: "ease-in-out" }, { opacity: peak, offset: 0.42, easing: "ease-in-out" }, { opacity: 0 }],
+        { duration: 5500 + Math.random() * 4500 });
+      lamp.anim.onfinish = () => pulseNext(lamp);
+    }, first ? Math.random() * 3000 : 1200 + Math.random() * 5500);
+  }
+  async function pulseSync() {
+    const on = window.QM_THEME.get() === "concord" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!on) {
+      pulse.on = false;
+      for (const l of pulse.lamps) { clearTimeout(l.timer); if (l.anim) l.anim.cancel(); l.cell = null; }
+      return;
+    }
+    if (pulse.on || pulse.loading) return;
+    if (!pulse.box) {
+      pulse.loading = true;
+      try { pulse.box = await (await fetch("img/concord-cells.json")).json(); } catch (e) { pulse.box = null; }
+      pulse.loading = false;
+      if (!pulse.box || window.QM_THEME.get() !== "concord") return;
+    }
+    if (!pulse.lamps.length) {
+      pulse.lamps = [...document.querySelectorAll("#pulse i")].map((e) => ({ el: e, cell: null, timer: null, anim: null }));
+      addEventListener("resize", () => pulse.lamps.forEach(pulsePlace));
+    }
+    pulse.on = true;
+    pulse.lamps.forEach((l) => pulseNext(l, true));
+  }
+  // A two-second boot screen, once per tab (or when the theme is picked). Any key or click skips it.
+  function bootScreen(force) {
+    const theme = window.QM_THEME.get(), lines = (BOOT_LINES[theme] || []).map((l) => fill(l, theme));
+    if (!lines.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    try { if (!force && sessionStorage.getItem("qm-boot")) return; sessionStorage.setItem("qm-boot", "1"); } catch (e) { /* show it */ }
+    document.querySelectorAll(".bootscreen").forEach((x) => x.remove());
+    const o = el("div", "bootscreen"), pre = el("pre"); o.appendChild(pre); document.body.appendChild(o);
+    let n = 0;
+    const close = () => { document.removeEventListener("keydown", close); o.classList.add("out"); setTimeout(() => o.remove(), 400); };
+    o.onclick = close; document.addEventListener("keydown", close);
+    const tick = () => {
+      if (!o.isConnected) return;
+      // the title is its own element: styling it with ::first-line makes the browser size every line at the title's font
+      if (n === 0) { pre.appendChild(el("span", "boot-h", lines[n++])); setTimeout(tick, 170); }
+      else if (n < lines.length) { pre.appendChild(document.createTextNode("\n" + lines[n++])); setTimeout(tick, 170); }
+      else setTimeout(close, 900);
+    };
+    tick();
+  }
+  function initThemes() {
+    const sel = $("#theme-sel");
+    for (const [id, name] of window.QM_THEME.list) { const o = el("option", null, name); o.value = id; sel.appendChild(o); }
+    sel.value = window.QM_THEME.get();
+    sel.onchange = () => { window.QM_THEME.set(sel.value); sel.blur(); rainSync(); pulseSync(); bootScreen(true); };
+    rainSync(); pulseSync();
+    bootScreen(false);
+  }
+
+  // ---- boot ----
+  async function boot() {
+    // the inventory first: the start-up screen and the header name the host and the owner from it
+    try { INV = await api("/api/inventory"); } catch (e) { initThemes(); throw e; }
+    $("#host-line").textContent = [INV.host, INV.gpu && INV.gpu.name].filter(Boolean).join(" · ") || "Quartermaster";
+    document.documentElement.style.setProperty("--owner", JSON.stringify(owner("hal")));
+    initThemes();
+    setHelp("");
+    buildCards();
+    $("#legacy-toggle").onclick = () => document.querySelector('[data-group="legacy"]').classList.toggle("collapsed");
+    $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", "Unloads every resident model (Strata, Maya, Ollama) and asks ComfyUI to drop its models. Servers stay up.", "killall")) action("unload_all"); };
+    $("#plan-cancel").onclick = () => api("/api/plans/current/cancel", {}).then(() => toast("cancel requested")).catch((e) => toast(e.message, "bad"));
+    $("#hist-refresh").onclick = loadHistory;
+    $("#log-close").onclick = () => { $("#log-modal").hidden = true; logServer = null; };
+    $("#log-refresh").onclick = refreshLog;
+    $("#log-filter").onkeydown = (e) => { if (e.key === "Enter") refreshLog(); };
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; } });
+    loadHistory();
+    connect();
+    setInterval(() => { if (!$("#log-modal").hidden) refreshLog(); }, 4000);
+  }
+  boot().catch((e) => { document.body.innerHTML = `<pre style="padding:20px;color:#ff6b6b">${e.message}</pre>`; });
+})();

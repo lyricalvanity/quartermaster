@@ -1,0 +1,153 @@
+/* MU/TH/UR 6000. Nostromo (1979) for the texture: phosphor text, industrial labels, the boot screen.
+   Aliens (1986) for the instruments: a vitals trace per unit, a rounds counter, the tracker sweep.
+   Everything is scoped to the theme; fonts are ones that ship with Windows and Office (no downloads). */
+@keyframes mu-sweep { to { transform: rotate(360deg); } }
+@keyframes mu-trace { from { stroke-dashoffset: 300; } to { stroke-dashoffset: 0; } }
+@keyframes mu-blink { 50% { opacity: 0; } }
+@keyframes mu-roll { from { transform: translateY(-30vh); } to { transform: translateY(130vh); } }
+
+:root[data-theme="muthur"] {
+  --bg: #020a05; --bg2: #04110a; --bg3: #08190f; --line: #11402a; --line2: #1b6038;
+  --fg: #9bf8b4; --fg2: #58c47d; --fg3: #3a9a60;
+  --strata: #74dcff; --maya: #9bf8b4; --ollama: #ffc24a; --legacy: #4f9d70;
+  --ok: #9bf8b4; --warn: #ffb000; --bad: #ff5a47; --busy: #eafff0; --idle: #3a9a60;
+  --mono: "Cascadia Mono", Consolas, "Lucida Console", monospace;
+  --sans: "Cascadia Mono", Consolas, "Lucida Console", monospace;
+  --disp: "OCR A Extended", "Cascadia Mono", Consolas, monospace;
+  --label: "Bahnschrift SemiCondensed", "Bahnschrift", "Agency FB", "Arial Narrow", sans-serif;
+  --led: #ff3b2f;
+  scrollbar-color: var(--line2) var(--bg);
+
+  /* The company's emblem behind the page (ui/img/weyland-dim.svg, drawn by tools/make_weyland.py; its
+     strength is the opacity on the file's outer <g>). The cards are opaque, so it shows in the open ground. */
+  body { text-shadow: 0 0 5px color-mix(in srgb, currentColor 32%, transparent);
+    background: url("img/weyland-dim.svg") 50% 56% / min(1700px, 60vw) auto no-repeat fixed, var(--bg); }
+  ::selection { background: var(--fg); color: var(--bg); text-shadow: none; }
+  /* scanlines and tube vignette, above everything, never in the way of a click */
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px),
+                radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.45) 100%); }
+  /* the refresh bar that rolls down a tube picture, as in the OCP theme, in phosphor green */
+  body::before { content: ""; position: fixed; left: 0; right: 0; top: 0; height: 22vh; pointer-events: none; z-index: 59;
+    background: linear-gradient(transparent, rgba(155,248,180,.045) 45%, rgba(155,248,180,.085) 50%, transparent);
+    animation: mu-roll 7s linear infinite; }
+
+  /* ---- header ---- */
+  header { border-bottom: 2px solid var(--line2); }
+  .hdr-actions .btn { white-space: nowrap; }
+  .mark { border-radius: 50%; border: 1px solid var(--fg2);
+    background: conic-gradient(from 0deg, rgba(155,248,180,.6), transparent 28%); animation: mu-sweep 3.2s linear infinite; }
+  .mark::after { inset: 11px; background: var(--fg); }
+  .title { font-family: var(--disp); text-transform: uppercase; letter-spacing: 2px; font-weight: 400; }
+  .sub { text-transform: uppercase; color: var(--fg2); }
+  .sub::before { content: "USCSS "; }
+  .gauge .g-label, .r-label { font-family: var(--label); letter-spacing: 1.5px; font-size: 12px; }
+  .bar { height: 12px; border-radius: 0; border-color: var(--line2); background: var(--bg); }
+  .fill { background: var(--maya);
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
+            mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); }
+  .fill.ram { background: var(--strata); }
+  .mark-line { background: var(--warn); width: 2px; }
+  .g-foot { text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: center; grid-column: 2; grid-row: 1 / span 3;
+    background: #140202; border: 1px solid #5a120c; padding: 1px 8px 2px; text-shadow: none; }
+  .rounds .r-v { font: 22px/1.1 var(--disp); color: var(--led); letter-spacing: 2px; text-shadow: 0 0 8px rgba(255,59,47,.7); }
+  .rounds .r-k { font: 9px var(--label); letter-spacing: 1.5px; color: #b8433a; text-transform: uppercase; }
+  #resident-line { border-left-width: 2px; }
+  .r-main { font-family: var(--disp); text-transform: uppercase; font-weight: 400; font-size: 15px; letter-spacing: 1px; }
+  .r-main::after { content: " \2588"; color: var(--fg2); animation: mu-blink 1.1s steps(1) infinite; }
+  .r-sub { text-transform: uppercase; }
+  #btn-killall { background: repeating-linear-gradient(-45deg, #171100 0 8px, #3d2e00 8px 16px); color: var(--warn); border-color: var(--warn); }
+  #btn-killall:not(:disabled):hover { background: var(--warn); color: #000; }
+
+  /* ---- sections and unit cards ---- */
+  h2 { font-family: var(--label); font-size: 12px; letter-spacing: 2px; font-weight: 600; color: var(--bg);
+    background: var(--fg2); width: fit-content; padding: 1px 10px 1px 8px; text-shadow: none; }
+  h2::before { content: "\25A0  "; }
+  .group { counter-reset: unit; }
+  .card { border-radius: 0; border-color: var(--line2); counter-increment: unit; padding-top: 14px; }
+  .card::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 3px; border-radius: 0; }
+  .card.resident { box-shadow: 0 0 0 1px var(--accent), 0 0 22px -6px var(--accent); }
+  .c-name { font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; font-weight: 400; width: fit-content; }
+  .card.resident .c-name { background: var(--accent); color: var(--bg); padding: 0 6px; text-shadow: none; }
+  .c-model { text-transform: uppercase; }
+  .c-source { font-family: var(--mono); }
+  .c-meta::before { content: "UNIT " counter(unit, decimal-leading-zero); font: 600 10.5px var(--label); letter-spacing: 1.5px;
+    background: var(--accent); color: var(--bg); padding: 1px 6px; text-shadow: none; }
+  .tag { border-radius: 0; background: transparent; border: 1px solid var(--line); text-transform: uppercase; }
+  .tag.vision { color: var(--strata); border-color: var(--strata); }
+  .tag.bad { border-color: var(--bad); }
+  .c-live { text-transform: uppercase; }
+  .pill { border-radius: 0; font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; }
+  .pill.ready { background: var(--ok); color: var(--bg); text-shadow: none; }
+  .pill.busy { background: var(--busy); color: var(--bg); text-shadow: none; }
+  .will { text-transform: uppercase; }
+  .card.will-unload { border-color: var(--warn); }
+
+  /* vitals: Gorman's console. A trace per unit; it flatlines when the server is down. */
+  .vitals { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+    border: 1px solid var(--line); background: var(--bg); padding: 2px 6px; }
+  .vitals svg { width: 100%; height: 22px; display: block; overflow: hidden; }
+  .vitals path { fill: none; stroke: var(--accent); stroke-width: 1.3; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .v-base { opacity: .26; }
+  .v-sweep { stroke-dasharray: 46 254; animation: mu-trace 3s linear infinite; filter: drop-shadow(0 0 2px var(--accent)); }
+  .v-k, .v-s { font: 10px var(--label); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .v-s { min-width: 62px; text-align: right; }
+  .vitals[data-mode="alive"] .v-s { color: var(--fg); }
+  .vitals[data-mode="active"] .v-s { color: var(--busy); }
+  .vitals[data-mode="flat"] path { stroke: var(--bad); }
+  .vitals[data-mode="flat"] .v-base { opacity: .6; }
+  .vitals[data-mode="flat"] .v-s { color: var(--bad); }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 0; background: transparent; border-color: var(--fg3); font-family: var(--label);
+    font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; }
+  .btn:not(:disabled):hover { background: var(--fg); color: var(--bg); border-color: var(--fg); text-shadow: none; filter: none; }
+  .btn.primary { background: var(--accent, var(--fg)); color: var(--bg); border-color: var(--accent, var(--fg)); text-shadow: none; }
+  .btn.primary:not(:disabled):hover { background: var(--busy); border-color: var(--busy); }
+  .btn.danger { border-color: var(--bad); color: var(--bad); }
+  .btn.danger:not(:disabled):hover { background: var(--bad); color: #000; border-color: var(--bad); }
+  select, input { border-radius: 0; background: var(--bg); border-color: var(--line2); text-transform: uppercase; }
+  #log-filter { text-transform: none; }
+  .preset { border-radius: 0; border-color: var(--line2); }
+  .preset:hover { border-color: var(--fg); }
+  .preset .n { font-family: var(--label); text-transform: uppercase; letter-spacing: 1.2px; }
+
+  /* ---- side panels ---- */
+  .panel { border-radius: 0; border-color: var(--line2); }
+  .p-head { font-family: var(--label); font-size: 12px; letter-spacing: 2px; color: var(--fg2);
+    border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .kpi { border-radius: 0; background: var(--bg); border: 1px solid var(--line); }
+  .kpi .k { font-family: var(--label); letter-spacing: 1.2px; }
+  .kpi .v { font-family: var(--disp); font-weight: 400; }
+  .stepper .dot { border-radius: 0; }
+  .warn { background: #1a1300; border-color: var(--warn); border-radius: 0; text-transform: uppercase; }
+  .warn::before { content: "\25B2  CAUTION   "; font-family: var(--label); letter-spacing: 1.5px; }
+
+  /* ---- modals and toasts ---- */
+  .modal { background: rgba(0,6,2,.78); }
+  .modal-box { border-radius: 0; border-color: var(--fg2); }
+  .modal-box.small::before { content: ""; height: 10px; margin: -12px -14px 10px; flex: none;
+    background: repeating-linear-gradient(-45deg, var(--warn) 0 10px, #000 10px 20px); }
+  .m-head { font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; font-weight: 400; }
+  #log-body { border-radius: 0; text-shadow: none; }
+  .toast { border-radius: 0; text-transform: uppercase; }
+
+  /* ---- boot screen ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; background: var(--bg); cursor: pointer;
+    flex-direction: column; gap: 18px; align-items: center; justify-content: center; transition: opacity .35s; }
+  .bootscreen::before { content: ""; flex: none; width: min(440px, 72vw); aspect-ratio: 1100 / 520;
+    background: url("img/weyland.svg") center / contain no-repeat; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-width: min(560px, 90vw); min-height: 250px; font: 15px/1.75 var(--disp); letter-spacing: 1px; color: var(--fg); }
+  .bootscreen pre::after { content: "\2588"; animation: mu-blink 1s steps(1) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="muthur"] .mark,
+  :root[data-theme="muthur"] .v-sweep,
+  :root[data-theme="muthur"] .r-main::after { animation: none; }
+  :root[data-theme="muthur"] body::before { animation: none; display: none; }
+}

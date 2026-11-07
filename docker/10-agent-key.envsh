@@ -1,0 +1,9 @@
+# Sourced (.envsh) by the nginx entrypoint BEFORE 20-envsubst-on-templates.sh: reads the mounted agent key into the
+# env var the nginx template expands (the key never sits in the image).
+if [ -f /run/secrets/agent.key ]; then
+  export AGENT_KEY="$(tr -d '\r\n' < /run/secrets/agent.key)"
+else
+  echo "quartermaster: /run/secrets/agent.key is not mounted; /api calls will be refused" >&2
+  export AGENT_KEY="missing"
+fi
+export AGENT_URL="${AGENT_URL:-http://host.docker.internal:8790}"

@@ -1,0 +1,166 @@
+{
+  "_comment": "Quartermaster inventory, example. Copy to inventory.json and edit. Every server the dashboard may order about, and how: the agent executes only what is written here; the page sends intents (op + server id), never commands. Paths are examples. After editing: POST /api/reload (bearer) or restart the agent. inventory.json itself is never committed (.gitignore).",
+  "host": "workstation",
+  "owner": "Dave",
+  "_owner": "optional; some themes address the owner by name (HAL, the Matrix). Without it they use their canon.",
+  "gpu": {
+    "index": 0,
+    "name": "NVIDIA GeForce RTX 4090",
+    "total_mib": 24564,
+    "free_card_mib": 2048,
+    "_free_card": "the card counts as free for a load when nvidia-smi memory.used is below this (a bare desktop sits at 0.5-2 GB)"
+  },
+  "ram_total_gib": 128,
+  "pin_budget_gib": 64,
+  "commit_warn_gib": 16,
+  "poll_s": 2.0,
+  "policy": {
+    "park_8099_default": false,
+    "unload_ollama_on_resident": true,
+    "free_comfyui_on_resident": true,
+    "humans_only": true
+  },
+  "servers": [
+    {
+      "id": "strata-main",
+      "group": "strata",
+      "kind": "strata",
+      "name": "Qwen Q8_0",
+      "engine": "Strata",
+      "model": "Qwen3.8-Flash-Next Q8_0",
+      "model_id": "qwen3.8-flash-next-q8_0",
+      "context": 262144,
+      "vision": true,
+      "quant": "Q8_0",
+      "port": 8099,
+      "footprint": { "vram_gib": 22, "ram_gib": 80 },
+      "start": {
+        "argv": ["C:\\Users\\you\\Strata\\run-qwen-q8-8099.bat"],
+        "cwd": "C:\\Users\\you\\Strata",
+        "loads_at_start": true
+      },
+      "log": "C:\\Users\\you\\Strata\\strata-qwen-q8_0.log",
+      "config": "C:\\Users\\you\\Strata\\strata-qwen-q8_0.json",
+      "timeouts": { "start_s": 360, "load_s": 360, "unload_s": 90 },
+      "notes": "idle_unload_s 0; loads on the first inference request from anyone. Parkable.",
+      "parkable": true,
+      "source": "where the weights came from (shown on the card)"
+    },
+    {
+      "id": "maya-glm",
+      "group": "maya",
+      "kind": "maya",
+      "name": "GLM-5.3-Flash",
+      "engine": "project-maya",
+      "model": "GLM-5.3-Flash Maya-M",
+      "model_id": "glm-5.3-flash",
+      "context": 262144,
+      "vision": true,
+      "quant": "Maya-M",
+      "port": 8101,
+      "footprint": { "vram_gib": 22, "ram_gib": 70 },
+      "start": {
+        "argv": ["C:\\Users\\you\\Maya\\run-maya-glm.bat", "--plain"],
+        "cwd": "C:\\Users\\you\\Maya",
+        "loads_at_start": true
+      },
+      "log": "C:\\Users\\you\\Maya\\maya-glm.log",
+      "config": "C:\\Users\\you\\Maya\\maya-glm.json",
+      "timeouts": { "start_s": 240, "load_s": 240, "unload_s": 60, "reload_s": 300 },
+      "context_choices": [32768, 131072, 262144],
+      "notes": "idle_unload_s 1800. After an engine crash prefer stop + start over a settings reload."
+    },
+    {
+      "id": "ollama",
+      "group": "ollama",
+      "kind": "ollama",
+      "name": "Ollama",
+      "engine": "ollama",
+      "model": "small models, loaded on demand",
+      "port": 11434,
+      "vision": false,
+      "context": null,
+      "footprint": { "vram_gib": null, "ram_gib": null },
+      "timeouts": { "unload_s": 60 },
+      "notes": "Service, always up. Unload = /api/generate keep_alive 0 per loaded model."
+    }
+  ],
+  "shims": [
+    {
+      "id": "shim-glm",
+      "name": "Ollama-API shim for GLM",
+      "port": 11437,
+      "fronts": "maya-glm",
+      "start": {
+        "argv": ["C:\\Users\\you\\shims\\run-shim-glm-11437.bat"],
+        "cwd": "C:\\Users\\you\\shims"
+      }
+    }
+  ],
+  "presets": [
+    {
+      "id": "glm-long",
+      "name": "GLM long context",
+      "desc": "GLM resident at 256k",
+      "steps": [
+        { "op": "make_resident", "target": "maya-glm" },
+        { "op": "set_context", "target": "maya-glm", "value": 262144 }
+      ]
+    },
+    {
+      "id": "clear",
+      "name": "Clear the card",
+      "desc": "Nothing resident: small models and image work get the whole card",
+      "steps": [ { "op": "unload_all" } ]
+    }
+  ],
+  "openwebui": {
+    "_comment": "Optional: remove the block to hide the tile. This driver is for an OpenWebUI that runs as another user and is started, stopped and updated by three Windows scheduled tasks whose scripts live where only administrators can write. The agent runs the tasks by name and passes them nothing; it reads health and version from the URL and shows the tail of two text logs.",
+    "name": "OpenWebUI",
+    "url": "http://127.0.0.1:3000",
+    "open_url": "http://localhost:3000",
+    "tasks": { "start": "owui-ctl-start", "stop": "owui-ctl-stop", "update": "owui-ctl-update" },
+    "install_hint": "install the three owui-ctl scheduled tasks (see your own notes)",
+    "keepalive_log": "C:\\path\\to\\keepalive.log",
+    "ctl_log": "C:\\path\\to\\owui-ctl.log",
+    "bridge_ip": "192.0.2.1",
+    "bridge_ports": [11434, 8099, 8101]
+  },
+  "comfyui": {
+    "_comment": "Optional: remove the block to hide the tile. The agent starts exactly this argv, stops only a process on this port whose command line contains 'match', and asks ComfyUI to drop its models with POST /free. ComfyUI has no login: never add --listen (the agent refuses to start it with one). 'update' is optional and drives the guarded Update button.",
+    "name": "ComfyUI",
+    "url": "http://127.0.0.1:8188",
+    "open_url": "http://127.0.0.1:8188",
+    "port": 8188,
+    "start": {
+      "argv": ["D:\\ComfyUI\\venv\\Scripts\\python.exe", "D:\\ComfyUI\\ComfyUI\\main.py", "--disable-xformers"],
+      "cwd": "D:\\ComfyUI\\ComfyUI"
+    },
+    "match": "ComfyUI\\main.py",
+    "log": "D:\\ComfyUI\\ComfyUI\\user\\comfyui.log",
+    "timeouts": { "start_s": 240, "stop_s": 60, "free_s": 120 },
+    "update": {
+      "repo": "D:\\ComfyUI\\ComfyUI",
+      "python": "D:\\ComfyUI\\venv\\Scripts\\python.exe",
+      "backup_root": "D:\\ComfyUI\\update-backups",
+      "pins": ["torch", "torchvision", "torchaudio"]
+    }
+  },
+  "art": {
+    "_comment": "Optional (needs comfyui): the art queue. Batches of image jobs wait for the card; one op parks the resident model, runs them all in ComfyUI, and loads the model again. out_dir must lie under one of out_roots and never under anything in deny or under this folder. models overrides a workflow's file names.",
+    "queue_dir": "C:\\Users\\you\\Quartermaster\\artq",
+    "out_roots": ["D:\\projects"],
+    "deny": [],
+    "max_images": 400,
+    "image_timeout_s": 600,
+    "models": {
+      "qwen-image": {
+        "unet": "qwen_image_2512_fp8_e4m3fn.safetensors",
+        "clip": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "vae": "qwen_image_vae.safetensors",
+        "lora": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+        "shift": 3.1
+      }
+    }
+  }
+}

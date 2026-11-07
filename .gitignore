@@ -1,0 +1,35 @@
+# Quartermaster: everything that describes ONE installation stays on that machine.
+# The repository carries the program, the themes and an example inventory, never a real one.
+
+# the roster of this host, its presets and its bearer key
+agent/inventory.json
+agent/presets.json
+agent/agent.key
+
+# this installation's own notes and its scrub denylist
+local/
+
+# what the agent writes while running
+logs/
+artq/
+backup/
+__pycache__/
+*.pyc
+*.log
+
+# generated launchers carry local paths; templates ship instead
+run-quartermaster.bat
+Quartermaster Agent.cmd
+
+# fonts copied from C:\Windows\Fonts are Microsoft's and stay where they were copied;
+# Michroma (SIL Open Font License) ships with its licence
+ui/fonts/*
+!ui/fonts/Michroma-Regular.ttf
+!ui/fonts/OFL*.txt
+
+# editor and scratch
+.venv/
+*.bak
+*.orig
+.DS_Store
+Thumbs.db

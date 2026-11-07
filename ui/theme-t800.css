@@ -1,0 +1,185 @@
+/* The Terminator (1984) and Judgment Day (1991): what the T-800 sees. Everything is red; the readouts laid over
+   it are white capitals in outlined boxes. A column of machine code scrolls up the left edge on wide windows
+   (written for this file, in the manner of the listing in the film, not copied from it). The resident model
+   is the acquired target, in corner brackets. Each unit has a scanner sweeping back and forth; a server that
+   is down reads TERMINATED. Because the ground is red, failure is a white block that blinks. */
+@keyframes tm-scan { from { background-position: 0 50%, 0 0; } to { background-position: 100% 50%, 0 0; } }
+@keyframes tm-code { to { transform: translateY(-12.5%); } }
+@keyframes tm-blink { 50% { opacity: .2; } }
+@keyframes tm-eye { 50% { box-shadow: 0 0 22px 4px #ff2020; } }
+
+:root[data-theme="t800"] {
+  --w: #FFFFFF; --p: #FFC8C8; --d: #D07070; --r: #E01010;
+  --bg: #140000; --bg2: rgba(70,0,0,.50); --bg3: rgba(120,0,0,.45); --line: rgba(255,200,200,.28); --line2: rgba(255,220,220,.6);
+  --fg: #FFFFFF; --fg2: #FFC8C8; --fg3: #D88080;
+  --strata: #FFFFFF; --maya: #FFFFFF; --ollama: #FFFFFF; --legacy: #D88080;
+  --ok: #FFFFFF; --warn: #FFE08A; --bad: #FFFFFF; --busy: #FFFFFF; --idle: #FFC8C8;
+  --mono: "Lucida Console", Consolas, monospace;
+  --sans: "Lucida Console", Consolas, monospace;
+  --col: 0px;
+  scrollbar-color: var(--line2) var(--bg);
+
+  body { font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at 50% 45%, #a30000 0%, #5e0000 45%, #1a0000 100%);
+    background-attachment: fixed; }
+  ::selection { background: #fff; color: var(--r); }
+  .c-source, #log-body, #log-filter, input { text-transform: none; }
+
+  /* ---- header ---- */
+  header { background: rgba(20,0,0,.72); border-bottom: 1px solid var(--line2); }
+  .mark { flex: none; border: 2px solid #5a0000; border-radius: 50%; background: radial-gradient(circle, #fff 0 9%, #ff6a6a 10% 24%, #e00000 25% 55%, #400000 56%);
+    box-shadow: 0 0 12px 1px #ff2020; animation: tm-eye 2.6s ease-in-out infinite; }
+  .mark::after { display: none; }
+  .title { font-weight: 700; font-size: 17px; letter-spacing: 3px; color: #fff; white-space: nowrap; }
+  .sub { color: var(--fg2); }
+  .sub::before { content: "MODEL 101  \00B7  "; color: var(--fg3); }
+  .gauge .g-label { color: var(--fg2); letter-spacing: 2px; }
+  .gauge .g-val { color: #fff; font-weight: 700; }
+  .bar { height: 10px; border-radius: 0; border-color: var(--line2); background: rgba(0,0,0,.45); }
+  .fill, .fill.ram { background: #fff; }
+  .fill.ram { background: var(--p); }
+  .mark-line { background: #000; width: 2px; }
+  .g-foot { color: var(--fg3); }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; border: 1px solid var(--line2); padding: 2px 8px; }
+  .rounds .r-v { font: 700 25px/1.05 var(--mono); color: #fff; letter-spacing: 1px; }
+  .rounds .r-k { font: 9px var(--mono); color: var(--fg2); }
+  #resident-line { border-left: 2px solid #fff !important; }
+  .r-label { color: var(--fg2); letter-spacing: 2px; }
+  .r-label::after { content: "  \25B8  TARGET"; }
+  .r-main { font-weight: 700; font-size: 15px; color: #fff; }
+  .r-sub { color: var(--fg2); }
+  .conn { color: #000; }
+  .conn.on { color: #fff; }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- sections ---- */
+  #cards { counter-reset: grp; }
+  .group { counter-increment: grp; }
+  h2 { display: flex; align-items: baseline; gap: 14px; margin: 18px 0 9px; font-weight: 700; font-size: 13px; letter-spacing: 3px; color: #fff; }
+  h2::before { content: "\25B6"; font-size: 10px; }
+  h2::after { content: "SCAN MODE 4398" counter(grp); font-weight: 400; font-size: 10.5px; letter-spacing: 1.5px; color: var(--fg3); }
+
+  /* ---- readout boxes ---- */
+  .card, .panel, .preset { background: var(--bg2); border: 1px solid var(--line2); border-radius: 0; box-shadow: none; }
+  .card::before { display: none; }
+  /* target acquired: corner brackets */
+  .card.resident { border-color: transparent; --bk: #fff;
+    background:
+      linear-gradient(var(--bk), var(--bk)) 0 0 / 22px 3px no-repeat, linear-gradient(var(--bk), var(--bk)) 0 0 / 3px 22px no-repeat,
+      linear-gradient(var(--bk), var(--bk)) 100% 0 / 22px 3px no-repeat, linear-gradient(var(--bk), var(--bk)) 100% 0 / 3px 22px no-repeat,
+      linear-gradient(var(--bk), var(--bk)) 0 100% / 22px 3px no-repeat, linear-gradient(var(--bk), var(--bk)) 0 100% / 3px 22px no-repeat,
+      linear-gradient(var(--bk), var(--bk)) 100% 100% / 22px 3px no-repeat, linear-gradient(var(--bk), var(--bk)) 100% 100% / 3px 22px no-repeat,
+      rgba(130,0,0,.55); }
+  .card.will-unload { border-color: #fff; border-style: dashed; }
+  .card.down { opacity: .7; }
+  .c-name { font-weight: 700; font-size: 15px; letter-spacing: 1.5px; color: #fff; }
+  .card.resident .c-name::after { content: "TARGET ACQUIRED"; display: block; width: fit-content; margin: 4px 0 2px; padding: 1px 7px; background: #fff; color: var(--r);
+    font-size: 10px; letter-spacing: 2px; animation: tm-blink 1.4s steps(1) 4; }
+  .c-model { color: var(--fg2); }
+  .c-source { color: var(--fg3); }
+  .tag { border-radius: 0; background: none; border: 1px solid var(--line); color: #fff; }
+  .tag.vision { border-color: #fff; }
+  .tag.bad { background: #fff; color: var(--r); border-color: #fff; font-weight: 700; }
+  .c-live { color: var(--fg2); }
+  .c-live b { color: #fff; }
+  .pill { border-radius: 0; border-color: var(--line2); color: var(--fg2); letter-spacing: 1.5px; }
+  .pill.ready { background: #fff; border-color: #fff; color: var(--r); font-weight: 700; }
+  .pill.busy { background: #fff; border-color: #fff; color: var(--r); font-weight: 700; animation: tm-blink .8s steps(1) infinite; }
+  .pill.down { border-style: dashed; color: var(--fg3); }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { border-color: #fff; color: #fff; }
+  .pill.parked { background: #000; border-color: #fff; color: #fff; }
+  .will { color: var(--r); background: #fff; font-weight: 700; padding: 2px 7px; }
+
+  /* the scanner */
+  .vitals { display: flex; align-items: center; gap: 8px; }
+  .vitals svg { display: none; }
+  .v-k { order: 0; font-size: 0; }
+  .v-k::before { content: "SCAN"; font: 10.5px var(--mono); letter-spacing: 2px; color: var(--fg3); }
+  .vitals::before { content: ""; order: 1; flex: 1; height: 8px; border: 1px solid var(--line);
+    background: linear-gradient(90deg, transparent, #fff 35%, #fff 65%, transparent) 0 50% / 26% 100% no-repeat, rgba(0,0,0,.4);
+    animation: tm-scan 2.6s ease-in-out infinite alternate; }
+  .v-s { order: 2; min-width: 82px; text-align: right; font: 10.5px var(--mono); letter-spacing: 1.5px; color: var(--fg3); white-space: nowrap; }
+  .vitals[data-mode="alive"] .v-s { color: #fff; }
+  .vitals[data-mode="active"]::before { animation-duration: .5s; }
+  .vitals[data-mode="active"] .v-s { color: #fff; font-weight: 700; }
+  .vitals[data-mode="standby"]::before { animation: none; opacity: .45; }
+  .vitals[data-mode="flat"]::before { animation: none; background: rgba(0,0,0,.4); }
+  .vitals[data-mode="flat"] .v-s { font-size: 0; }
+  .vitals[data-mode="flat"] .v-s::after { content: "TERMINATED"; font-size: 10.5px; color: #fff; }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 0; background: rgba(0,0,0,.35); border: 1px solid var(--line2); color: #fff; font: 700 11.5px var(--mono); letter-spacing: 1px; text-transform: uppercase; }
+  .btn:not(:disabled):hover { background: #fff; border-color: #fff; color: var(--r); filter: none; }
+  .btn:disabled { opacity: .38; }
+  .btn.primary { background: #fff; border-color: #fff; color: var(--r); }
+  .btn.primary:not(:disabled):hover { background: #000; border-color: #fff; color: #fff; }
+  .btn.danger { border-style: dashed; border-color: #fff; color: #fff; }
+  .btn.danger:not(:disabled):hover { background: #000; color: #fff; border-style: solid; }
+  select, input { border-radius: 0; background: rgba(0,0,0,.5); border-color: var(--line2); color: #fff; text-transform: uppercase; }
+  .preset { padding: 10px 14px; text-transform: uppercase; }
+  .preset:hover { border-color: #fff; background: rgba(130,0,0,.6); }
+  .preset .n { font-weight: 700; color: #fff; letter-spacing: 1px; }
+  .preset .d { color: var(--fg3); }
+
+  /* ---- side panels ---- */
+  .p-head { font-weight: 700; font-size: 12px; letter-spacing: 3px; color: #fff; border-bottom: 1px solid var(--line2); padding-bottom: 5px; }
+  .p-head .p-status { color: var(--fg2); text-transform: uppercase; }
+  .kpi { background: rgba(0,0,0,.35); border-radius: 0; border: 1px solid var(--line); }
+  .kpi .k { color: var(--fg3); letter-spacing: 1.5px; }
+  .kpi .v { color: #fff; }
+  .kpi .u { color: var(--fg3); }
+  .reqs th { color: var(--fg2); border-bottom-color: var(--line2); }
+  .reqs td { color: #fff; }
+  .history li { color: var(--fg2); }
+  .history .ok { color: #fff; }
+  .history .failed { background: #fff; color: var(--r); padding: 0 4px; font-weight: 700; }
+  .stepper .dot { border-radius: 0; }
+  .stepper li.done .dot { background: #fff; } .stepper li.running .dot { background: var(--warn); } .stepper li.failed .dot { background: #000; box-shadow: 0 0 0 1px #fff; }
+  .plan-err { background: #fff; color: var(--r); padding: 3px 8px; font-weight: 700; }
+
+  /* ---- notices ---- */
+  .warn { background: #fff; border: 0; border-radius: 0; color: var(--r); font-weight: 700; animation: tm-blink 1s steps(1) 3; }
+  .warn::before { content: "PRIORITY OVERRIDE  \25B8  "; }
+  .toast { border-radius: 0; background: rgba(20,0,0,.92); border: 1px solid #fff; color: #fff; font-weight: 700; }
+  .toast.ok::before { content: "AFFIRMATIVE.  "; }
+  .toast.bad { background: #fff; color: var(--r); }
+  .toast.bad::before { content: "NEGATIVE.  "; }
+  .modal { background: rgba(20,0,0,.78); }
+  .modal-box { background: rgba(60,0,0,.94); border: 1px solid #fff; border-radius: 0; }
+  .modal-box.small { padding: 18px 20px; }
+  .m-head { color: #fff; letter-spacing: 2px; }
+  #confirm-text { color: var(--fg2); }
+  /* the list of possible responses: one above the other, the first one chosen */
+  .modal-box.small .m-foot { flex-direction: column-reverse; align-items: flex-start; gap: 4px; }
+  #confirm-yes, #confirm-no { border: 0; background: none; padding: 3px 8px; color: #fff; }
+  #confirm-yes { background: #fff; color: var(--r); }
+  #confirm-no:hover, #confirm-yes:hover { background: #fff; color: var(--r); }
+  #log-body { background: rgba(0,0,0,.6); border-color: var(--line2); border-radius: 0; color: var(--fg2); }
+
+  /* ---- start-up ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer; align-items: center; justify-content: center; transition: opacity .35s;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.3) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, #8a0000, #140000 75%); }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-height: 300px; font: 700 min(16px, 3.2vw)/1.85 var(--mono); letter-spacing: 1.5px; color: #fff; }
+  .bootscreen .boot-h { font-size: min(52px, 11vw); letter-spacing: 8px; }
+  .bootscreen pre::after { content: "\2588"; animation: tm-blink .9s steps(1) infinite; }
+
+  /* ---- the code column: wide windows only ---- */
+  @media (min-width: 1101px) {
+    body { padding-left: 150px; }
+    /* one block of 29 lines, set eight times; the animation moves it up by exactly one block, so it never runs out */
+    body::before { --code: "LDA #$00\A STA $C050\A JSR $FB1E\A LDX #$FF\A TXS\A CLD\A LDA $36\A CMP #$A5\A BNE $0340\A INC $4E\A LDY #$08\A LSR A\A BCC $0352\A EOR #$B8\A DEY\A BNE $034B\A STA $2F\A JSR $FDED\A LDA #$8D\A JMP $FF69\A SEC\A SBC #$30\A CMP #$0A\A BCS $0371\A ASL A\A ASL A\A ADC $3C\A STA $3C\A RTS\A ";
+      content: var(--code) var(--code) var(--code) var(--code) var(--code) var(--code) var(--code) var(--code);
+      white-space: pre; position: fixed; left: 14px; top: 0; width: 130px; pointer-events: none; z-index: 0;
+      font: 12px/20px var(--mono); letter-spacing: .5px; color: rgba(255,255,255,.55); animation: tm-code 22s linear infinite; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="t800"] .mark, :root[data-theme="t800"] .vitals::before, :root[data-theme="t800"] .pill.busy,
+  :root[data-theme="t800"] body::before, :root[data-theme="t800"] .warn { animation: none; }
+}
