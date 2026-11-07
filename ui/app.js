@@ -203,7 +203,8 @@
     const top = el("div", "c-top");
     const left = el("div");
     left.appendChild(el("div", "c-name", o.name || "OpenWebUI"));
-    left.appendChild(el("div", "c-model", o.model || "scheduled-task driver"));     // the inventory may describe how it runs
+    const sysd = o.driver === "systemd" || (!o.driver && !!o.units);
+    left.appendChild(el("div", "c-model", o.model || (sysd ? "systemd driver" : "scheduled-task driver")));     // the inventory may describe how it runs
     top.appendChild(left);
     const pill = el("span", "pill", "—"); top.appendChild(pill);
     c.appendChild(top);
@@ -217,13 +218,13 @@
     sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", "This takes it down for everyone using it. Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
     act.appendChild(sp);
     const up = el("button", "btn small", "Update");
-    up.onclick = async () => { if (await confirm("Update OpenWebUI?", "Runs the update task: the current image is pulled, the data backed up, the service restarted on the new version. A release with schema changes migrates the database one way. Windows may ask you to approve it.")) action("owui_update", null, { confirm: true }); };
+    up.onclick = async () => { if (await confirm("Update OpenWebUI?", o.update_note || "Runs its update control, which backs up the data and restarts it on the new version as that control was written to. A release with schema changes migrates the database one way.")) action("owui_update", null, { confirm: true }); };
     act.appendChild(up);
     act.appendChild(el("span", "spacer"));
     const open = el("a", "btn small ghost", "open"); open.href = o.open_url || o.url; open.target = "_blank"; open.rel = "noopener"; act.appendChild(open);
-    const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("openwebui", "OpenWebUI · control log"); act.appendChild(lg);
+    if (o.ctl_log) { const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("openwebui", "OpenWebUI · control log"); act.appendChild(lg); }
     c.appendChild(act);
-    c.onmouseenter = () => setHelp(o.help || "OpenWebUI, driven by scheduled tasks the agent runs by name and passes nothing; the tile reads only health and version.");
+    c.onmouseenter = () => setHelp(o.help || `OpenWebUI, driven by ${sysd ? "units" : "scheduled tasks"} the agent starts by name and passes nothing; the tile reads only health and version.`);
     c.onmouseleave = () => setHelp("");
     owui = { root: c, pill, meta, live, note, st, sp, up, vit };
     return c;

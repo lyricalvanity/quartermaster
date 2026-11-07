@@ -1,0 +1,12 @@
+// Lets one user start the three OpenWebUI control units without a password, and nothing else: not stop
+// them, not touch OpenWebUI's own unit. Quartermaster runs as that user; the units do the work as root.
+// OWNER: the login name the dashboard's agent runs as. Install root-owned, 0644, in /etc/polkit-1/rules.d.
+polkit.addRule(function (action, subject) {
+    var units = ["owui-ctl-start.service", "owui-ctl-stop.service", "owui-ctl-update.service"];
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "OWNER" &&
+        action.lookup("verb") == "start" &&
+        units.indexOf(action.lookup("unit")) >= 0) {
+        return polkit.Result.YES;
+    }
+});

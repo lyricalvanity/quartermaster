@@ -85,9 +85,13 @@ proxy. One generic tile, driven by a declared **driver**:
 - `docker-compose`: `up -d` / `down` / `pull` in a named project directory;
 - `schtasks`: run named Windows scheduled tasks, pass nothing (version 1's OpenWebUI driver, generalised);
 - `windows-service`: `sc start|stop`;
-- `systemd` (Linux, later): `systemctl --user`. An OpenWebUI that runs as a system unit (another user, for
-  isolation) gets a read-only tile from setup: health and version from its URL, and no controls, since a
-  system unit is root's to start, stop and update (2026-11-07).
+- `systemd` (Linux): each control is a unit the agent starts with `systemctl [--user] --no-ask-password`,
+  passing nothing. A control names either a sealed oneshot that does the job and writes the same
+  control-log lines as the scheduled tasks, or (`{"unit", "verb"}`) the app's own unit to start, stop or
+  restart. For an OpenWebUI that is a system unit under its own user, setup names `owui-ctl-start`, `-stop`
+  and `-update`; `contrib/openwebui-systemd` has them, the script behind them, and a polkit rule that lets
+  the owner start exactly those three. The sequestration lives beneath the units; the agent sees their
+  names, their LoadState and their log (2026-11-07).
 
 Version 1's `openwebui` block becomes a service of driver `schtasks`; its extras (bridge ports, two logs)
 stay as driver-specific fields.

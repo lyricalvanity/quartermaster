@@ -88,10 +88,12 @@ docker compose up -d --build
    `systemctl --user enable --now quartermaster`.
 
    What differs on Linux: per-process VRAM comes from `nvidia-smi --query-compute-apps` instead of the
-   Windows GPU counter; servers start in their own session and stop with a group signal; the OpenWebUI
-   scheduled-task driver does not exist there (a systemd driver is a later stage). Setup writes a
-   read-only tile for an OpenWebUI that runs as a systemd system unit: health and version from its URL,
-   the unit's name and user from systemd, and its start, stop and update left to root.
+   Windows GPU counter; servers start in their own session and stop with a group signal; OpenWebUI is
+   driven through systemd instead of scheduled tasks: each control is a unit the agent starts by name
+   with `--no-ask-password`. For a system unit under its own user, setup names three sealed root-owned
+   control units, which `contrib/openwebui-systemd` provides with a polkit rule for the owner to install;
+   for a user unit, it starts and stops that unit directly. How OpenWebUI is walled off stays beneath the
+   units, and the agent reads only health, version and the controls' own log.
 
 After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
 variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory

@@ -1467,6 +1467,13 @@ def op_preset(p: Plan):
 # Who can ring those bells is decided by Windows, not here: a task this unelevated process may run reads
 # as "run"; one that wants elevation reads as "gated" and goes through a consent prompt a person answers.
 # Written 2026-11-04 (Faber).
+#
+# The systemd driver (Linux, 2026-11-07) keeps that contract: each verb names a unit, and the agent asks
+# systemd to start it with --no-ask-password, at system or user scope. A verb names either a sealed control
+# unit the owner installed (a oneshot that does the job and writes the same control-log lines the tasks do)
+# or, as {"unit": ..., "verb": "start"|"stop"|"restart"}, the app's own unit. Whatever walls OpenWebUI off
+# lives beneath those units; the agent knows their names and their log, nothing else. Who may start them is
+# polkit's to say: a unit that wants a password fails at once, since nobody can type one for this process.
 
 # Task names come from inventory.json (openwebui.tasks), never from a request. The inventory is already the
 # trust root for every argv the agent runs, so naming the tasks there adds nothing a request could reach.
@@ -1477,14 +1484,55 @@ def owui_tasks() -> dict:
     return {**OWUI_TASK_DEFAULTS, **((INV.openwebui or {}).get("tasks") or {})}
 
 
+def owui_driver() -> str:
+    o = INV.openwebui or {}
+    return o.get("driver") or ("systemd" if o.get("units") else "schtasks")
+
+
+def owui_units() -> dict:
+    """verb -> (unit, systemctl verb) for the systemd driver. A verb the inventory leaves out has no control."""
+    out = {}
+    for v, u in ((INV.openwebui or {}).get("units") or {}).items():
+        unit, sv = (u, "start") if isinstance(u, str) else ((u or {}).get("unit"), (u or {}).get("verb", "start"))
+        if v in ("start", "stop", "update") and unit and sv in ("start", "stop", "restart"):
+            out[v] = (unit, sv)
+    return out
+
+
+def owui_controls() -> dict:
+    """verb -> the name of what it runs: a scheduled task, or a unit."""
+    return {v: u for v, (u, _) in owui_units().items()} if owui_driver() == "systemd" else owui_tasks()
+
+
+def owui_systemctl() -> list:
+    return ["systemctl"] + (["--user"] if (INV.openwebui or {}).get("scope") == "user" else [])
+
+
 def owui_install_hint() -> str:
-    return (INV.openwebui or {}).get("install_hint") or "install the scheduled tasks named in openwebui.tasks"
+    return (INV.openwebui or {}).get("install_hint") or (
+        "install the units named in openwebui.units (contrib/openwebui-systemd)" if owui_driver() == "systemd"
+        else "install the scheduled tasks named in openwebui.tasks")
+
+
+def owui_step(verb: str, default: str) -> str:
+    """The step's words: the inventory's openwebui.steps.<verb> describes this installation's scheme, if it likes."""
+    return ((INV.openwebui or {}).get("steps") or {}).get(verb) or default
 
 
 def owui_task_state(verb: str) -> str:
-    """'run': this process may run it. 'gated': it exists and Windows wants elevation. 'missing'."""
+    """'run': this process may run it. 'gated': it exists and Windows wants elevation. 'missing'.
+    A unit reads 'run' once systemd has it loaded; whether polkit lets this user start it shows on the first try."""
+    if owui_driver() == "systemd":
+        u = owui_units().get(verb)
+        if not u:
+            return "missing"
+        try:
+            rc, out, _ = run(owui_systemctl() + ["show", u[0], "-p", "LoadState", "--value"], timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return "missing"
+        return "run" if rc == 0 and out.strip() == "loaded" else "missing"
     if not host.WINDOWS:
-        return "missing"                      # the scheduled-task driver is Windows only; a systemd driver is a later stage
+        return "missing"                      # the scheduled-task driver is Windows only
     rc, out, err = run(["schtasks.exe", "/Query", "/TN", owui_tasks()[verb]], timeout=15)
     if rc == 0:
         return "run"
@@ -1542,7 +1590,7 @@ class OwuiWatch:
         info["ctl_tail"] = [l[:200] for l in tail_file(o["ctl_log"], 8)] if o.get("ctl_log") else []
         if slow or time.time() - self._slow_at > 20:
             self._slow_at = time.time()
-            info["tasks"] = {v: owui_task_state(v) for v in owui_tasks()}
+            info["tasks"] = {v: owui_task_state(v) for v in ("start", "stop", "update")}
             info["install_hint"] = owui_install_hint()
             info["bridge_bound"], info["bridge_expected"] = owui_bridge(o)
             kl = tail_file(o["keepalive_log"], 8) if o.get("keepalive_log") else []
@@ -1576,15 +1624,19 @@ def _owui_need():
 
 
 def _owui_log_size() -> int:
+    log = (INV.openwebui or {}).get("ctl_log")            # a unit driven directly has none
     try:
-        return Path(INV.openwebui["ctl_log"]).stat().st_size
+        return Path(log).stat().st_size if log else 0
     except OSError:
         return 0
 
 
 def _owui_log_since(offset: int) -> list[str]:
+    log = (INV.openwebui or {}).get("ctl_log")
+    if not log:
+        return []
     try:
-        with open(INV.openwebui["ctl_log"], "rb") as f:
+        with open(log, "rb") as f:
             f.seek(0, os.SEEK_END)
             if f.tell() < offset:
                 offset = 0                       # the log was replaced under us
@@ -1594,13 +1646,28 @@ def _owui_log_since(offset: int) -> list[str]:
         return []
 
 
-def _owui_fire(p: Plan, st, verb: str) -> int:
-    """Start one of the three scheduled tasks. Returns the control log's size from before it ran."""
-    name = owui_tasks()[verb]
+def _owui_fire(p: Plan, st, verb: str, timeout: float = 60) -> int:
+    """Start one of the three controls. Returns the control log's size from before it ran."""
+    name = owui_controls().get(verb) or verb
     state = owui_task_state(verb)
     before = _owui_log_size()
     if state == "missing":
-        raise PlanFailed(f"task {name} is not installed: {owui_install_hint()}")
+        raise PlanFailed(f"{name} is not installed: {owui_install_hint()}")
+    if owui_driver() == "systemd":
+        unit, sv = owui_units()[verb]
+        # with a control log the log says when the job is done; without one, systemctl waits for the job itself
+        argv = owui_systemctl() + ["--no-ask-password"] + (["--no-block"] if INV.openwebui.get("ctl_log") else []) + [sv, unit]
+        try:
+            rc, out, err = run(argv, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            raise PlanFailed(f"systemctl {sv} {unit} did not return in {int(timeout)} s; the job may still be running")
+        if rc != 0:
+            msg = (err or out).strip()
+            if "authentication required" in msg.lower() or "access denied" in msg.lower():
+                raise PlanFailed(f"polkit wants a password to {sv} {unit}, and nobody can type one for this process: {owui_install_hint()}")
+            raise PlanFailed(f"systemctl {sv} {unit}: {msg[:200]}")
+        p.say(st, f"{unit}: {sv} asked")
+        return before
     if state == "run":
         rc, out, err = run(["schtasks.exe", "/Run", "/TN", name], timeout=30)
         if rc != 0:
@@ -1620,6 +1687,15 @@ def _owui_fire(p: Plan, st, verb: str) -> int:
     return before
 
 
+def _owui_run(p: Plan, st, verb: str, timeout: float) -> int:
+    """Run one control to its end and return its code: the control log's done line where there is a log,
+    systemctl's own wait where a unit has none."""
+    before = _owui_fire(p, st, verb, timeout)
+    if owui_driver() == "systemd" and not INV.openwebui.get("ctl_log"):
+        return 0                                  # systemctl waited, and would have failed the fire otherwise
+    return _owui_wait_task(p, st, verb, before, timeout)
+
+
 def _owui_wait_task(p: Plan, st, verb: str, before: int, timeout: float) -> int:
     """Follow the control log until the task writes its 'done rc=N' line; returns N."""
     started = re.compile(rf"=== owui-ctl {verb} start ")
@@ -1636,7 +1712,7 @@ def _owui_wait_task(p: Plan, st, verb: str, before: int, timeout: float) -> int:
         return lines
 
     def has_started():
-        return any(started.search(l) for l in new_lines()), "the task has not written to the control log"
+        return any(started.search(l) for l in new_lines()), "nothing in the control log yet"
 
     def has_finished():
         lines = new_lines()
@@ -1646,8 +1722,9 @@ def _owui_wait_task(p: Plan, st, verb: str, before: int, timeout: float) -> int:
                 return True, int(m.group(1))
         return False, ""
 
-    _wait(p, st, has_started, 60, every=1.5, what=f"task {OWUI_TASKS[verb]} to start")
-    return _wait(p, st, has_finished, timeout, every=2.0, what=f"task {OWUI_TASKS[verb]} to finish")
+    name = owui_controls().get(verb) or verb
+    _wait(p, st, has_started, 60, every=1.5, what=f"{name} to start")
+    return _wait(p, st, has_finished, timeout, every=2.0, what=f"{name} to finish")
 
 
 def _owui_wait_health(p: Plan, want_up: bool, timeout: float):
@@ -1660,13 +1737,13 @@ def _owui_wait_health(p: Plan, want_up: bool, timeout: float):
 
 def op_owui_start(p: Plan):
     _owui_need()
-    st = p.step("Start OpenWebUI", "start the app unit inside the sequestered distro")
+    st = p.step("Start OpenWebUI", owui_step("start", "through its start control"))
     if owui_health():
         return p.done_step(st, "already up")
-    rc = _owui_wait_task(p, st, "start", _owui_fire(p, st, "start"), 180)
+    rc = _owui_run(p, st, "start", 180)
     if rc != 0:
-        raise PlanFailed(f"the start task ended with code {rc}; see the OpenWebUI control log")
-    p.done_step(st, "unit started")
+        raise PlanFailed(f"the start control ended with code {rc}; see the OpenWebUI control log")
+    p.done_step(st, "started")
     p.done_step(_owui_wait_health(p, True, 300), "200")
 
 
@@ -1674,29 +1751,29 @@ def op_owui_stop(p: Plan):
     _owui_need()
     if not p.args.get("confirm"):
         raise PlanFailed("stop takes OpenWebUI down for everyone using it: send confirm=true")
-    st = p.step("Stop OpenWebUI", "stop the app unit; the distro and its keepalive stay up, and a reboot starts it again")
+    st = p.step("Stop OpenWebUI", owui_step("stop", "through its stop control; Start, or a reboot, brings it back"))
     if not owui_health():
         return p.done_step(st, "already down")
-    rc = _owui_wait_task(p, st, "stop", _owui_fire(p, st, "stop"), 180)
+    rc = _owui_run(p, st, "stop", 180)
     if rc != 0:
-        raise PlanFailed(f"the stop task ended with code {rc}; see the OpenWebUI control log")
-    p.done_step(st, "unit stopped")
+        raise PlanFailed(f"the stop control ended with code {rc}; see the OpenWebUI control log")
+    p.done_step(st, "stopped")
     p.done_step(_owui_wait_health(p, False, 90), "down")
 
 
 def op_owui_update(p: Plan):
     _owui_need()
     if not p.args.get("confirm"):
-        raise PlanFailed("update pulls a new image and may migrate the database one way: send confirm=true")
-    st = p.step("Update OpenWebUI", "tag the old image, pull :main, back up the data volume, restart. "
-                                    "Cancel stops the watching, not the update.")
+        raise PlanFailed("update replaces the installed version and may migrate the database one way: send confirm=true")
+    st = p.step("Update OpenWebUI", owui_step("update", "through its update control, which backs up and upgrades as it was written to")
+                + ". Cancel stops the watching, not the update.")
     if not owui_health():
         raise PlanFailed("OpenWebUI is not up; start it first")
     was = (OWUI_WATCH.get() or {}).get("version")
-    rc = _owui_wait_task(p, st, "update", _owui_fire(p, st, "update"), 2400)
+    rc = _owui_run(p, st, "update", 2400)
     if rc != 0:
-        raise PlanFailed(f"the update script ended with code {rc}; see the OpenWebUI control log")
-    p.done_step(st, "update script finished")
+        raise PlanFailed(f"the update control ended with code {rc}; see the OpenWebUI control log")
+    p.done_step(st, "update finished")
     st2 = _owui_wait_health(p, True, 300)
     now = (OWUI_WATCH.get() or {}).get("version")
     p.done_step(st2, f"already current ({now})" if now == was else f"{was or '?'} -> {now or '?'}")

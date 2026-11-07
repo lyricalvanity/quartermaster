@@ -19,8 +19,13 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
 - The page loads an optional `ui/fonts/local.css` (ignored by git) after `fonts.css`, so a machine without the
   Windows and Office faces can map those names to faces it has; the agent and the container serve an empty
   one when it is absent. The agent sends `.ttf` and `.otf` as fonts.
-- Setup writes a read-only OpenWebUI tile on Linux when a systemd system unit serves it: health and version,
-  no controls.
+- OpenWebUI has a systemd driver on Linux: each of start, stop and update names a unit the agent starts by
+  name with `--no-ask-password`, either a sealed control unit or the app's own unit. Setup writes it for a
+  system unit (three `owui-ctl-*` units, in `contrib/openwebui-systemd` with their script and a polkit rule)
+  and for a user unit (start and stop directly). The tile's and the steps' words are driver-neutral, with
+  `steps` and `update_note` in the inventory for an installation's own.
+- OpenWebUI's start, stop and update plans named an undefined `OWUI_TASKS` while waiting on the control log,
+  so they failed after the task had been asked to run.
 
 ## 0.1.0 - 2026-11-07
 

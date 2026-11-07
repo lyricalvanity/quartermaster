@@ -11,7 +11,7 @@
     "ports": [3000, 8080],
     "health": "/health",
     "version": {"url": "/api/version", "path": "version"},
-    "drivers": {"schtasks": "three Windows scheduled tasks owui-ctl-start/stop/update exist", "docker": "a container from ghcr.io/open-webui/open-webui is running", "pip": "the open-webui package is installed in a venv"}
+    "drivers": {"schtasks": "three Windows scheduled tasks owui-ctl-start/stop/update exist", "systemd": "a systemd unit serves it: three owui-ctl-* control units for a system unit (contrib/openwebui-systemd), or its own user unit", "docker": "a container from ghcr.io/open-webui/open-webui is running", "pip": "the open-webui package is installed in a venv"}
   },
   "drive": {
     "endpoints": {"health": "GET /health", "version": "GET /api/version"},

@@ -1,0 +1,8 @@
+# One of three sealed controls for OpenWebUI (Quartermaster, contrib/openwebui-systemd). Root-owned in
+# /etc/systemd/system and never enabled: started on demand, by root or by the user the polkit rule names.
+[Unit]
+Description=OpenWebUI control: stop
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/owui-ctl stop

@@ -1,0 +1,104 @@
+#!/bin/bash
+# owui-ctl: start, stop or update an OpenWebUI that a systemd system unit runs from a virtualenv, under a user
+# of its own. One of three sealed control units runs this as root with one fixed word; Quartermaster starts
+# those units by name and passes nothing, so nothing it sends reaches this script.
+#
+# It appends its own lines to $LOG, which the dashboard shows and follows:
+#   === owui-ctl <verb> start <time>
+#   ...
+#   === owui-ctl <verb> done rc=<n>
+# It never writes the service's environment or anything from its data directory there.
+#
+# Install root-owned, mode 0755, where only root can write: /usr/local/libexec/owui-ctl. It runs as root:
+# read it before installing it.
+
+set -u -o pipefail
+
+# ---- this machine: edit before installing ---------------------------------------------------------------
+APP_UNIT=open-webui.service          # the unit that serves OpenWebUI
+VENV=/opt/open-webui                 # its virtualenv: $VENV/bin/python runs open-webui
+UV=/usr/bin/uv                       # for a venv uv built (no pip inside): a root-owned uv, never a user's copy
+BACKUP_ROOT=/var/backups/open-webui  # root-only; one dated copy of the data directory per update
+KEEP=3                               # copies kept
+LOG=/var/log/owui-ctl.log            # root-owned, mode 0644: the dashboard's user reads it
+# ----------------------------------------------------------------------------------------------------------
+
+verb=${1:-}
+case "$verb" in start|stop|update) ;; *) echo "owui-ctl: start, stop or update, not '$verb'" >&2; exit 64 ;; esac
+umask 022
+exec >>"$LOG" 2>&1
+echo "=== owui-ctl $verb start $(date -Is)"
+finish() { echo "=== owui-ctl $verb done rc=$1"; exit "$1"; }
+
+case "$verb" in
+start) systemctl start "$APP_UNIT"; finish $? ;;
+stop)  systemctl stop "$APP_UNIT"; finish $? ;;
+esac
+
+# ---- update: stop, copy the data, upgrade as the venv's owner, start. A failed upgrade puts the old
+# version back. A database the new version has migrated is not rolled back here; the copy is for that.
+
+owner=$(stat -c %U "$VENV") || finish 2
+version() { "$VENV/bin/python" -c 'import importlib.metadata as m; print(m.version("open-webui"))' 2>/dev/null; }
+installer() {   # pip inside the venv, else uv if root owns it and nobody else can write it
+    if [ -x "$VENV/bin/pip" ]; then echo pip
+    elif [ -f "$UV" ] && [ ! -L "$UV" ] && [ "$(stat -c %u "$UV")" = 0 ] && [ -z "$(find "$UV" -perm /022)" ]; then echo uv
+    else echo none
+    fi
+}
+pkg() {         # pkg upgrade | pkg pin <version>
+    case "$(installer):$1" in
+    pip:upgrade) runuser -u "$owner" -- "$VENV/bin/pip" install --quiet --no-input --no-cache-dir --progress-bar off --upgrade open-webui ;;
+    pip:pin)     runuser -u "$owner" -- "$VENV/bin/pip" install --quiet --no-input --no-cache-dir --progress-bar off "open-webui==$2" ;;
+    uv:upgrade)  runuser -u "$owner" -- env UV_NO_CACHE=1 "$UV" pip install --quiet --python "$VENV/bin/python" --upgrade-package open-webui open-webui ;;
+    uv:pin)      runuser -u "$owner" -- env UV_NO_CACHE=1 "$UV" pip install --quiet --python "$VENV/bin/python" "open-webui==$2" ;;
+    *)           return 1 ;;
+    esac
+}
+if [ "$(installer)" = none ]; then
+    echo "no pip in $VENV and no root-owned uv at $UV, so nothing could install; nothing changed"
+    finish 3
+fi
+
+# the data directory as the running service has it: DATA_DIR from its environment, read here as root and
+# never logged; else the package default inside the venv
+pid=$(systemctl show -p MainPID --value "$APP_UNIT")
+data=""
+if [ "${pid:-0}" -gt 0 ] && [ -r "/proc/$pid/environ" ]; then
+    data=$(tr '\0' '\n' < "/proc/$pid/environ" | sed -n 's/^DATA_DIR=//p' | tail -n 1)
+fi
+[ -n "$data" ] || data=$(ls -d "$VENV"/lib/python3*/site-packages/open_webui/data 2>/dev/null | head -n 1)
+if [ -z "$data" ] || [ ! -d "$data" ]; then
+    echo "no data directory found (is $APP_UNIT running?); nothing changed"
+    finish 4
+fi
+
+old=$(version)
+echo "installed ${old:-unknown}, through $(installer); stopping $APP_UNIT"
+systemctl stop "$APP_UNIT" || finish 5
+dest="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)-${old:-unknown}"
+install -d -m 0700 "$BACKUP_ROOT"
+if ! cp -a "$data" "$dest"; then
+    echo "the copy failed; starting it again unchanged"
+    rm -rf -- "$dest"
+    systemctl start "$APP_UNIT"
+    finish 6
+fi
+echo "data copied to $dest ($(du -sh "$dest" | cut -f1))"
+
+echo "upgrading open-webui"
+if ! pkg upgrade; then
+    echo "the upgrade failed; putting ${old:-the old version} back"
+    [ -n "$old" ] && pkg pin "$old"
+    systemctl start "$APP_UNIT"
+    finish 7
+fi
+new=$(version)
+echo "now ${new:-unknown}; starting $APP_UNIT"
+systemctl start "$APP_UNIT" || finish 8
+
+# keep the newest $KEEP copies (their names sort by date)
+ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | sort -r | tail -n +"$((KEEP + 1))" | while IFS= read -r d; do
+    rm -rf -- "$d" && echo "removed the old copy $d"
+done
+finish 0

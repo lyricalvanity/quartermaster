@@ -541,19 +541,23 @@ def detect_comfyui(seen: dict, running: list[dict]) -> dict:
     return out
 
 
-def webui_system_unit(port: int) -> tuple[str, str] | None:
-    """(unit, user) of a running systemd system service whose command line serves OpenWebUI on port, from
-    systemd's own view of the unit (ExecStart and User only: its environment may hold secrets)."""
-    rc, o, _ = run(["systemctl", "list-units", "--type=service", "--state=running", "--no-legend", "--plain"], timeout=15)
+OWUI_CTL_UNITS = {"start": "owui-ctl-start.service", "stop": "owui-ctl-stop.service", "update": "owui-ctl-update.service"}
+
+
+def webui_unit(port: int, scope: str = "system") -> tuple[str, str] | None:
+    """(unit, user) of a running systemd service, at system or user scope, whose command line serves OpenWebUI
+    on port, from systemd's own view of the unit (ExecStart and User only: its environment may hold secrets)."""
+    sc = ["systemctl"] + (["--user"] if scope == "user" else [])
+    rc, o, _ = run(sc + ["list-units", "--type=service", "--state=running", "--no-legend", "--plain"], timeout=15)
     for name in (l.split()[0] for l in (o.splitlines() if rc == 0 else []) if l.split()):
         if "webui" not in name.lower():
             continue
-        rc, s, _ = run(["systemctl", "show", name, "-p", "User", "-p", "ExecStart"], timeout=15)
+        rc, s, _ = run(sc + ["show", name, "-p", "User", "-p", "ExecStart"], timeout=15)
         props = dict(l.split("=", 1) for l in s.splitlines() if "=" in l)
         exe = props.get("ExecStart", "")
         m = re.search(r"--port[ =](\d+)", exe)
         if "open-webui" in exe and (int(m.group(1)) if m else 8080) == port:
-            return name, props.get("User") or "root"
+            return name, props.get("User") or ("root" if scope == "system" else os.environ.get("USER", "you"))
     return None
 
 
@@ -572,14 +576,28 @@ def detect_openwebui() -> dict:
             "tasks": {"start": "owui-ctl-start", "stop": "owui-ctl-stop", "update": "owui-ctl-update"}}
         out["notes"].append(f"OpenWebUI: scheduled tasks {tasks}; answering on :{port}" if port else f"OpenWebUI: scheduled tasks {tasks}; not answering")
         return out
-    unit = webui_system_unit(port) if port and not WIN else None
+    unit = webui_unit(port) if port and not WIN else None
     if unit:
+        # a system unit is root's: the agent starts three sealed control units, which polkit lets the owner start
         name, user = unit
+        installed = [v for v, u in OWUI_CTL_UNITS.items() if run(["systemctl", "show", u, "-p", "LoadState", "--value"], timeout=10)[1].strip() == "loaded"]
         out["service"] = {
-            "_comment": f"OpenWebUI as the systemd system unit {name}, running as {user}. The agent reads /health and /api/version from the URL and nothing else, and has no controls for a system unit: start, stop and update stay with root.",
+            "_comment": f"OpenWebUI as the systemd system unit {name}, running as {user}. The agent reads /health and /api/version from the URL and starts the three control units below by name with --no-ask-password, passing nothing; what they do as root is theirs (contrib/openwebui-systemd). It reads their log and nothing of OpenWebUI's.",
             "name": "OpenWebUI", "model": f"system unit · user {user}", "url": f"http://127.0.0.1:{port}", "open_url": f"http://127.0.0.1:{port}",
-            "install_hint": f"a system unit: start, stop and update it as root (systemctl restart {name})"}
-        out["notes"].append(f"OpenWebUI is the system unit {name} (user {user}) on :{port}: a read-only tile, health and version")
+            "driver": "systemd", "scope": "system", "units": dict(OWUI_CTL_UNITS), "ctl_log": "/var/log/owui-ctl.log",
+            "install_hint": "install the three owui-ctl units and the polkit rule from contrib/openwebui-systemd, as root"}
+        out["notes"].append(f"OpenWebUI is the system unit {name} (user {user}) on :{port}; control units installed: {', '.join(installed) or 'none yet'}")
+        return out
+    unit = webui_unit(port, "user") if port and not WIN else None
+    if unit:
+        # a user unit is the owner's own: start and stop it directly; an update needs a unit of the owner's making
+        name, _ = unit
+        out["service"] = {
+            "_comment": f"OpenWebUI as the systemd user unit {name}. The agent starts and stops that unit and reads /health and /api/version; add units.update (a oneshot of yours) for an Update button.",
+            "name": "OpenWebUI", "model": "user unit", "url": f"http://127.0.0.1:{port}", "open_url": f"http://127.0.0.1:{port}",
+            "driver": "systemd", "scope": "user", "units": {"start": {"unit": name, "verb": "start"}, "stop": {"unit": name, "verb": "stop"}},
+            "install_hint": "name a oneshot user unit of yours as units.update for an Update button"}
+        out["notes"].append(f"OpenWebUI is the user unit {name} on :{port}: start and stop through it")
         return out
     if port:
         rc, o, _ = run(["docker", "ps", "--format", "{{.Image}}"], timeout=15)
