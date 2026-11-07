@@ -157,10 +157,16 @@ state and page served, the installed agent untouched.
 
 A preset is `{id, name, desc, steps: [{op, target, value}]}` over the agent's whitelisted ops and the
 inventory's ids, with values constrained (a context from the unit's `context_choices`, a budget in range).
-The page gets an **editor** that only picks from those, and a **Save current state as preset** button that
-snapshots what is resident, its context and budget, and which shims and services are up. The agent
-validates against the same whitelist on `POST /api/presets` and writes `presets.json`, a separate file, so
-the one thing the page may write is cleanly bounded and the inventory stays read-only to it.
+The page gets an **editor** that only picks from those, and a **Save current** button that snapshots what
+is resident, its context, and which shims and ComfyUI are up. The agent validates against the same
+whitelist on `POST /api/presets` and writes `presets.json`, a separate file, so the one thing the page may
+write is cleanly bounded and the inventory stays read-only to it. **(built 2026-11-06.)** The whitelist is
+`PRESET_OPS` in the agent: seventeen ops; not in it are `preset` (no nesting), the updates and the art
+queue. A step whose op needs a confirmation (`stop`, `stop_all`, `comfy_stop`) gets it from the preset
+having been saved by a person. `GET /api/presets` serves the table with each op's valid targets and the
+Maya context choices, so the editor never carries its own copy of the rules; `POST /api/presets/delete`
+removes one. Both are logged like actions. The thinking budget is not in the snapshot: the engine does not
+report it.
 
 ## 7. Updaters
 
@@ -239,8 +245,8 @@ Each stage leaves the original workstation working.
 | 1 | Scrub, `owner`/`host` tokens, example inventory, MIT, scrub check, repository | **done 2026-11-06** |
 | 2 | Schema 2 with migration; engine bands with version and menu; slot colours in the themes | **done 2026-11-06** |
 | 3 | `setup` and `detect`: host facts, the detectors, launcher and key | **done 2026-11-06** |
-| 4 | Preset editor and Save-current; `presets.json` | next |
-| 5 | Updaters and the clients strip with bindings | |
+| 4 | Preset editor and Save-current; `presets.json` | **done 2026-11-06** |
+| 5 | Updaters and the clients strip with bindings | next |
 | 6 | Platform module and the Linux implementation | |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |
 

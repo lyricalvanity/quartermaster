@@ -102,9 +102,15 @@ first time the agent loads it: the original is kept as `inventory.schema1.json` 
 | `comfyui` | optional tile: start argv, port, the command-line text that identifies the process, an optional `update` section |
 | `art` | optional queue of image batches that wait for the card (needs `comfyui`) |
 
-`presets.json`: `{"presets": [{id, name, desc, steps: [{op, target, value}]}]}`. Each engine's band shows its
-version and unit counts and has a menu (stop every unit of that engine; the update entry appears once an
-engine declares a recipe). Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
+`presets.json`: `{"presets": [{id, name, desc, steps: [{op, target, value}]}]}`. Presets are made in the
+page: **+ New** opens an editor whose steps are picked from the ops the agent allows (`GET /api/presets`
+serves that table: make resident, unload, clear the card, start, stop, park, context, thinking budget,
+shims, ComfyUI and OpenWebUI start/stop) over the inventory's own ids; **Save current** opens it
+pre-filled with what is resident, its context, and which shims and ComfyUI are up; the pencil on a preset
+edits or deletes it. The agent checks a saved preset against the same table and writes `presets.json`
+itself; the inventory file has no write path from the page. Each engine's band shows its version and unit
+counts and has a menu (stop every unit of that engine; the update entry appears once an engine declares a
+recipe). Themes colour the bands by slot (`--e1` … `--e6` in engine order, `--e0` for the
 legacy band), so a theme never needs to know an engine's name.
 
 ## From a terminal

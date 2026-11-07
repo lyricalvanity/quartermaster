@@ -1168,7 +1168,13 @@ def op_preset(p: Plan):
     p.done_step(head)
     for step in pr["steps"]:
         p.check()
-        sub = Plan(step["op"], step.get("target"), {"value": step.get("value"), "force": p.args.get("force")}, p.by)
+        spec = PRESET_OPS.get(step["op"])
+        if not spec:
+            raise PlanFailed(f"a preset may not run {step['op']!r}")
+        args = {"value": step.get("value"), "force": p.args.get("force")}
+        if spec.get("confirm"):
+            args["confirm"] = True          # the person confirmed it when they saved the preset
+        sub = Plan(step["op"], step.get("target"), args, p.by)
         sub.steps = p.steps          # share the stepper
         sub.cancel = p.cancel
         sub.loading = p.loading
@@ -1986,6 +1992,113 @@ def op_art_batch(p: Plan):
                      f"{time.time() - t_all - gen:.0f} s of swapping and loading")
 
 
+# ---- presets: the one thing the page may write ------------------------------------
+# A preset is a list of steps over these ops and the inventory's ids, nothing else; the page's editor offers
+# exactly this table (GET /api/presets serves it) and the agent checks a saved preset against it again.
+# Updates, the art queue and presets themselves are not in it: those have their own doors.
+PRESET_OPS = {
+    "make_resident": {"target": "model", "label": "Make resident"},
+    "unload": {"target": "unit", "label": "Unload"},
+    "unload_all": {"target": None, "label": "Clear the card"},
+    "start": {"target": "model", "label": "Start the server"},
+    "stop": {"target": "model", "label": "Stop the server (ends the process)", "confirm": True},
+    "stop_all": {"target": "engine", "label": "Stop every unit of an engine", "confirm": True},
+    "park": {"target": "parkable", "label": "Park"},
+    "unpark": {"target": "parkable", "label": "Unpark"},
+    "set_context": {"target": "maya", "value": "context", "label": "Set context"},
+    "set_budget": {"target": "maya", "value": "budget", "label": "Set thinking budget"},
+    "start_shim": {"target": "shim", "label": "Start a shim"},
+    "stop_shim": {"target": "shim", "label": "Stop a shim"},
+    "comfy_start": {"target": None, "needs": "comfyui", "label": "Start ComfyUI"},
+    "comfy_free": {"target": None, "needs": "comfyui", "label": "ComfyUI: drop its models"},
+    "comfy_stop": {"target": None, "needs": "comfyui", "label": "Stop ComfyUI", "confirm": True},
+    "owui_start": {"target": None, "needs": "openwebui", "label": "Start OpenWebUI"},
+    "owui_stop": {"target": None, "needs": "openwebui", "label": "Stop OpenWebUI"},
+}
+PRESET_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+def preset_targets(kind: str) -> list[str]:
+    """The ids a step of this target kind may name."""
+    if kind == "unit":
+        return list(INV.servers)
+    if kind == "model":
+        return [sid for sid, s in INV.servers.items() if s["kind"] != "ollama"]
+    if kind == "parkable":
+        return [sid for sid, s in INV.servers.items() if s.get("parkable")]
+    if kind == "maya":
+        return [sid for sid, s in INV.servers.items() if s["kind"] == "maya"]
+    if kind == "shim":
+        return list(INV.shims)
+    if kind == "engine":
+        return [e["id"] for e in INV.engines]
+    return []
+
+
+def validate_preset(raw) -> dict:
+    """A preset as the page sent it, checked against PRESET_OPS and the inventory. Raises ValueError."""
+    if not isinstance(raw, dict):
+        raise ValueError("a preset is an object")
+    pid = str(raw.get("id") or "").strip().lower()
+    if not PRESET_ID.match(pid):
+        raise ValueError("id: lower-case letters, digits and dashes, 1-40 characters")
+    name = str(raw.get("name") or "").strip()
+    if not 1 <= len(name) <= 60:
+        raise ValueError("name: 1-60 characters")
+    desc = str(raw.get("desc") or "").strip()[:200]
+    steps_in = raw.get("steps")
+    if not isinstance(steps_in, list) or not 1 <= len(steps_in) <= 12:
+        raise ValueError("steps: 1 to 12 of them")
+    steps = []
+    for i, st in enumerate(steps_in, 1):
+        if not isinstance(st, dict):
+            raise ValueError(f"step {i}: an object")
+        op = st.get("op")
+        spec = PRESET_OPS.get(op)
+        if not spec:
+            raise ValueError(f"step {i}: {op!r} is not an op a preset may run")
+        if spec.get("needs") and not getattr(INV, spec["needs"]):
+            raise ValueError(f"step {i}: {op} needs the inventory's {spec['needs']} block")
+        out = {"op": op}
+        if spec["target"]:
+            tgt = st.get("target")
+            if tgt not in preset_targets(spec["target"]):
+                raise ValueError(f"step {i}: {op} needs one of {preset_targets(spec['target'])}")
+            out["target"] = tgt
+        val = st.get("value")
+        if spec.get("value") == "context":
+            choices = INV.servers[out["target"]].get("context_choices") or []
+            if val not in choices:
+                raise ValueError(f"step {i}: context must be one of {choices}")
+            out["value"] = int(val)
+        elif spec.get("value") == "budget":
+            try:
+                n = int(val)
+            except (TypeError, ValueError):
+                raise ValueError(f"step {i}: budget is a number") from None
+            if n != 0 and not 256 <= n <= 262144:
+                raise ValueError(f"step {i}: budget is 0 or 256..262144")
+            out["value"] = n
+        steps.append(out)
+    return {"id": pid, "name": name, "desc": desc, "steps": steps}
+
+
+def save_presets(presets: list[dict]) -> None:
+    """presets.json, written whole and atomically; the inventory file is never touched here."""
+    tmp = PRESETS.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"presets": presets}, indent=2) + "\n", encoding="utf-8", newline="\n")
+    os.replace(tmp, PRESETS)
+    INV.presets = {p["id"]: p for p in presets}
+
+
+def presets_public() -> dict:
+    return {"presets": list(INV.presets.values()),
+            "ops": {op: {**spec, "targets": preset_targets(spec["target"]) if spec["target"] else [],
+                         "available": not spec.get("needs") or bool(getattr(INV, spec["needs"]))}
+                    for op, spec in PRESET_OPS.items()},
+            "context_choices": {sid: s.get("context_choices") or [] for sid, s in INV.servers.items() if s["kind"] == "maya"}}
+
+
 OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_unload_all, "stop": op_stop, "stop_all": op_stop_all,
        "start": op_start, "park": op_park, "unpark": op_unpark, "set_context": op_set_context,
        "set_budget": op_set_budget, "start_shim": op_start_shim, "stop_shim": op_stop_shim, "preset": op_preset,
@@ -2094,6 +2207,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, STATE.get())
         if path == "/api/inventory":
             return self._json(200, INV.public())
+        if path == "/api/presets":
+            return self._json(200, presets_public())
         if path == "/api/plans":
             with PLANS.lock:
                 return self._json(200, {"current": PLANS.current.public() if PLANS.current else None, "recent": PLANS.recent[::-1]})
@@ -2176,6 +2291,29 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(202, {"plan": p.public()})
         if path.startswith("/api/plans/") and path.endswith("/cancel"):
             return self._json(200, {"cancelled": PLANS.cancel_current()})
+        if path == "/api/presets":
+            try:
+                pr = validate_preset(body.get("preset", body))
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            kept = [p for p in INV.presets.values() if p["id"] != pr["id"]]
+            was = pr["id"] in INV.presets
+            try:
+                save_presets(kept + [pr] if not was else [pr if p["id"] == pr["id"] else p for p in INV.presets.values()])
+            except OSError as e:
+                return self._json(500, {"error": f"presets.json: {e}"})
+            self._art_log("preset_save", pr["id"], by, f"{'replaced' if was else 'created'} {pr['name']} ({len(pr['steps'])} steps)")
+            return self._json(200, {"preset": pr, "replaced": was})
+        if path == "/api/presets/delete":
+            pid = str(body.get("id") or "")
+            if pid not in INV.presets:
+                return self._json(404, {"error": "no such preset"})
+            try:
+                save_presets([p for p in INV.presets.values() if p["id"] != pid])
+            except OSError as e:
+                return self._json(500, {"error": f"presets.json: {e}"})
+            self._art_log("preset_delete", pid, by, "")
+            return self._json(200, {"deleted": pid})
         if path.startswith("/api/art/"):
             aq = art_queue()
             if not aq:

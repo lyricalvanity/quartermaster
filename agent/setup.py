@@ -389,6 +389,29 @@ def detect_llamacpp(seen: dict, running: list[dict]) -> dict:
     return out
 
 
+def comfy_python(root: Path, proc: dict | None) -> Path:
+    """The interpreter to start ComfyUI with. A running ComfyUI's own interpreter wins; otherwise, of the venvs
+    beside or inside the checkout, the one carrying the most accelerators (sage attention, triton, xformers):
+    two venvs can both start ComfyUI and differ in exactly what the owner's launch flags need."""
+    if proc:
+        m = re.match(r"\s*\"?([^\"]+?python[w]?\.exe|\S*python[0-9.]*)\"?\s", proc["cmd"] + " ", re.I)
+        if m and Path(m.group(1)).exists():
+            return Path(m.group(1))
+    cands = [p for p in (py_in(root), py_in(root.parent)) if p]
+    if not cands:
+        return Path(sys.executable)
+    if len(cands) == 1:
+        return cands[0]
+
+    def score(py: Path) -> int:
+        rc, o, _ = run([py, "-c", "import importlib.util as u;print(sum(bool(u.find_spec(m)) for m in ('torch','aiohttp','sageattention','triton','xformers')))"], timeout=60)
+        try:
+            return int(o.strip()) if rc == 0 else -1
+        except ValueError:
+            return -1
+    return max(cands, key=score)
+
+
 def detect_comfyui(seen: dict, running: list[dict]) -> dict:
     out = {"engines": [], "units": [], "notes": []}
     cands = [HOMEDIR / "ComfyUI" / "ComfyUI", HOMEDIR / "ComfyUI", HOMEDIR / "comfy" / "ComfyUI"]
@@ -402,7 +425,7 @@ def detect_comfyui(seen: dict, running: list[dict]) -> dict:
             root = Path(m.group(1)).resolve().parent
     if not root:
         return out
-    py = py_in(root) or py_in(root.parent) or Path(sys.executable)
+    py = comfy_python(root, proc)
     port = proc["port"] if proc else 8188
     ver = ""
     vf = root / "comfyui_version.py"

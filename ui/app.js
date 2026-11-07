@@ -401,9 +401,13 @@
       const b = s.legacy ? bands.legacy : bands[s.engine];
       if (b) b.grid.appendChild(serverCard(s));
     }
+    buildPresets();
+  }
+  function buildPresets() {
     const pr = $("#presets"); pr.innerHTML = "";
     for (const p of INV.presets || []) {
       const b = el("button", "preset"); b.appendChild(el("div", "n", p.name)); b.appendChild(el("div", "d", p.desc || ""));
+      const ed = el("span", "edit", "✎"); ed.title = "edit this preset"; ed.onclick = (ev) => { ev.stopPropagation(); openPresetEditor(p); }; b.appendChild(ed);
       b.onclick = () => action("preset", p.id); pr.appendChild(b);
       b.onmouseenter = () => setHelp(`${p.name}: ${p.desc || "preset"}`); b.onmouseleave = () => setHelp("");
     }
@@ -413,6 +417,122 @@
       b.onclick = () => action(STATE && STATE.shims && STATE.shims[sh.id] && STATE.shims[sh.id].up ? "stop_shim" : "start_shim", sh.id);
       pr.appendChild(b);
     }
+  }
+
+  // ---- the preset editor: steps over the ops the agent allows (GET /api/presets), saved to presets.json by the agent ----
+  let PE = null;                                   // { ops, context_choices } from the agent, fetched when the editor opens
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  function nameOf(kind, id) {
+    const u = (INV.units || []).find((x) => x.id === id), sh = (INV.shims || []).find((x) => x.id === id), e = (INV.engines || []).find((x) => x.id === id);
+    return u ? `${u.name} · :${u.port}` : sh ? `${sh.name} · :${sh.port}` : e ? e.name : id;
+  }
+  function stepRow(step, idx, rows) {
+    const row = el("div", "pe-row");
+    row.appendChild(el("span", "n", String(idx + 1)));
+    const op = el("select"); row.appendChild(op);
+    for (const [k, spec] of Object.entries(PE.ops)) {
+      if (!spec.available) continue;
+      const o = el("option", null, spec.label); o.value = k; op.appendChild(o);
+    }
+    op.value = step.op in PE.ops && PE.ops[step.op].available ? step.op : op.options[0].value;
+    const tgt = el("select"); row.appendChild(tgt);
+    const valWrap = el("div"); row.appendChild(valWrap);
+    const fill = () => {
+      const spec = PE.ops[op.value];
+      tgt.innerHTML = ""; valWrap.innerHTML = "";
+      tgt.hidden = !spec.target;
+      if (spec.target) {
+        for (const id of spec.targets) { const o = el("option", null, nameOf(spec.target, id)); o.value = id; tgt.appendChild(o); }
+        if (spec.targets.includes(step.target)) tgt.value = step.target;
+        if (!spec.targets.length) { const o = el("option", null, "(nothing of that kind in the inventory)"); o.value = ""; tgt.appendChild(o); }
+      }
+      if (spec.value === "context") {
+        const v = el("select"); valWrap.appendChild(v);
+        const choices = (PE.context_choices[tgt.value] || []);
+        for (const n of choices) { const o = el("option", null, fmtK(n)); o.value = n; v.appendChild(o); }
+        if (choices.includes(step.value)) v.value = String(step.value);
+        tgt.onchange = fill;
+      } else if (spec.value === "budget") {
+        const v = el("input"); v.type = "number"; v.min = 0; v.max = 262144; v.step = 256; v.placeholder = "0 = off"; v.value = step.value ?? ""; valWrap.appendChild(v);
+        tgt.onchange = null;
+      } else tgt.onchange = null;
+    };
+    op.onchange = () => { step.op = op.value; fill(); };
+    fill();
+    const ctl = el("div", "ctl"); row.appendChild(ctl);
+    // read every row back before re-drawing, so a change in another row is not lost to a move or a removal
+    const sync = () => { [...$("#pe-steps").children].forEach((r, i) => { rows[i] = r.read(); }); };
+    const mk = (t, title, fn) => { const b = el("button", "btn small ghost", t); b.title = title; b.type = "button"; b.onclick = () => { sync(); fn(); renderSteps(rows); }; ctl.appendChild(b); };
+    mk("↑", "move up", () => { if (idx > 0) [rows[idx - 1], rows[idx]] = [rows[idx], rows[idx - 1]]; });
+    mk("↓", "move down", () => { if (idx < rows.length - 1) [rows[idx + 1], rows[idx]] = [rows[idx], rows[idx + 1]]; });
+    mk("✕", "remove", () => { rows.splice(idx, 1); });
+    row.read = () => {
+      const spec = PE.ops[op.value], out = { op: op.value };
+      if (spec.target) out.target = tgt.value;
+      const v = valWrap.querySelector("select, input");
+      if (spec.value && v) out.value = Number(v.value);
+      return out;
+    };
+    return row;
+  }
+  function renderSteps(rows) {
+    const box = $("#pe-steps"); box.innerHTML = "";
+    rows.forEach((r, i) => { box.appendChild(stepRow(r, i, rows)); });
+  }
+  async function openPresetEditor(preset, snapshot) {
+    try { PE = await api("/api/presets"); } catch (e) { toast(e.message, "bad"); return; }
+    const editing = !!preset && !snapshot;
+    const p = preset ? JSON.parse(JSON.stringify(preset)) : { id: "", name: "", desc: "", steps: [{ op: "make_resident" }] };
+    $("#pe-title").textContent = editing ? `Edit preset: ${p.name}` : snapshot ? "Save the current arrangement as a preset" : "New preset";
+    $("#pe-name").value = p.name; $("#pe-id").value = p.id; $("#pe-desc").value = p.desc || "";
+    $("#pe-id").disabled = editing;
+    let idTouched = editing || !!p.id;
+    $("#pe-name").oninput = () => { if (!idTouched) $("#pe-id").value = slug($("#pe-name").value); };
+    $("#pe-id").oninput = () => { idTouched = true; };
+    const rows = p.steps.map((s) => ({ ...s }));
+    const syncRows = () => { [...$("#pe-steps").children].forEach((row, i) => { rows[i] = row.read(); }); };
+    renderSteps(rows);
+    $("#pe-add").onclick = () => { syncRows(); rows.push({ op: "make_resident" }); renderSteps(rows); };
+    $("#pe-delete").hidden = !editing;
+    $("#pe-err").hidden = true;
+    const modal = $("#preset-modal"); modal.hidden = false;
+    $("#pe-name").focus();
+    const close = () => { modal.hidden = true; };
+    $("#pe-cancel").onclick = close;
+    $("#pe-delete").onclick = async () => {
+      if (!(await confirm(`Delete preset ${p.name}?`, "The preset is removed from presets.json. Nothing running changes."))) return;
+      try { await api("/api/presets/delete", { id: p.id }); toast(`preset ${p.id} deleted`); close(); await refreshPresets(); } catch (e) { showErr(e.message); }
+    };
+    const showErr = (m) => { const e = $("#pe-err"); e.textContent = m; e.hidden = false; };
+    $("#pe-save").onclick = async () => {
+      $("#pe-err").hidden = true;
+      syncRows();
+      const out = { id: $("#pe-id").value.trim(), name: $("#pe-name").value.trim(), desc: $("#pe-desc").value.trim(), steps: rows };
+      try {
+        const r = await api("/api/presets", { preset: out, by: "ui" });
+        toast(`preset ${r.preset.name} ${r.replaced ? "saved" : "created"}`); close(); await refreshPresets();
+      } catch (e) { showErr(e.message); }
+    };
+  }
+  async function refreshPresets() {
+    try { const r = await api("/api/presets"); INV.presets = r.presets; buildPresets(); } catch (e) { toast(e.message, "bad"); }
+  }
+  // what is on the card right now, as steps: resident model (and its context, for Maya), shims up, ComfyUI up
+  function snapshotPreset() {
+    const st = STATE || {}, steps = [];
+    const holders = st.holders || [];
+    if (!holders.length) steps.push({ op: "unload_all" });
+    for (const h of holders) {
+      const u = (INV.units || []).find((x) => x.id === h), i = (st.servers || {})[h] || {};
+      if (!u) continue;
+      steps.push({ op: "make_resident", target: h });
+      if (u.kind === "maya" && i.health && i.health.max_context && (u.context_choices || []).includes(i.health.max_context)) steps.push({ op: "set_context", target: h, value: i.health.max_context });
+    }
+    for (const sh of INV.shims || []) if (st.shims && st.shims[sh.id] && st.shims[sh.id].up) steps.push({ op: "start_shim", target: sh.id });
+    if (INV.comfyui && st.comfyui && st.comfyui.up) steps.push({ op: "comfy_start" });
+    const main = holders.length ? (INV.units.find((x) => x.id === holders[0]) || {}).name : "Card clear";
+    const stamp = new Date(); const hhmm = `${String(stamp.getHours()).padStart(2, "0")}${String(stamp.getMinutes()).padStart(2, "0")}`;
+    return { id: slug(`${main}-${hhmm}`), name: `${main} arrangement`, desc: `saved from the dashboard ${stamp.toLocaleString()}`, steps };
   }
 
   // ---- render ----
@@ -785,13 +905,15 @@
     setHelp("");
     buildCards();
     document.addEventListener("click", closeMenus);
+    $("#preset-new").onclick = () => openPresetEditor(null);
+    $("#preset-snap").onclick = () => openPresetEditor(snapshotPreset(), true);
     $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", `Unloads every resident model (${(INV.engines || []).map((e) => e.name).join(", ")})${INV.comfyui ? " and asks ComfyUI to drop its models" : ""}. Servers stay up.`, "killall")) action("unload_all"); };
     $("#plan-cancel").onclick = () => api("/api/plans/current/cancel", {}).then(() => toast("cancel requested")).catch((e) => toast(e.message, "bad"));
     $("#hist-refresh").onclick = loadHistory;
     $("#log-close").onclick = () => { $("#log-modal").hidden = true; logServer = null; };
     $("#log-refresh").onclick = refreshLog;
     $("#log-filter").onkeydown = (e) => { if (e.key === "Enter") refreshLog(); };
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; closeMenus(); } });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("#log-modal").hidden = true; $("#confirm-modal").hidden = true; $("#preset-modal").hidden = true; closeMenus(); } });
     loadHistory();
     connect();
     setInterval(() => { if (!$("#log-modal").hidden) refreshLog(); }, 4000);

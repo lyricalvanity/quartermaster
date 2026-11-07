@@ -65,7 +65,11 @@
   <section id="cards">
     <div id="bands"></div>
     <div class="group" data-group="services" id="grp-services-wrap" hidden><h2>Services</h2><div class="grid" id="grp-services"></div></div>
-    <div class="group"><h2>Presets</h2><div class="presets" id="presets"></div></div>
+    <div class="group" data-group="presets">
+      <div class="band-head"><h2>Presets</h2>
+        <div class="band-tools"><button class="btn small ghost" id="preset-snap" title="Save what is resident, its context, and which shims and services are up as a preset">Save current</button>
+          <button class="btn small ghost" id="preset-new">+ New</button></div></div>
+      <div class="presets" id="presets"></div></div>
   </section>
 
   <aside id="side">
@@ -104,6 +108,22 @@
       <button class="btn small" id="log-refresh">refresh</button>
       <button class="btn small ghost" id="log-close">close</button></div>
     <pre id="log-body"></pre>
+  </div>
+</div>
+
+<div class="modal" id="preset-modal" hidden>
+  <div class="modal-box preset-box">
+    <div class="m-head"><span id="pe-title">Preset</span></div>
+    <div class="pe-fields">
+      <label>Name <input id="pe-name" maxlength="60" placeholder="GLM long context"></label>
+      <label>Id <input id="pe-id" maxlength="40" placeholder="glm-long" pattern="[a-z0-9][a-z0-9-]*"></label>
+      <label class="wide">Description <input id="pe-desc" maxlength="200" placeholder="what this arrangement is for"></label>
+    </div>
+    <div class="pe-steps" id="pe-steps"></div>
+    <div class="pe-add"><button class="btn small" id="pe-add">+ step</button><span class="pe-hint">Steps run in order. A preset may only use the ops listed here, over the inventory's own ids.</span></div>
+    <div class="pe-err" id="pe-err" hidden></div>
+    <div class="m-foot"><button class="btn small danger ghost" id="pe-delete" hidden>Delete</button><span class="spacer"></span>
+      <button class="btn ghost" id="pe-cancel">Cancel</button><button class="btn primary" id="pe-save">Save</button></div>
   </div>
 </div>
 

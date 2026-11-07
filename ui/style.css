@@ -146,6 +146,27 @@ select, input { background: var(--bg3); border: 1px solid var(--line2); color: v
 .m-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; font-weight: 600; }
 .m-head input { flex: 1; }
 .m-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.m-foot .spacer { flex: 1; }
+/* the preset editor */
+.modal-box.preset-box { width: min(760px, 94vw); height: auto; max-height: 86vh; overflow: auto; }
+.preset { position: relative; }
+.preset .edit { position: absolute; right: 8px; top: 6px; font-size: 12px; color: var(--fg3); opacity: 0; transition: opacity .15s; padding: 2px 5px; border-radius: 5px; }
+.preset:hover .edit { opacity: 1; }
+.preset .edit:hover { color: var(--fg); background: var(--bg3); }
+.pe-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 10px; }
+.pe-fields label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--fg3); text-transform: uppercase; letter-spacing: .5px; }
+.pe-fields label.wide { grid-column: 1 / -1; }
+.pe-fields input { font-family: var(--sans); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.pe-steps { display: flex; flex-direction: column; gap: 6px; }
+.pe-row { display: grid; grid-template-columns: 24px minmax(170px, 1fr) minmax(150px, 1fr) minmax(90px, .6fr) auto; gap: 8px; align-items: center;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.pe-row .n { color: var(--fg3); font-family: var(--mono); font-size: 11px; text-align: right; }
+.pe-row select, .pe-row input { width: 100%; min-width: 0; }
+.pe-row .ctl { display: flex; gap: 2px; }
+.pe-row .ctl .btn { padding: 1px 6px; }
+.pe-add { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.pe-hint { color: var(--fg3); font-size: 11.5px; }
+.pe-err { margin-top: 8px; color: var(--bad); font-size: 12px; }
 #log-body { flex: 1; overflow: auto; margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 11px/1.45 var(--mono); color: var(--fg2); white-space: pre-wrap; }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 20; }
 .toast { background: var(--bg3); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; font-family: var(--mono); font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }

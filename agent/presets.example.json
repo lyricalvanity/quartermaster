@@ -1,5 +1,5 @@
 {
-  "_comment": "Presets, example. Copy to presets.json beside inventory.json. A preset is a list of steps over the agent's ops and the inventory's ids: make_resident, unload, unload_all, start, stop, park, unpark, set_context, set_budget, start_shim, stop_shim, comfy_start, comfy_stop, comfy_free, owui_start, owui_stop. presets.json is never committed (.gitignore).",
+  "_comment": "Presets, example. Copy to presets.json beside inventory.json, or make them in the page (+ New, Save current, the pencil on a preset): the agent writes this file itself. A preset is a list of steps over the agent's ops and the inventory's ids: make_resident, unload, unload_all, start, stop, stop_all, park, unpark, set_context, set_budget, start_shim, stop_shim, comfy_start, comfy_stop, comfy_free, owui_start, owui_stop. presets.json is never committed (.gitignore).",
   "presets": [
     {
       "id": "glm-long",
