@@ -31,8 +31,9 @@
     } catch (e) { toast(e.message, "bad"); }
   }
   // Theme copy carries {HOST}, {host}, {owner} and {N} (the number in the card's name); the inventory fills them in.
+  // Only HAL uses {owner}: HAL talks to its operator. The Matrix's screen talks to Neo, and the reader is Neo.
   // Themes that address someone by name fall back to their canon: HAL to Dave, the Matrix to Neo.
-  const OWNER_DEFAULT = { hal: "Dave", matrix: "Neo" };
+  const OWNER_DEFAULT = { hal: "Dave" };
   function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "Dave"; }
   function fill(s, theme) {
     const host = (INV && INV.host) || "HOST", gpu = (INV && INV.gpu && INV.gpu.name) || "";
@@ -925,7 +926,7 @@
       "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
     concord: ["Nerves Concord", "RAVEN TERMINAL  -  {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
       "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
-    matrix: ["Wake up, {owner}...", "The Matrix has you...", "Follow the white rabbit.", "", "Knock, knock. "],
+    matrix: ["Wake up, Neo...", "The Matrix has you...", "Follow the white rabbit.", "", "Knock, knock, Neo. "],   // the screen talks to Neo; whoever reads it is Neo
     precrime: ["Precrime", "DEPARTMENT OF PRECRIME  -  {HOST} DIVISION", "", "PRECOG LINK ............ ESTABLISHED",
       "PREVISION ARCHIVE ...... ONLINE", "CONTAINMENT ............ SEALED", "", "THE PRECOGS ARE NEVER WRONG."],
     ocp: ["OCP POLICE SYSTEMS", "LOAD BIOS", "COMMAND.COM", "MEMORY SET ............ OK", "SYSTEM STATUS ......... OK", "",

@@ -3,7 +3,7 @@
   "schema": 2,
   "host": "workstation",
   "owner": "Dave",
-  "_owner": "optional; some themes address the owner by name (HAL, the Matrix). Without it they use their canon.",
+  "_owner": "optional; HAL addresses the owner by name (Dave without one). The Matrix talks to Neo regardless.",
   "gpus": [
     {
       "index": 0,
