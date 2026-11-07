@@ -327,7 +327,7 @@ Each stage leaves the original workstation working.
 - Licence: **MIT** (the most permissive licence with an attribution clause that fits code).
 - Installer: **CLI**, for the reason in section 5. Presets are made in the page.
 - Update checks: **on click only**; a scheduled check is an option, off by default.
-- Owner's name in themes: an inventory field, canon default (HAL says Dave). The Matrix's screen addresses Neo whoever reads it (2026-11-07; it had used the owner's name).
+- Owner's name in themes: an inventory field (`owner`). Every start-up screen addresses the owner in its own idiom (HAL's good evening, the Matrix's wake-up, WOPR's professor, a crew manifest, a pilot line); without an owner each falls back to whoever its canon addressed (Dave, Neo, Falken, Ripley, ...). No name is in the code (2026-11-07).
 - The art queue ships as an **optional** module.
 - Linux: wanted; Windows first; the platform table in section 9 is the port.
 - Repository name: `quartermaster`.

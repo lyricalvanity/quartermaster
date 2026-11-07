@@ -3,7 +3,7 @@
   "schema": 2,
   "host": "workstation",
   "owner": "Dave",
-  "_owner": "optional; HAL addresses the owner by name (Dave without one). The Matrix talks to Neo regardless.",
+  "_owner": "optional; every theme's start-up screen addresses the owner by name (HAL's notices too). Without it each uses its canon: Dave, Neo, Falken, Ripley, ...",
   "gpus": [
     {
       "index": 0,

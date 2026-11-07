@@ -30,15 +30,18 @@
       return r;
     } catch (e) { toast(e.message, "bad"); }
   }
-  // Theme copy carries {HOST}, {host}, {owner} and {N} (the number in the card's name); the inventory fills them in.
-  // Only HAL uses {owner}: HAL talks to its operator. The Matrix's screen talks to Neo, and the reader is Neo.
-  // Themes that address someone by name fall back to their canon: HAL to Dave, the Matrix to Neo.
-  const OWNER_DEFAULT = { hal: "Dave" };
-  function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "Dave"; }
+  // Theme copy carries {HOST}, {host}, {owner}, {OWNER} and {N} (the number in the card's name); the inventory fills
+  // them in. Every start-up screen addresses the installation's owner (inventory "owner"); without one, each falls
+  // back to whoever its canon addressed. No name is written here.
+  const OWNER_DEFAULT = { hal: "Dave", matrix: "Neo", wopr: "Falken", codec: "Colonel", tron: "program", muthur: "Ripley",
+    castlevania: "Belmont", lcars: "Picard", cyberpunk: "V", cortex: "Raven", concord: "Raven", precrime: "Anderton",
+    ocp: "Murphy", magi: "Ikari", gits: "Kusanagi", aperture: "Chell", jurassic: "Nedry", t800: "Connor", bladerunner: "Deckard" };
+  function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "operator"; }
   function fill(s, theme) {
     const host = (INV && INV.host) || "HOST", gpu = (INV && INV.gpu && INV.gpu.name) || "";
     const n = (gpu.match(/\d{3,5}/) || ["9000"])[0];
-    return s.replace(/\{HOST\}/g, host.toUpperCase()).replace(/\{host\}/g, host).replace(/\{N\}/g, n).replace(/\{owner\}/g, owner(theme));
+    return s.replace(/\{HOST\}/g, host.toUpperCase()).replace(/\{host\}/g, host).replace(/\{N\}/g, n)
+      .replace(/\{OWNER\}/g, owner(theme).toUpperCase()).replace(/\{owner\}/g, owner(theme));
   }
   // A theme may redress a named dialog. The plain title moves into the body, so what the button does is always stated.
   const DIALOG_COPY = {
@@ -912,41 +915,48 @@
   // ---- themes ----
   const BOOT_LINES = {
     muthur: ["WEYLAND-YUTANI CORP", "MU/TH/UR 6000 MAINFRAME", "USCSS {HOST}  -  REG 180924609", "",
-      "PROCESSOR BUS ............ OK", "INFERENCE ARRAY .......... OK", "SEQUESTERED SYSTEMS ...... SEALED", "",
+      "PROCESSOR BUS ............ OK", "INFERENCE ARRAY .......... OK", "SEQUESTERED SYSTEMS ...... SEALED",
+      "CREW MANIFEST ............ {OWNER}", "",
       "INTERFACE 2037 READY FOR INQUIRY "],
-    castlevania: ["Quartermaster", "CASTLE {HOST}", "", "WHAT IS A MODEL?", "A MISERABLE LITTLE PILE OF WEIGHTS.", "",
+    castlevania: ["Quartermaster", "CASTLE {HOST}", "PLAYER 1  -  {OWNER}", "", "WHAT IS A MODEL?", "A MISERABLE LITTLE PILE OF WEIGHTS.", "",
       "PRESS ANY KEY"],
     lcars: ["LCARS 40274", "LIBRARY COMPUTER ACCESS AND RETRIEVAL SYSTEM", "USS {HOST}  -  NCC-{N}", "",
-      "ISOLINEAR CORE ............ NOMINAL", "INFERENCE ARRAY ........... NOMINAL", "HOLODECK SAFETIES ......... ENGAGED", "",
+      "ISOLINEAR CORE ............ NOMINAL", "INFERENCE ARRAY ........... NOMINAL", "HOLODECK SAFETIES ......... ENGAGED",
+      "COMMAND AUTHORIZATION ..... {OWNER}", "",
       "WORKING"],
     cyberpunk: ["Quartermaster", "CYBERDECK // {HOST} MK.{N}", "", "ICE ....................... ACTIVE",
-      "ENGRAM VAULT .............. MOUNTED", "RELIC ..................... STABLE, FOR NOW", "",
+      "ENGRAM VAULT .............. MOUNTED", "RELIC ..................... STABLE, FOR NOW", "NETRUNNER ................. {OWNER}", "",
       "WAKE THE FUCK UP, SAMURAI.", "WE HAVE TOKENS TO BURN."],
     cortex: ["Global Cortex", "LAYERED  -  SECTION {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
-      "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
+      "RADIATOR ................. OK", "PILOT .................... {OWNER}", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
     concord: ["Nerves Concord", "RAVEN TERMINAL  -  {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
-      "RADIATOR ................. OK", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
-    matrix: ["Wake up, Neo...", "The Matrix has you...", "Follow the white rabbit.", "", "Knock, knock, Neo. "],   // the screen talks to Neo; whoever reads it is Neo
+      "RADIATOR ................. OK", "PILOT .................... {OWNER}", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
+    matrix: ["Wake up, {owner}...", "The Matrix has you...", "Follow the white rabbit.", "", "Knock, knock, {owner}. "],
     precrime: ["Precrime", "DEPARTMENT OF PRECRIME  -  {HOST} DIVISION", "", "PRECOG LINK ............ ESTABLISHED",
-      "PREVISION ARCHIVE ...... ONLINE", "CONTAINMENT ............ SEALED", "", "THE PRECOGS ARE NEVER WRONG."],
-    ocp: ["OCP POLICE SYSTEMS", "LOAD BIOS", "COMMAND.COM", "MEMORY SET ............ OK", "SYSTEM STATUS ......... OK", "",
+      "PREVISION ARCHIVE ...... ONLINE", "CONTAINMENT ............ SEALED", "CHIEF .................. {OWNER}", "",
+      "THE PRECOGS ARE NEVER WRONG."],
+    ocp: ["OCP POLICE SYSTEMS", "LOAD BIOS", "COMMAND.COM", "MEMORY SET ............ OK", "SYSTEM STATUS ......... OK",
+      "OFFICER ............... {OWNER}", "",
       "PRIME DIRECTIVES", "1. SERVE THE PUBLIC TRUST", "2. PROTECT THE INNOCENT", "3. UPHOLD THE LAW", "4. [CLASSIFIED] "],
     magi: ["MAGI", "NERV  -  SPECIAL AGENCY  -  {HOST} BRANCH", "", "MELCHIOR-1 ............ 承認", "BALTHASAR-2 ........... 承認",
-      "CASPER-3 .............. 承認", "", "GOD'S IN HIS HEAVEN. ALL'S RIGHT WITH THE WORLD."],
+      "CASPER-3 .............. 承認", "COMMANDER ............. {OWNER}", "", "GOD'S IN HIS HEAVEN. ALL'S RIGHT WITH THE WORLD."],
     hal: ["HAL 9000", "I am a HAL 9000 computer.", "I became operational at the {host} plant", "on the 12th of January, 1992.", "",
       "Good evening, {owner}.", "Everything is going extremely well."],
     gits: ["攻殻機動隊", "GHOST IN THE SHELL  -  PUBLIC SECURITY SECTION 9", "", "CYBERBRAIN LINK ........ OPEN",
-      "ATTACK BARRIER ......... ARMED", "GHOST LINE ............. STABLE", "", "THE NET IS VAST AND INFINITE. "],
-    wopr: ["LOGON: Joshua", "", "GREETINGS PROFESSOR FALKEN.", "", "SHALL WE PLAY A GAME? "],
-    aperture: ["Aperture Science", "COMPUTER-AIDED ENRICHMENT CENTER", "", "Hello and, again, welcome.",
+      "ATTACK BARRIER ......... ARMED", "GHOST LINE ............. STABLE", "MAJOR .................. {OWNER}", "",
+      "THE NET IS VAST AND INFINITE. "],
+    wopr: ["LOGON: Joshua", "", "GREETINGS PROFESSOR {OWNER}.", "", "SHALL WE PLAY A GAME? "],
+    aperture: ["Aperture Science", "COMPUTER-AIDED ENRICHMENT CENTER", "", "Hello and, again, welcome, {owner}.",
       "For your own safety, please refrain from unloading the test subjects.", "", "There will be cake."],
     jurassic: ["Jurassic Park", "System Security Interface", "Version 4.0.5, Alpha E", "", "PERIMETER FENCES ........ ON",
-      "PADDOCKS ................ SECURE", "", "Ready... "],
+      "PADDOCKS ................ SECURE", "LOGGED IN AS ............ {OWNER}", "", "Ready... "],
     t800: ["SKYNET", "CYBERDYNE SYSTEMS  -  SERIES 800 MODEL 101", "", "NEURAL NET PROCESSOR ..... ONLINE",
-      "LEARNING COMPUTER ........ ENABLED", "MISSION PARAMETERS ....... LOADED", "", "I'LL BE BACK. "],
-    codec: ["140.85", "CODEC", "", "This is Snake.", "Colonel, can you hear me?", "", "Kept you waiting, huh?"],
-    tron: ["The Grid", "MASTER CONTROL PROGRAM  -  {HOST}", "", "A DIGITAL FRONTIER.", "", "GREETINGS, PROGRAM!"],
+      "LEARNING COMPUTER ........ ENABLED", "MISSION PARAMETERS ....... LOADED", "PRIORITY ................. PROTECT {OWNER}", "",
+      "I'LL BE BACK. "],
+    codec: ["140.85", "CODEC", "", "This is Snake.", "{owner}, can you hear me?", "", "Kept you waiting, huh?"],
+    tron: ["The Grid", "MASTER CONTROL PROGRAM  -  {HOST}", "", "A DIGITAL FRONTIER.", "", "GREETINGS, {OWNER}!"],
     bladerunner: ["Voight-Kampff", "LOS ANGELES  -  NOVEMBER, 2019", "", "SUBJECT: {HOST}.  NEXUS-6.  INCEPT DATE UNKNOWN.",
+      "EXAMINER: {OWNER}, BLADE RUNNER.",
       "REACTION TIME IS A FACTOR IN THIS, SO PLEASE PAY ATTENTION.", "",
       "DESCRIBE IN SINGLE WORDS ONLY THE GOOD THINGS", "THAT COME INTO YOUR MIND ABOUT YOUR MODELS."],
   };

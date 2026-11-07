@@ -39,6 +39,9 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
   sliver in OCP), and the radar marks of MU/TH/UR, Global Cortex and Nerves Concord turn only their sweep,
   with the glow trailing it, while the ring, crosshair and centre stay put. OCP's title is set a size smaller
   to fit beside a whole mark.
+- Every theme's start-up screen addresses the installation's owner (inventory `owner`) in its own idiom: a
+  crew manifest, a pilot line, a command authorization, "Wake up, …", "Greetings Professor …". Without an
+  owner each falls back to whoever its canon addressed. HAL and the Matrix had done this; the rest did not.
 
 ## 0.1.0 - 2026-11-07
 
