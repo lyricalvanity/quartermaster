@@ -26,6 +26,15 @@ From the first install on a second machine, a Linux laptop with Ollama and a lla
   `steps` and `update_note` in the inventory for an installation's own.
 - OpenWebUI's start, stop and update plans named an undefined `OWUI_TASKS` while waiting on the control log,
   so they failed after the task had been asked to run.
+- A `pnpm-global` update failed from the agent with `ERR_PNPM_GLOBAL_BIN_DIR_NOT_IN_PATH`: pnpm refuses a
+  global add while its global bin directory is off PATH, and an agent a service manager started never read the
+  shell profile that puts it there. The add and the rollback get that directory appended to PATH, read from
+  pnpm's config; setup's shim test reads it the same way, since `pnpm bin -g` refuses too.
+- An update record a version moved outside Quartermaster has caught up with is served as current: the band
+  or chip no longer shows `↑` with the version it already runs, the menu no longer offers it, and apply
+  refuses it.
+- A band's or chip's menu stays inside its band and the window: one that would cross an edge slides back, one
+  wider than the room wraps, and it fits again when a theme's face loads after it opened.
 
 ## 0.1.0 - 2026-11-07
 

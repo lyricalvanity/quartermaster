@@ -360,7 +360,24 @@
   const bands = {};
   function engineOf(s) { return INV.engines.find((e) => e.id === s.engine) || { id: s.engine, name: s.engine, slot: "e1" }; }
   function slotOf(s) { return s.legacy ? "e0" : engineOf(s).slot; }
-  function closeMenus() { document.querySelectorAll(".menu").forEach((m) => m.remove()); }
+  function closeMenus() { document.querySelectorAll(".menu").forEach((m) => { if (m._fit) m._fit.disconnect(); m.remove(); }); }
+  // A menu opens under its ▾ with the right edges aligned. One that would cross an edge of its band, or of the
+  // window where a theme's band runs past it, slides back inside (a client chip near the left goes right); one
+  // wider than that wraps its lines. It fits again whenever its size changes: a theme's face loads on first use
+  // and widens the menu after it opened.
+  function placeMenu(m) {
+    const fit = () => {
+      const g = (m.closest(".group") || document.body).getBoundingClientRect();
+      const left = Math.max(g.left, 0), right = Math.min(g.right, document.documentElement.clientWidth);
+      m.style.maxWidth = `${right - left}px`;
+      m.style.right = "";
+      const r = m.getBoundingClientRect();
+      if (r.left < left) m.style.right = `${r.left - left}px`;
+      else if (r.right > right) m.style.right = `${r.right - right}px`;
+    };
+    fit();
+    if (window.ResizeObserver) { m._fit = new ResizeObserver(fit); m._fit.observe(m); }
+  }
   function engineBand(e) {
     const g = el("div", "group"); g.dataset.group = e.id; g.dataset.slot = e.slot;
     const head = el("div", "band-head"); g.appendChild(head);
@@ -380,6 +397,7 @@
         if (await confirm(`Stop every ${e.name} unit?`, `This ends ${info.up || 0} server process${info.up === 1 ? "" : "es"}. Their models unload with them.`)) action("stop_all", e.id, { confirm: true });
       }, planRunning || !info.up);
       updateItems(item, e.id, e.name, info, planRunning);
+      placeMenu(m);
     };
     const grid = el("div", "grid"); grid.id = "grp-" + e.id; g.appendChild(grid);
     bands[e.id] = { root: g, ver, cnt, grid };
@@ -430,6 +448,7 @@
         const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.onclick = () => { closeMenus(); fn(); }; m.appendChild(b); return b; };
         if (c.config) item(`config: ${c.config}`, () => {}, true);
         updateItems(item, c.id, c.name || c.id, info, planRunning);
+        placeMenu(m);
       };
       chip.onmouseenter = () => setHelp(`${c.name}: ${c.bindings && c.bindings.length ? "points at " + c.bindings.map((b) => `${b.name} (${b.url})`).join(", ") : "no local bindings"}`);
       chip.onmouseleave = () => setHelp("");

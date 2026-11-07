@@ -280,7 +280,7 @@ def suggestions() -> list[dict]:
         out.append({"kind": "inventory", "title": f"No version source for {', '.join(no_ver)}",
                     "why": "the band shows nothing and an update check has nothing to compare",
                     "how": "give the engine a version_cmd, version_file or version_url in the inventory (the catalog record says which it has)."})
-    for uid, u in UPDATES.items():
+    for uid, u in ((STATE.get() or {}).get("updates") or UPDATES).items():
         if u.get("ok") and u.get("available"):
             out.append({"kind": "update", "title": f"{uid}: {u.get('latest')} is newer than {u.get('installed') or '?'}",
                         "why": f"from the check you ran {u.get('checked_at', '')}",
@@ -328,6 +328,14 @@ def update_ctx(entry: dict, role: str) -> dict:
     installed = engine_version(entry) if role == "engine" else (engine_version(entry) if entry.get("version_cmd") else entry.get("version"))
     return {"id": entry["id"], "name": entry.get("name", entry["id"]), "root": entry.get("root"), "python": py, "exe": entry.get("exe"),
             "installed": installed, "backup_root": entry.get("backup_root") or str(LOG_DIR / "update-backups")}
+
+
+def settled(u: dict, live: str | None) -> dict:
+    """An update record as of now. A version moved outside Quartermaster (by hand, or by the program's own
+    updater) to the one the check found leaves the record stale: the live version wins and nothing is offered."""
+    if u.get("ok") and u.get("available") and live and not updaters.newer(u.get("latest"), live):
+        return {**u, "installed": live, "available": False, "can_apply": False}
+    return u
 
 
 def remember_update(uid: str, rec: dict) -> None:
@@ -705,7 +713,8 @@ class State:
                     ports.append(int(m.group(1)))
             snap["clients"][c["id"]] = {"version": engine_version(c) if c.get("version_cmd") else c.get("version"), "ports": sorted(set(ports)),
                                         "recipe": rp.get("recipe") or "none", "recipe_note": rp.get("note")}
-        snap["updates"] = dict(UPDATES)
+        snap["updates"] = {uid: settled(u, (snap["engines"].get(uid) or snap["clients"].get(uid) or {}).get("version"))
+                           for uid, u in UPDATES.items()}
         with self.lock:
             self.snapshot = snap
         return snap
@@ -1282,6 +1291,9 @@ def op_apply_update(p: Plan):
             raise PlanFailed(f"stop {entry.get('name', p.target)}'s running units first: {', '.join(up)}")
     if not last.get("can_apply") and (rp.get("recipe") not in ("self",)):
         raise PlanFailed("run Check first; this recipe can be applied only from a check that found a newer version")
+    now = ctx.get("installed")
+    if last.get("available") and now and not updaters.newer(last.get("latest"), now):
+        raise PlanFailed(f"{ctx['name']} is already at {now}, moved outside Quartermaster since the check; run Check again")
     st = p.step(f"Update {ctx['name']}", f"{last.get('installed') or ctx.get('installed') or '?'} -> {last.get('latest') or 'its own newest'} ({rp.get('recipe')})")
     r = updaters.apply(rp, ctx, last.get("latest"))
     if r.get("backup"):

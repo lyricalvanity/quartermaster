@@ -628,8 +628,10 @@ def pnpm_owns(exe: str, pkg: str) -> bool:
     pm = which("pnpm")
     if not pm:
         return False
-    rc, o, _ = run([pm, "bin", "-g"], timeout=20)
+    rc, o, _ = run([pm, "config", "get", "global-bin-dir"], timeout=20)   # `pnpm bin -g` refuses while the dir is off PATH
     bindir = o.strip().splitlines()[-1].strip() if rc == 0 and o.strip() else ""
+    if bindir in ("", "undefined"):
+        bindir = os.environ.get("PNPM_HOME", "")
     same = lambda a: os.path.normcase(os.path.realpath(a))
     if not bindir or same(os.path.dirname(exe)) != same(bindir):
         return False

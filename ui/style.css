@@ -71,9 +71,9 @@ h2.toggle { cursor: pointer; user-select: none; }
 .client .band-tools { gap: 0; }
 .c-used { font-size: 11px; color: var(--fg3); }
 .band-menu { padding: 0 7px; line-height: 18px; }
-.menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 190px; display: flex; flex-direction: column; gap: 2px;
+.menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: max-content; min-width: 190px; display: flex; flex-direction: column; gap: 2px;
   background: var(--bg2); border: 1px solid var(--line2); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px -8px rgba(0,0,0,.6); }
-.menu .btn { text-align: left; justify-content: flex-start; }
+.menu .btn { text-align: left; justify-content: flex-start; white-space: normal; }
 .card.service { --accent: var(--busy); }
 .tag.bad { color: var(--bad); }
 a.btn { text-decoration: none; display: inline-block; }

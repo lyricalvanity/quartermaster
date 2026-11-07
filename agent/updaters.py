@@ -30,10 +30,10 @@ VER_RE = re.compile(r"\d+\.\d+(?:\.\d+)*(?:[-+.][0-9A-Za-z.]+)?")
 RECIPES = ("npm-global", "pnpm-global", "pip", "winget", "git-pull-pip-e", "git-check", "github-release", "self", "script", "comfy", "driver", "none")
 
 
-def sh(args, cwd=None, timeout=600):
+def sh(args, cwd=None, timeout=600, env=None):
     try:
         p = subprocess.run([str(a) for a in args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                           timeout=timeout, creationflags=NO_WINDOW, env=ENV)
+                           timeout=timeout, creationflags=NO_WINDOW, env=env or ENV)
         return p.returncode, p.stdout or "", p.stderr or ""
     except (OSError, subprocess.TimeoutExpired) as e:
         return 1, "", str(e)
@@ -85,6 +85,27 @@ def node_installed(pm: str, pkg: str) -> str | None:
     return None
 
 
+def pnpm_bin_dir() -> str | None:
+    """pnpm's global bin directory. `pnpm bin -g` refuses to answer while that directory is off PATH; the config
+    does not, and an unset one means PNPM_HOME."""
+    pm = which("pnpm")
+    if not pm:
+        return None
+    rc, o, _ = sh([pm, "config", "get", "global-bin-dir"], timeout=60)
+    d = o.strip().splitlines()[-1].strip() if rc == 0 and o.strip() else ""
+    return d if d and d != "undefined" else os.environ.get("PNPM_HOME")
+
+
+def node_env(pm: str) -> dict:
+    """pnpm refuses a global add while its global bin directory is off PATH, which it is for an agent a service
+    manager started: the login shell's profile is what put it there. That one call gets it appended."""
+    d = pnpm_bin_dir() if pm == "pnpm" else None
+    path = ENV.get("PATH", "")
+    if not d or os.path.normcase(d) in {os.path.normcase(x) for x in path.split(os.pathsep)}:
+        return ENV
+    return dict(ENV, PATH=path + os.pathsep + d)
+
+
 def npm_check(recipe, ctx):
     pm, pkg = NODE_PM[recipe["recipe"]], recipe.get("package")
     if not pkg:
@@ -108,7 +129,7 @@ def npm_apply(recipe, ctx, latest):
     before = node_installed(pm, pkg)
     if not before:
         return result(False, error=f"{pm} does not list {pkg} as global; not installing a second copy")
-    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{pkg}@{latest}"], timeout=900)
+    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{pkg}@{latest}"], timeout=900, env=node_env(pm))
     if rc:
         return result(False, before=before, error=f"{pm} install failed: {(e or o).strip()[-300:]}")
     after = node_installed(pm, pkg)
@@ -119,7 +140,8 @@ def npm_rollback(recipe, ctx, backup):
     if not backup or not backup.get("version"):
         return result(False, error="no previous version recorded")
     pm = NODE_PM[recipe["recipe"]]
-    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{backup['package']}@{backup['version']}"], timeout=900)
+    rc, o, e = sh([which(pm) or pm, "add" if pm == "pnpm" else "i", "-g", f"{backup['package']}@{backup['version']}"], timeout=900,
+                  env=node_env(pm))
     return result(rc == 0, note=(e or o).strip()[-200:])
 
 
