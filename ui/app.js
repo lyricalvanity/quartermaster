@@ -155,10 +155,12 @@
       mk.onclick = () => action("make_resident", s.id);
       act.appendChild(mk); refs.mk = mk;
       const un = el("button", "btn small", "Unload"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
-      const st = el("button", "btn small", "Start"); st.onclick = () => action("start", s.id); act.appendChild(st); refs.st = st;
-      const sp = el("button", "btn small danger", "Stop");
-      sp.onclick = async () => { const u = usedBy(s.port); if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.${u.length ? ` ${u.join(" and ")} point${u.length === 1 ? "s" : ""} at this port.` : ""}`)) action("stop", s.id, { confirm: true }); };
-      act.appendChild(sp); refs.sp = sp;
+      if (s.kind !== "llamacpp-router") {            // a router's model has no process of its own to start or stop: Unload ends it
+        const st = el("button", "btn small", "Start"); st.onclick = () => action("start", s.id); act.appendChild(st); refs.st = st;
+        const sp = el("button", "btn small danger", "Stop");
+        sp.onclick = async () => { const u = usedBy(s.port); if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.${u.length ? ` ${u.join(" and ")} point${u.length === 1 ? "s" : ""} at this port.` : ""}`)) action("stop", s.id, { confirm: true }); };
+        act.appendChild(sp); refs.sp = sp;
+      }
       if (s.parkable) { const pk = el("button", "btn small", "Park"); pk.onclick = () => action(c.classList.contains("parked") ? "unpark" : "park", s.id); act.appendChild(pk); refs.pk = pk; }
     } else {
       const un = el("button", "btn small", "Unload all"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
@@ -373,7 +375,7 @@
       const info = (STATE && STATE.engines && STATE.engines[e.id]) || {};
       const planRunning = STATE && STATE.plan && STATE.plan.status === "running";
       const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.onclick = () => { closeMenus(); fn(); }; m.appendChild(b); return b; };
-      if (e.kind !== "ollama") item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
+      if ((INV.units || []).some((u) => u.engine === e.id && u.kind !== "ollama" && u.kind !== "llamacpp-router")) item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
         if (await confirm(`Stop every ${e.name} unit?`, `This ends ${info.up || 0} server process${info.up === 1 ? "" : "es"}. Their models unload with them.`)) action("stop_all", e.id, { confirm: true });
       }, planRunning || !info.up);
       updateItems(item, e.id, e.name, info, planRunning);
@@ -766,8 +768,8 @@
         refs.mk.disabled = planRunning || (i.loaded && (st.holders || []).length === 1 && i.state === "ready");
         refs.mk.textContent = i.loaded && (st.holders || []).length === 1 ? "Resident" : "Make resident";
         refs.un.disabled = planRunning || !i.loaded;
-        refs.st.disabled = planRunning || i.up;
-        refs.sp.disabled = planRunning || !i.up;
+        if (refs.st) refs.st.disabled = planRunning || i.up;
+        if (refs.sp) refs.sp.disabled = planRunning || !i.up;
         if (refs.pk) { refs.pk.textContent = i.parked ? "Unpark" : "Park"; refs.pk.disabled = planRunning; }
         if (refs.sel && i.health && i.health.max_context && document.activeElement !== refs.sel && (s.context_choices || []).includes(i.health.max_context)) refs.sel.value = String(i.health.max_context);
         if (refs.sel) refs.sel.disabled = planRunning || !i.up;

@@ -27,22 +27,31 @@
   qm log <id> [n]                engine log tail
   qm history                     the action log
   qm cancel                      cancel the running plan
-Ids: see `qm status`. Key: agent.key beside this file."""
+Ids: see `qm status`. Key: agent.key beside this file, or in QM_HOME; QM_PORT picks the agent's port, as for the agent."""
 import json
+import os
 import sys
 import time
 import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-KEY = (HERE / "agent.key").read_text(encoding="utf-8").strip()
-BASE = "http://127.0.0.1:8790"
+HOME = Path(os.environ["QM_HOME"]).resolve() if os.environ.get("QM_HOME") else HERE
+BASE = f"http://127.0.0.1:{int(os.environ.get('QM_PORT') or 8790)}"
+
+
+def key():
+    """Read on the first call, not at import: `qm setup` runs before there is a key."""
+    try:
+        return (HOME / "agent.key").read_text(encoding="utf-8").strip()
+    except OSError:
+        sys.exit(f"no agent.key in {HOME}: run `qm setup` first")
 
 
 def call(method, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(BASE + path, data=data, method=method,
-                                 headers={"Authorization": "Bearer " + KEY, "Content-Type": "application/json"})
+                                 headers={"Authorization": "Bearer " + key(), "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, json.loads(r.read() or b"null")

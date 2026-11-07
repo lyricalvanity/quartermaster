@@ -88,6 +88,7 @@ def log(msg: str) -> None:
 PRESETS = HOME / "presets.json"
 SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
 ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI"}
+UNSTOPPABLE = ("ollama", "llamacpp-router")      # unit kinds whose process serves others too: unload, never stop
 
 
 def migrate_schema1(data: dict) -> tuple[dict, list]:
@@ -198,8 +199,9 @@ def engine_version(e: dict) -> str | None:
         elif e.get("version_cmd"):
             rc, out, err = run(list(e["version_cmd"]), timeout=25, cwd=e.get("root"))
             text = (out or err).strip()
-            m = re.search(r"\d+\.\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.]+)?", text)
-            v = m.group(0) if m else (text.splitlines()[0][:40] if text else v)
+            # version_re, when given, picks the number out of a busier --version (its first group that matched)
+            m = re.search(e.get("version_re") or r"\d+\.\d+(?:\.\d+)*(?:[-+][0-9A-Za-z.]+)?", text)
+            v = next((g for g in m.groups() if g), m.group(0)) if m else (text.splitlines()[0][:40] if text else v)
         elif e.get("version_url"):
             st, body = http("GET", e["version_url"], timeout=3.0)
             cur = body if st == 200 else None
@@ -291,11 +293,11 @@ def scan_proposals() -> dict:
     kinds = {k for k, _ in _setup.KINDS}
     found = _setup.detect_all(kinds)
     have_e = {e["id"] for e in INV.engines}
-    have_p = {s.get("port") for s in INV.servers.values()}
+    have_k = {_setup.unit_key(s) for s in INV.servers.values()}
     have_c = set(INV.clients)
     return {"engines": [e["id"] for e in found["engines"] if e["id"] not in have_e],
             "units": [{"id": u["id"], "engine": u["engine"], "port": u["port"], "name": u["name"], "running": u.get("running", False)}
-                      for u in found["units"] if u["port"] not in have_p],
+                      for u in found["units"] if _setup.unit_key(u) not in have_k],
             "services": [k for k in found["services"] if not getattr(INV, k, None)],
             "clients": [{"id": c["id"], "version": c.get("version")} for c in found["clients"] if c["id"] not in have_c],
             "notes": found["notes"]}
@@ -420,7 +422,11 @@ def gpu_apps():
         for line in out.strip().splitlines():
             parts = [p.strip() for p in line.split(",")]
             if len(parts) >= 2:
-                apps.append({"pid": parts[0], "name": Path(parts[1]).name})
+                name = Path(parts[1]).name
+                # Ollama's runner is its own copy of llama-server (lib/ollama/llama-server): name it for whose it is
+                if name.lower().startswith("llama-server") and "ollama" in parts[1].lower():
+                    name = host.exe_names(("ollama-runner",))[0]
+                apps.append({"pid": parts[0], "name": name})
     return apps
 
 
@@ -430,6 +436,49 @@ def process_list():
 
 
 pid_listening = host.pid_listening
+
+
+# ---- llama.cpp in router mode --------------------------------------------------------------------
+# llama-server started with --models-dir (or --models-preset) is a router: it holds no model itself, starts one
+# child llama-server per loaded model on a port of its own, and answers GET /models with each model's status.
+# Every model it offers is a unit of kind llamacpp-router (the router's port, its own router_model). Load and
+# unload go through POST /models/load and /models/unload; the router process is never ended for either.
+
+_ROUTER_CACHE: dict[int, tuple[float, dict | None]] = {}
+
+
+def router_models(port: int, max_age: float = 0.5) -> dict | None:
+    """{model id or alias: status} from a router's GET /models, or None when it does not answer. A poll probes
+    every unit of one router; one request serves them all."""
+    hit = _ROUTER_CACHE.get(port)
+    if hit and time.time() - hit[0] < max_age:
+        return hit[1]
+    try:
+        st, body = http("GET", f"http://127.0.0.1:{port}/models", timeout=2.0)
+    except Exception:  # noqa: BLE001 - down
+        st, body = 0, None
+    out = None
+    if st == 200 and isinstance(body, dict):
+        out = {}
+        for m in body.get("data") or []:
+            if isinstance(m, dict) and m.get("id"):
+                for name in [m["id"], *(m.get("aliases") or [])]:
+                    out[name] = m.get("status") or {}
+    _ROUTER_CACHE[port] = (time.time(), out)
+    return out
+
+
+def router_arg(status: dict, flag: str) -> str | None:
+    """One flag's value from the argv the router runs (or would run) a model's child with."""
+    a = [str(x) for x in status.get("args") or []]
+    return a[a.index(flag) + 1] if flag in a and a.index(flag) + 1 < len(a) else None
+
+
+def systemctl_user(p: Plan, st, verb: str, unit: str, timeout: float = 60):
+    p.say(st, f"systemctl --user {verb} {unit}")
+    rc, out, err = host.run(["systemctl", "--user", verb, unit], timeout=timeout)
+    if rc != 0:
+        raise PlanFailed(f"systemctl --user {verb} {unit} failed: {(err or out).strip()[:200]}")
 
 
 # ---- state -------------------------------------------------------------------
@@ -469,6 +518,30 @@ class State:
                             models=[{"name": m.get("name"), "size_vram_gib": round((m.get("size_vram") or 0) / 2**30, 1),
                                      "size_gib": round((m.get("size") or 0) / 2**30, 1),
                                      "expires_at": m.get("expires_at")} for m in models])
+                return info
+            if kind == "llamacpp-router":
+                # the router's /health says ok with nothing loaded: a model's own status is the only truth
+                models = router_models(port)
+                if models is None:
+                    return info
+                info["up"] = True
+                status = models.get(s.get("router_model") or "")
+                if status is None:
+                    info["health"] = {"status": "not offered by the router"}
+                    return info
+                value = str(status.get("value") or "")
+                ctx = router_arg(status, "--ctx-size") or ""
+                info["health"] = {"status": value, "model": s.get("router_model"), **({"max_context": int(ctx)} if ctx.isdigit() else {})}
+                info["loaded"] = value == "loaded"
+                child = router_arg(status, "--port") or ""
+                if info["loaded"] and child.isdigit():
+                    try:
+                        st2, slots = http("GET", f"http://127.0.0.1:{child}/slots", timeout=1.0)
+                        if st2 == 200 and isinstance(slots, list):
+                            info["busy"] = any(isinstance(x, dict) and x.get("is_processing") for x in slots)
+                    except Exception:  # noqa: BLE001 - busy only guards an unload; the state stands without it
+                        pass
+                info["state"] = "busy" if info["busy"] else "ready" if info["loaded"] else "loading" if value == "loading" else "idle"
                 return info
             st, h = http("GET", base + "/health", timeout=2.0)
             if st != 200 or not isinstance(h, dict):
@@ -862,6 +935,14 @@ def op_unload_server(p: Plan, sid: str, force=False):
             p.say(st, "llama-server loads one model at start and keeps it; unloading is stopping the process")
             p.done_step(st)
             op_stop_process(p, sid)
+        elif kind == "llamacpp-router":
+            # the router ends this model's child process and stays up for the others
+            code, r = http("POST", base + "/models/unload", body={"model": s["router_model"]}, timeout=60)
+            _ROUTER_CACHE.pop(s["port"], None)
+            p.say(st, f"/models/unload {s['router_model']} -> {code} {json.dumps(r)[:160]}")
+            if code >= 400:
+                raise PlanFailed(f"{name} refused to unload: {json.dumps(r)[:200]}")
+            _wait(p, st, lambda: (not fresh_info(sid).get("loaded"), "still loaded"), s["timeouts"].get("unload_s", 60), what=f"{name} to release the card")
         elif kind == "maya":
             code, r = http("POST", base + "/models/unload", body={}, timeout=60)
             p.say(st, f"/models/unload -> {code} {json.dumps(r)[:160]}")
@@ -898,9 +979,19 @@ def op_stop_process(p: Plan, sid: str):
         return op_stop_launch(p, sid)
     if s["kind"] == "ollama":
         raise PlanFailed("Ollama is a service; unload its models instead")
-    st = p.step(f"Stop {s['name']} process", f"the process listening on {s['port']}")
+    if s["kind"] == "llamacpp-router":
+        raise PlanFailed(f"{s['name']} is one model of the llama.cpp router on :{s['port']}; Unload ends its process, and the router, "
+                         "which serves the others, is not stopped from here")
+    unit = (s.get("start") or {}).get("systemd_user")
+    st = p.step(f"Stop {s['name']} process", f"systemd user unit {unit}" if unit else f"the process listening on {s['port']}")
     STATE.set_transient(sid, "stopping")
     try:
+        if unit:
+            # a killed service is a clean exit to systemd (no restart) and a stale state; let it stop its own
+            systemctl_user(p, st, "stop", unit, timeout=s["timeouts"].get("unload_s", 60) + 30)
+            _wait(p, st, lambda: (not fresh_info(sid).get("up"), "port still open"), 60, what=f"{s['name']} to exit")
+            p.done_step(st)
+            return
         pids = pid_listening(s["port"])
         if not pids:
             p.done_step(st, "nothing listening")
@@ -940,6 +1031,13 @@ def op_start_server(p: Plan, sid: str):
             # launch returns once it serves; we wait on health, not on the process
             _wait(p, st, lambda: (fresh_info(sid).get("up"), f"launch pid {proc.pid} {'alive' if proc.poll() is None else 'exited ' + str(proc.returncode)}"),
                   s["timeouts"]["start_s"], what=f"{s['name']} to open port {s['port']}")
+        elif (s.get("start") or {}).get("systemd_user"):
+            # a server systemd keeps (a router most often): start its unit, never a second copy beside it
+            systemctl_user(p, st, "start", s["start"]["systemd_user"])
+            _wait(p, st, lambda: (fresh_info(sid).get("up"), "waiting for the port"), s["timeouts"].get("start_s", 120),
+                  what=f"{s['name']} to open port {s['port']}")
+        elif not (s.get("start") or {}).get("argv"):
+            raise PlanFailed(f"{s['name']} is down and the inventory gives no way to start it")
         else:
             p.say(st, " ".join(s["start"]["argv"]))
             out_path = LOG_DIR / f"{sid}.out.log"
@@ -1002,6 +1100,13 @@ def op_load_server(p: Plan, sid: str):
                     result["r"] = (0, str(e))
             threading.Thread(target=fire, daemon=True).start()
             p.say(st, "/models/load sent")
+        elif s["kind"] == "llamacpp-router":
+            # answers at once; the model's status in GET /models goes loading -> loaded
+            code, r = http("POST", base + "/models/load", body={"model": s["router_model"]}, timeout=60)
+            _ROUTER_CACHE.pop(s["port"], None)
+            p.say(st, f"/models/load {s['router_model']} -> {code} {json.dumps(r)[:120]}")
+            if code >= 400:
+                result["r"] = (code, r)
         # strata-launch loads at start; nothing to send
         logp = s.get("log")
 
@@ -1123,13 +1228,14 @@ def op_stop(p: Plan):
 
 
 def op_stop_all(p: Plan):
-    """End every running unit of one engine (the band's menu). Ollama is a service and is skipped."""
+    """End every running unit of one engine (the band's menu). Ollama and a llama.cpp router's models are served
+    by a process that is not theirs to end, and are skipped."""
     if not p.args.get("confirm"):
         raise PlanFailed("stop_all ends server processes: send confirm=true")
     if p.target not in INV.engine_by_id:
         raise PlanFailed("unknown engine")
     st = STATE.get()["servers"]
-    ups = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and s["kind"] != "ollama" and st.get(sid, {}).get("up")]
+    ups = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and s["kind"] not in UNSTOPPABLE and st.get(sid, {}).get("up")]
     if not ups:
         s = p.step("Nothing running", INV.engine_by_id[p.target]["name"])
         p.done_step(s)

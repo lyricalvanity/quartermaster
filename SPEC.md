@@ -73,6 +73,7 @@ Capabilities are declared per **kind**, not per install:
 | maya | yes | yes | yes | yes | declared |
 | ollama | live list | yes | service | per model | declared or self |
 | llamacpp | yes | yes | yes | no (one model per process) | declared |
+| llamacpp-router | one per model it offers | yes (its children) | the router's own unit, never from the page | per model | declared |
 | comfyui | no | yes | yes | free | built in (version 1) |
 
 ### 3.3 Services
@@ -279,9 +280,10 @@ Docker-based services get easier on Linux, not harder. The nginx container is un
 `kill_tree`, `kill`, `popen_detached`, `exe_names`, `python_console`); the agent calls those and nothing
 platform-specific of its own except the two Windows-only drivers (scheduled tasks, the consent prompt),
 which refuse plainly elsewhere. `setup.py` writes a systemd user unit on Linux. The Linux branches were
-run under WSL Ubuntu (memory, listeners, command lines, a detached session, a group kill); a Linux box with
-engines on it has not run the agent yet. Per-process VRAM on Linux comes from `nvidia-smi`'s compute-apps
-list, which, unlike the Windows counter, does not see graphics-only clients.
+run under WSL Ubuntu (memory, listeners, command lines, a detached session, a group kill); on 2026-11-07 a
+Linux laptop with Ollama and a llama.cpp router (both on Vulkan, both under systemd user units) ran setup and
+the agent. Per-process VRAM on Linux comes from `nvidia-smi`'s compute-apps list, which, unlike the Windows
+counter, does not see graphics-only clients; Vulkan engines do appear there (as C+G), with their memory.
 
 ## 10. Repository hygiene
 
@@ -307,7 +309,7 @@ Each stage leaves the original workstation working.
 | 3 | `setup` and `detect`: host facts, the detectors, launcher and key | **done 2026-11-06** |
 | 4 | Preset editor and Save-current; `presets.json` | **done 2026-11-06** |
 | 5 | Updaters as catalog recipes, and the clients strip with bindings | **done 2026-11-06** |
-| 6 | Platform module and the Linux implementation | **done 2026-11-06** (WSL-tested; a real Linux host still owed) |
+| 6 | Platform module and the Linux implementation | **done 2026-11-06** (WSL-tested; a Linux host with engines 2026-11-07) |
 | 7 | Catalog panel, suggestions, guides; detectors read the catalog's conventions | **done 2026-11-06** (panel, suggestions, scan, guides); detectors-from-records still to do |
 | later | multi-GPU placement; a fleet view that reads several agents; an optional scheduled update check (off) | |
 

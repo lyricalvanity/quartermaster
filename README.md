@@ -9,8 +9,8 @@ nineteen themes because a status page you look at every day should be a pleasure
 It was built on one workstation and generalised so it can be installed on yours: `setup.py` finds what the
 machine runs and writes the inventory; a catalog of kinds carries detection, update recipes and guides. It
 runs on **Windows** (where it was built and is used daily) and on **Linux** through a platform module whose
-branches were exercised under WSL Ubuntu but not yet on a Linux box with engines on it; one NVIDIA GPU either
-way. Version 0.1.0; the design and what remains are in [SPEC.md](SPEC.md).
+branches were exercised under WSL Ubuntu and then on a Linux laptop running Ollama and a llama.cpp router on
+Vulkan (2026-11-07); one NVIDIA GPU either way. Version 0.1.0; the design and what remains are in [SPEC.md](SPEC.md).
 
 ![Quartermaster, plain theme](docs/img/plain.png)
 
@@ -110,7 +110,7 @@ first time the agent loads it: the original is kept as `inventory.schema1.json` 
 | `ram_total_gib`, `pin_budget_gib`, `commit_warn_gib` | the RAM gauge and its warning lines |
 | `policy` | `unload_ollama_on_resident`, `free_comfyui_on_resident`, `park_8099_default`, `humans_only` |
 | `engines[]` | one per runtime, in the order the bands appear: `id`, `kind` (`strata`, `maya`, `ollama`, …), `name`, optional `root`, and one version source: `version` (a string), `version_file`, `version_cmd` (argv; the first version-looking token of its output) or `version_url` + `version_path` (a dotted JSON path). All local; read on a click or a reload, cached ten minutes |
-| `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya` or `ollama`; `start.argv` and `cwd`; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
+| `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya`, `ollama`, `llamacpp` or `llamacpp-router` (one model of a llama.cpp router: `router_model` names it, load and unload go through the router, and the router is never stopped from the page); `start.argv` and `cwd`, or `start.systemd_user` for a server a systemd user unit keeps; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
 | `shims[]` | small proxies that front a unit on another port (an Ollama-API shim for an OpenAI-style server, say) |
 | `clients[]` | programs that consume the units (Pi, Codex CLI, Claude Code): executable, version command, and the local URLs their configuration points at. Written by setup; the page's client strip is a later stage |
 | `openwebui` | optional tile; this driver runs three named Windows scheduled tasks (`tasks`) and reads health, version and two logs |
@@ -208,7 +208,7 @@ fan reference only.
 
 0.1.0 (see [CHANGELOG.md](CHANGELOG.md)). Built on one workstation in November 2026 and in daily use there;
 the seven stages of the generalisation in [SPEC.md](SPEC.md) are done. Tested on that machine and under
-WSL; not yet installed on a second machine by anyone, which is the next thing that should happen. What
+WSL, and installed on a second machine, a Linux laptop, on 2026-11-07. What
 remains: detectors reading their conventions from the catalog records instead of code, a systemd service
 driver, more than one card, a fleet view across several agents, the optional scheduled update check (off
 by default). Issues and pull requests welcome ([CONTRIBUTING.md](CONTRIBUTING.md)); the rules under "What it

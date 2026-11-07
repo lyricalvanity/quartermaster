@@ -222,8 +222,45 @@ def cmdlines(pids: list[int]) -> dict[int, str]:
     return res
 
 
+def argv_of(pid: int, cmd: str) -> list[str]:
+    """A process's argv: exact from /proc on Linux, split from its command line elsewhere."""
+    if not WIN:
+        try:
+            return [a.decode("utf-8", "replace") for a in Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0") if a]
+        except OSError:
+            pass
+    return [a or b for a, b in re.findall(r"\"([^\"]+)\"|(\S+)", cmd)]
+
+
+def router_list(port: int) -> list[dict]:
+    """A llama.cpp router's GET /models: [{id, status: {value, args}, ...}], [] if it does not answer."""
+    st, body = get_json(f"http://127.0.0.1:{port}/models")
+    return [m for m in (body or {}).get("data", []) if isinstance(m, dict) and m.get("id")] if st == 200 and isinstance(body, dict) else []
+
+
+def flag(args: list, name: str) -> str | None:
+    args = [str(a) for a in args]
+    return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else None
+
+
+def systemd_unit(pid: int) -> tuple[str, str] | None:
+    """("user" | "system", "name.service") when systemd keeps this process, from its cgroup (Linux)."""
+    if WIN:
+        return None
+    try:
+        cg = Path(f"/proc/{pid}/cgroup").read_text().strip().splitlines()[-1].split(":", 2)[-1]
+    except (OSError, IndexError):
+        return None
+    leaf = cg.rstrip("/").rsplit("/", 1)[-1]
+    if not leaf.endswith(".service") or leaf.startswith("user@"):
+        return None
+    return ("user" if "/user@" in cg else "system"), leaf
+
+
 def running_servers() -> list[dict]:
-    """Recognisable engine processes behind listening ports: [{port, pid, kind, cmd}]."""
+    """Recognisable engine processes behind listening ports: [{port, pid, kind, cmd}]. Two kinds are for telling
+    apart only and no detector takes them: ollama-runner (Ollama's own llama-server, one per loaded model) and
+    llamacpp-child (a model a llama.cpp router started on a port of its own)."""
     ports = listening()
     cl = cmdlines(sorted(set(ports.values())))
     found = []
@@ -236,14 +273,39 @@ def running_servers() -> list[dict]:
         elif "maya.py" in low or "maya.exe" in low:
             kind = "maya"
         elif "llama-server" in low:
-            kind = "llamacpp"
+            # Ollama ships its runner as lib/ollama/llama-server: that one is Ollama's, not a llama.cpp install
+            kind = "ollama-runner" if "ollama" in low.split("llama-server", 1)[0] else "llamacpp"
         elif "comfyui" in low and "main.py" in low:
             kind = "comfyui"
         elif "ollama" in low:
             kind = "ollama"
         if kind:
             found.append({"port": port, "pid": pid, "kind": kind, "cmd": cmd})
+    children = set()
+    for r in found:
+        if r["kind"] != "llamacpp":
+            continue
+        st, props = get_json(f"http://127.0.0.1:{r['port']}/props")
+        if (isinstance(props, dict) and props.get("role") == "router") or re.search(r"--models-(dir|preset)\b", r["cmd"]):
+            r["kind"] = "llamacpp-router"
+            for m in router_list(r["port"]):
+                child = flag((m.get("status") or {}).get("args") or [], "--port") or ""
+                if child.isdigit() and int(child):
+                    children.add(int(child))
+    for r in found:
+        if r["kind"] == "llamacpp" and r["port"] in children:
+            r["kind"] = "llamacpp-child"
     return found
+
+
+def unit_key(u: dict) -> tuple:
+    """What makes a unit the same unit for detect: its port, and for a router's model, which model."""
+    return u.get("port"), u.get("router_model")
+
+
+def quant_of(stem: str) -> str:
+    m = re.search(r"(?:^|[-_.])(i?q\d(?:_[a-z0-9]+)*|bf16|f16|f32|mxfp4)$", stem, re.I)
+    return m.group(1).upper() if m else ""
 
 
 # ---- detectors ---------------------------------------------------------------------------
@@ -361,28 +423,64 @@ def detect_ollama(seen: dict) -> dict:
     return out
 
 
+def start_for(r: dict, argv: list[str]) -> tuple[dict, str]:
+    """How the agent should start a server it found running: its systemd user unit when systemd keeps it (never
+    a second copy beside the unit), nothing for a system unit (that is root's), else the argv it runs with."""
+    su = systemd_unit(r["pid"])
+    if su and su[0] == "user":
+        return {"systemd_user": su[1]}, f" (systemd user unit {su[1]})"
+    if su:
+        return {}, f" (system unit {su[1]}: start and stop it with sudo systemctl; the agent will not)"
+    return {"argv": argv, "cwd": str(Path(argv[0]).parent) if argv else ""}, ""
+
+
 def detect_llamacpp(seen: dict, running: list[dict]) -> dict:
     out = {"engines": [], "units": [], "notes": []}
     exe = which("llama-server") or next((str(p) for p in (HOMEDIR / "llama.cpp" / ("llama-server.exe" if WIN else "llama-server"),) if p.exists()), None)
-    procs = [r for r in running if r["kind"] == "llamacpp"]
+    procs = [r for r in running if r["kind"] in ("llamacpp", "llamacpp-router")]
+    if not exe and procs:
+        first = argv_of(procs[0]["pid"], procs[0]["cmd"])[:1]
+        exe = first[0] if first and Path(first[0]).exists() else None
     if not exe and not procs:
         return out
     e = {"id": "llamacpp", "kind": "llamacpp", "name": "llama.cpp"}
     if exe:
-        e["root"], e["version_cmd"] = str(Path(exe).parent), [exe, "--version"]
+        # releases were tagged by build (b6123) and are now versions (v0.9.0); --version says "version: 0.8.0-dev
+        # (build 11800, ...)" on a new build and "version: 6123 (abc)" on an old one: take whichever matches the tags
+        e["root"], e["version_cmd"], e["version_re"] = str(Path(exe).parent), [exe, "--version"], r"version: (\d+\.\d+[\w.\-]*)|version: (\d+) \("
     out["engines"].append(e)
+    taken = set(seen.values())
     for r in procs:
         if r["port"] in seen:
             continue
+        argv = argv_of(r["pid"], r["cmd"])
+        start, how = start_for(r, argv)
+        if r["kind"] == "llamacpp-router":
+            models = router_list(r["port"])
+            for m in models:
+                status = m.get("status") or {}
+                args = status.get("args") or []
+                gguf, ctx = flag(args, "--model") or "", flag(args, "--ctx-size") or ""
+                uid = m["id"] if m["id"] not in taken else f"{m['id']}-{r['port']}"
+                taken.add(uid)
+                out["units"].append({
+                    "id": uid, "engine": "llamacpp", "kind": "llamacpp-router", "name": m["id"], "model": Path(gguf).name if gguf else m["id"],
+                    "router_model": m["id"], "context": int(ctx) if ctx.isdigit() else None,
+                    "vision": "image" in ((m.get("architecture") or {}).get("input_modalities") or []),
+                    "quant": quant_of(Path(gguf).stem if gguf else m["id"]), "port": r["port"], "footprint": {"vram_gib": None, "ram_gib": None},
+                    "start": start, "log": "", "timeouts": {"start_s": 120, "load_s": 180, "unload_s": 60},
+                    "notes": "one model of a llama.cpp router: load and unload through its API (POST /models/load, /models/unload); the router itself is never stopped from here"})
+            seen[r["port"]] = "llamacpp-router"
+            out["notes"].append(f"llama.cpp router on :{r['port']} offers {len(models)} model{'s' if len(models) != 1 else ''}{how}")
+            continue
         m = re.search(r"(?:-m|--model)\s+\"?([^\"\s]+)", r["cmd"])
         model = Path(m.group(1)).stem if m else f"llama-server :{r['port']}"
-        argv = [a for a in re.findall(r"\"([^\"]+)\"|(\S+)", r["cmd"])]
-        argv = [a or b for a, b in argv]
+        if start.get("argv"):
+            start["loads_at_start"] = True
         out["units"].append({"id": f"llama-{r['port']}", "engine": "llamacpp", "kind": "llamacpp", "name": model, "model": model,
-                             "context": None, "vision": False, "quant": "", "port": r["port"], "footprint": {"vram_gib": None, "ram_gib": None},
-                             "start": {"argv": argv, "cwd": str(Path(argv[0]).parent) if argv else "", "loads_at_start": True},
-                             "log": "", "timeouts": {"start_s": 300, "load_s": 300, "unload_s": 30},
-                             "notes": "described from the running process; one model for the server's life, unload = stop"})
+                             "context": None, "vision": False, "quant": quant_of(model), "port": r["port"], "footprint": {"vram_gib": None, "ram_gib": None},
+                             "start": start, "log": "", "timeouts": {"start_s": 300, "load_s": 300, "unload_s": 30},
+                             "notes": "described from the running process; one model for the server's life, unload = stop" + how})
         seen[r["port"]] = f"llama-{r['port']}"
     if exe and not procs:
         out["notes"].append(f"llama-server found at {exe}; a unit is proposed only while one is running (start it, then `detect`)")
@@ -685,7 +783,7 @@ def do_setup(home: Path) -> int:
     if not pre.exists():
         presets = [{"id": "clear", "name": "Clear the card", "desc": "Nothing resident: small models and image work get the whole card", "steps": [{"op": "unload_all"}]}]
         for u in inv["units"]:
-            if u["kind"] in ("strata", "strata-launch", "maya", "llamacpp") and not u.get("legacy"):
+            if u["kind"] in ("strata", "strata-launch", "maya", "llamacpp", "llamacpp-router") and not u.get("legacy"):
                 presets.append({"id": f"resident-{u['id']}", "name": f"{u['name'][:30]} resident", "desc": f"{u['name']} on :{u['port']}, nothing else on the card",
                                 "steps": [{"op": "make_resident", "target": u["id"]}]})
         write_json(pre, {"presets": presets})
@@ -717,10 +815,10 @@ def do_detect(home: Path) -> int:
     found = detect_all(kinds)
     have_e = {e["id"] for e in inv.get("engines", [])}
     have_u = {u["id"] for u in inv.get("units", [])}
-    have_p = {u.get("port") for u in inv.get("units", [])}
+    have_k = {unit_key(u) for u in inv.get("units", [])}
     have_c = {c["id"] for c in inv.get("clients", [])}
     new_e = [e for e in found["engines"] if e["id"] not in have_e]
-    new_u = [u for u in found["units"] if u["id"] not in have_u and u["port"] not in have_p]
+    new_u = [u for u in found["units"] if u["id"] not in have_u and unit_key(u) not in have_k]
     new_s = {k: s for k, s in found["services"].items() if k not in inv}
     new_c = [c for c in found["clients"] if c["id"] not in have_c]
     for n in found["notes"]:

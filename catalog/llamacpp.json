@@ -1,7 +1,7 @@
 {
   "id": "llamacpp",
   "name": "llama.cpp",
-  "what": "The reference GGUF inference engine. llama-server serves one model per process over an OpenAI-style API with every knob exposed on the command line.",
+  "what": "The reference GGUF inference engine. llama-server serves one model per process over an OpenAI-style API with every knob exposed on the command line; started with --models-dir (or --models-preset) it is a router instead, starting one child llama-server per model it is asked to load.",
   "licence": "MIT",
   "home": "https://github.com/ggml-org/llama.cpp",
   "tier": "A",
@@ -12,19 +12,23 @@
     "roots": ["~/llama.cpp"],
     "ports": [8080],
     "health": "/health",
-    "version": {"cmd": ["llama-server", "--version"]},
-    "note": "a unit is proposed from a running llama-server (its -m and --port), since there is no configuration file convention"
+    "version": {"cmd": ["llama-server", "--version"], "re": "version: (\\d+\\.\\d+[\\w.\\-]*)|version: (\\d+) \\("},
+    "router": {"flags": ["--models-dir", "--models-preset"], "props_role": "router"},
+    "note": "a unit is proposed from a running llama-server (its -m and --port), since there is no configuration file convention. A router (GET /props says role router) gives one unit per model in its GET /models; its children, on ports of their own, are not units. Ollama's runner is a llama-server too (lib/ollama/llama-server) and belongs to Ollama. A server a systemd user unit keeps is started and stopped through that unit."
   },
   "drive": {
-    "endpoints": {"health": "GET /health", "models": "GET /v1/models"},
-    "can": ["start a unit with its recorded argv", "stop it", "treat it as loaded while it answers /health"],
-    "cannot": ["unload without stopping: one model for the server's life", "change the context without a restart"]
+    "endpoints": {"health": "GET /health", "models": "GET /v1/models", "router models": "GET /models (each model's status and its child's argv)",
+                  "router load": "POST /models/load {model}", "router unload": "POST /models/unload {model}"},
+    "can": ["start a unit with its recorded argv", "stop it", "treat it as loaded while it answers /health",
+            "a router: load and unload each model through its API; see a child busy in its /slots"],
+    "cannot": ["a single server: unload without stopping (one model for the server's life)", "change the context without a restart",
+               "a router: stop it from the page (it serves every model; its own unit stops it)"]
   },
   "launch": {"argv": ["llama-server", "-m", "<model.gguf>", "--port", "<port>", "-ngl", "99", "-c", "<context>"], "never": ["--host 0.0.0.0 without a reverse proxy in front: there is no login"]},
   "update": {
     "recipe": "github-release",
     "github": "ggml-org/llama.cpp",
-    "note": "Releases are build numbers (b1234). Download the archive that matches your CUDA or CPU and replace the folder; the check compares the running build to the newest release."
+    "note": "Releases were build numbers (b1234) and are now versions (v0.9.0); --version gives the version on a new build and the build on an old one. Download the archive that matches your CUDA, Vulkan or CPU and replace the folder; the check compares the installed version to the newest release."
   },
   "install": {
     "windows": ["Download llama-<build>-bin-win-cuda-<cuda>-x64.zip (and the matching cudart zip) from the releases page, unpack beside each other, put the folder on PATH."],
@@ -33,6 +37,6 @@
   },
   "fits": {
     "good": ["any GGUF, any quant, exact control of layers, context and KV types", "the newest model architectures first"],
-    "not": ["switching between models without restarting", "a store, a pull command, or a UI: bring your own"]
+    "not": ["switching between models without restarting, unless it runs as a router", "a store, a pull command, or a UI: bring your own"]
   }
 }

@@ -21,6 +21,7 @@ __pycache__/
 # generated launchers carry local paths; templates ship instead
 run-quartermaster.bat
 Quartermaster Agent.cmd
+quartermaster.service
 
 # fonts copied from C:\Windows\Fonts are Microsoft's and stay where they were copied;
 # Michroma (SIL Open Font License) ships with its licence

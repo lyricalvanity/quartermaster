@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+From the first install on a second machine, a Linux laptop with Ollama and a llama.cpp router on Vulkan:
+
+- A llama.cpp router (`llama-server --models-dir`) is driven as one unit per model it offers (kind
+  `llamacpp-router`): make resident and unload through `POST /models/load` and `/models/unload`, busy from the
+  child's `/slots`, and the router itself never stopped from the page. Before, its `/health` read as a
+  loaded model forever and Clear the card ended the router.
+- Setup no longer proposes Ollama's runner (its own `llama-server`) or a router's children as llama.cpp
+  units; a server a systemd user unit keeps is started and stopped through `systemctl --user`.
+- llama.cpp's version is read so that it compares with its release tags, which are now `v0.x.y`.
+- `qm` reads its key on first use (so `qm setup` works on a fresh clone) and honours `QM_HOME` and `QM_PORT`.
+- `quartermaster.service`, which setup writes with local paths, is ignored by git.
+
 ## 0.1.0 - 2026-11-07
 
 First public version. Built on one Windows workstation between 2026-11-03 and 2026-11-06 and generalised
