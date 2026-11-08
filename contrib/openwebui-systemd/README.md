@@ -11,7 +11,7 @@ different backup) keeps the three unit names and the log lines and rewrites `owu
 
 | file | installed as | what it does |
 |---|---|---|
-| `owui-ctl` | `/usr/local/libexec/owui-ctl`, root, 0755 | start or stop the app unit; update: stop, copy the data directory, upgrade, start, put the old version back if the upgrade fails, keep the newest copies |
+| `owui-ctl` | `/usr/local/libexec/owui-ctl`, root, 0755 | start or stop the app unit; update: check the room for a copy, stop, copy the data directory, upgrade, start, put the old version back if the upgrade fails, keep the newest copies |
 | `owui-ctl-{start,stop,update}.service` | `/etc/systemd/system/`, root, 0644 | oneshots that run `owui-ctl` with one fixed word; never enabled |
 | `50-quartermaster-owui.rules` | `/etc/polkit-1/rules.d/`, root, 0644 | lets one user start those three units, without a password, and nothing else |
 
@@ -29,7 +29,9 @@ service's account, or touch OpenWebUI's own unit. The database a new release mig
 the copy in the backup folder is how it comes back, by hand.
 
 `owui-ctl` runs as root. It reads the running service's `DATA_DIR` from its environment and logs nothing
-of that environment. For a venv uv built (no pip inside), it uses `uv` only from a root-owned path no one
+of that environment. The log is readable by every account, since that is how the dashboard follows it, so
+nothing from the data directory goes there, not even a file's name in an error. What `cp` and `rm` say about
+the data goes to `copy-errors.txt` in the backup folder, which the script makes root-only on every run. For a venv uv built (no pip inside), it uses `uv` only from a root-owned path no one
 else can write (`/usr/bin/uv` from the distribution's package), never a copy in a user's home: whoever can
 replace that file would be running code as root.
 

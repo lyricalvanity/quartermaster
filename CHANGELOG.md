@@ -68,6 +68,12 @@
 - The scrub tool scans commit messages too, as a `commit-msg` hook `--install-hook` now installs beside the
   pre-commit one: a message is published like a file, and one carrying a machine's name reached main before
   a reader elsewhere caught it. Re-run `--install-hook` to get the second hook.
+- The systemd driver's `owui-ctl` keeps the data's file names out of its log. That log is readable by every
+  account, which is how the dashboard follows it, and an update whose copy failed wrote cp's messages there:
+  one per file, with the data directory's path and the file's name, which for an upload is the name it was
+  uploaded under. They now go to `copy-errors.txt` in the backup folder. The script makes that folder
+  root-only on every run, not only when it creates it. An update now measures the room for the copy before it
+  stops the service, and refuses with rc 9, changing nothing, when there is not enough.
 
 ## 0.2.0 - 2026-11-07
 

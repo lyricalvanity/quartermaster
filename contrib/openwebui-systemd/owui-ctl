@@ -7,7 +7,9 @@
 #   === owui-ctl <verb> start <time>
 #   ...
 #   === owui-ctl <verb> done rc=<n>
-# It never writes the service's environment or anything from its data directory there.
+# It never writes the service's environment or anything from its data directory there, not even a file's name
+# in an error: the log is readable by every account, so what cp and rm say about the data goes to a file
+# beside the copies, as root-only as they are.
 #
 # Install root-owned, mode 0755, where only root can write: /usr/local/libexec/owui-ctl. It runs as root:
 # read it before installing it.
@@ -73,18 +75,37 @@ if [ -z "$data" ] || [ ! -d "$data" ]; then
     finish 4
 fi
 
+# the backup folder is root-only every time, not only when this script first made it
+if ! install -d -m 0700 "$BACKUP_ROOT" || ! chmod 0700 "$BACKUP_ROOT"; then
+    echo "could not make $BACKUP_ROOT root-only; nothing changed"
+    finish 9
+fi
+# room for the copy, measured before anything stops: the data as it is now, a tenth more for what the service
+# writes before it stops, and a gigabyte left over for the system
+need=$(du -sk -- "$data" 2>/dev/null | cut -f1)
+room=$(df -Pk -- "$BACKUP_ROOT" 2>/dev/null | awk 'NR == 2 { print $4 }')
+if [ -z "$need" ] || [ -z "$room" ]; then
+    echo "could not measure the data or the room for its copy; nothing changed"
+    finish 9
+fi
+if [ "$room" -lt $((need + need / 10 + 1048576)) ]; then
+    echo "no room for the copy: it needs $(((need + 1023) / 1024)) MB and 1 GB to spare, $BACKUP_ROOT has $((room / 1024)) MB free; nothing changed"
+    finish 9
+fi
+
 old=$(version)
 echo "installed ${old:-unknown}, through $(installer); stopping $APP_UNIT"
 systemctl stop "$APP_UNIT" || finish 5
 dest="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)-${old:-unknown}"
-install -d -m 0700 "$BACKUP_ROOT"
-if ! cp -a "$data" "$dest"; then
-    echo "the copy failed; starting it again unchanged"
-    rm -rf -- "$dest"
+errs="$BACKUP_ROOT/copy-errors.txt"   # cp names each file it fails on, and those names are the data's
+if ! cp -a -- "$data" "$dest" 2>"$errs"; then
+    echo "the copy failed (cp's messages are in $errs, root-only); starting it again unchanged"
+    rm -rf -- "$dest" 2>/dev/null
     systemctl start "$APP_UNIT"
     finish 6
 fi
-echo "data copied to $dest ($(du -sh "$dest" | cut -f1))"
+rm -f -- "$errs"
+echo "data copied to $dest ($(du -sh -- "$dest" 2>/dev/null | cut -f1))"
 
 echo "upgrading open-webui"
 if ! pkg upgrade; then
@@ -99,6 +120,6 @@ systemctl start "$APP_UNIT" || finish 8
 
 # keep the newest $KEEP copies (their names sort by date)
 ls -1d "$BACKUP_ROOT"/*/ 2>/dev/null | sort -r | tail -n +"$((KEEP + 1))" | while IFS= read -r d; do
-    rm -rf -- "$d" && echo "removed the old copy $d"
+    if rm -rf -- "$d" 2>/dev/null; then echo "removed the old copy $d"; else echo "could not remove all of the old copy $d"; fi
 done
 finish 0
