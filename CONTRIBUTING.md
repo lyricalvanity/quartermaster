@@ -7,10 +7,11 @@ something the inventory did not name, lets the page write the inventory, or reac
 click will not be merged, however useful.
 
 **Nothing of your machine goes in.** `inventory.json`, `presets.json`, `agent.key`, `logs/`, `artq/`,
-`backup/` and `local/` are ignored. `tools/scrub_check.py` runs as the pre-commit hook
-(`python tools/scrub_check.py --install-hook`) and refuses a commit that names your user, host, home
-directory or local addresses; put your own patterns in `local/scrub-denylist.txt`, one regular expression
-per line, which is never committed.
+`backup/` and `local/` are ignored. `tools/scrub_check.py` runs as the pre-commit and commit-msg hooks
+(`python tools/scrub_check.py --install-hook`) and refuses a commit whose files or message name your user,
+host, home directory or local addresses; put your own patterns in `local/scrub-denylist.txt`, one regular
+expression per line, which is never committed. Put the names of your other machines there too: the hook
+derives only this machine's.
 
 **Adding a kind** is a catalog record (`catalog/<kind>.json`, see `catalog/README.md`) and, so that `qm setup`
 finds it, a detector in `agent/setup.py`; without one the owner writes the unit by hand. For an engine the

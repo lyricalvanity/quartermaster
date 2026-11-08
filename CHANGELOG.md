@@ -61,6 +61,13 @@
   a good move, a broken release rolled back from a volume with its migration gone and a uid-1000 mode-600
   file intact, `none` leaving the data as the new version left it, `host` restoring from a bind-mounted
   folder on Windows, and pruning to `keep_backups`. Setup writes `backup: volume` into new compose blocks.
+- The compose driver's room check for a volume copy measures the drive Docker Desktop's data disk actually
+  lives on: the folder its settings name (`CustomWslDistroDir` or `DataFolder`), else the default under
+  `%LOCALAPPDATA%\Docker\wsl`, with junctions resolved. Before, it assumed the default drive, which on a
+  machine whose disk was moved read the wrong free space (caught by a second-machine reader).
+- The scrub tool scans commit messages too, as a `commit-msg` hook `--install-hook` now installs beside the
+  pre-commit one: a message is published like a file, and one carrying a machine's name reached main before
+  a reader elsewhere caught it. Re-run `--install-hook` to get the second hook.
 
 ## 0.2.0 - 2026-11-07
 

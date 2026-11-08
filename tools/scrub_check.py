@@ -2,9 +2,10 @@
 
     python tools/scrub_check.py                 scan every tracked file (working tree) and every staged file
     python tools/scrub_check.py --staged        scan what is about to be committed (the pre-commit hook)
-    python tools/scrub_check.py --install-hook  make this the repository's pre-commit hook
+    python tools/scrub_check.py --message FILE  scan a commit message (the commit-msg hook)
+    python tools/scrub_check.py --install-hook  make this the repository's pre-commit and commit-msg hooks
 
-What it looks for, in every tracked or staged text file:
+What it looks for, in every tracked or staged text file, and in a commit message:
   - this machine's identifiers, derived when the script runs: the user name, the home directory (every
     slash spelling), the host name, and the local IPv4 addresses;
   - every pattern in local/scrub-denylist.txt, one regular expression per line, case-insensitive, '#'
@@ -35,6 +36,12 @@ BINARY = {".ttf", ".otf", ".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".
 HOOK = """#!/bin/sh
 # Quartermaster: refuse a commit that carries this machine's particulars (tools/scrub_check.py).
 exec python "$(git rev-parse --show-toplevel)/tools/scrub_check.py" --staged
+"""
+# a commit message is published too, and the file hook never saw it: a host name reached public main in one
+# on 2026-11-07, caught by a reader on another machine
+MSG_HOOK = """#!/bin/sh
+# Quartermaster: refuse a commit message that carries this machine's particulars (tools/scrub_check.py).
+exec python "$(git rev-parse --show-toplevel)/tools/scrub_check.py" --message "$1"
 """
 
 
@@ -102,14 +109,34 @@ def content(path: str, staged: bool) -> str | None:
 
 def main() -> int:
     if "--install-hook" in sys.argv:
-        hook = ROOT / ".git" / "hooks" / "pre-commit"
-        hook.parent.mkdir(parents=True, exist_ok=True)
-        hook.write_text(HOOK, encoding="utf-8", newline="\n")
-        try:
-            os.chmod(hook, 0o755)
-        except OSError:
-            pass
-        print("installed", hook)
+        for name, text in (("pre-commit", HOOK), ("commit-msg", MSG_HOOK)):
+            hook = ROOT / ".git" / "hooks" / name
+            hook.parent.mkdir(parents=True, exist_ok=True)
+            hook.write_text(text, encoding="utf-8", newline="\n")
+            try:
+                os.chmod(hook, 0o755)
+            except OSError:
+                pass
+            print("installed", hook)
+        return 0
+    if "--message" in sys.argv:
+        msg_path = Path(sys.argv[sys.argv.index("--message") + 1])
+        pats = machine_patterns() + denylist_patterns()
+        problems = []
+        for n, line in enumerate(msg_path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if line.startswith("#"):                    # git's own commentary in the editor template
+                continue
+            for what, rx in pats:
+                m = rx.search(line)
+                if m:
+                    a, b = max(0, m.start() - 30), min(len(line), m.end() + 30)
+                    problems.append(f"message line {n}: {what}: ...{line[a:b].strip()}...")
+                    break
+        if problems:
+            print(f"scrub check: the commit message names this machine ({len(problems)} line(s)); reword it", file=sys.stderr)
+            for pr in problems:
+                print("  " + pr, file=sys.stderr)
+            return 1
         return 0
     staged = "--staged" in sys.argv
     tracked = set(git("ls-files"))

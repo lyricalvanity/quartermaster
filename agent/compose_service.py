@@ -73,6 +73,39 @@ def safe(s: str) -> str:
     return re.sub(r"[^0-9A-Za-z_.-]+", "_", str(s or "")).strip("_.-") or "x"
 
 
+def desktop_data_disk() -> Path | None:
+    """Docker Desktop's data disk on Windows, links resolved, or None. Desktop keeps it under the folder its
+    settings name (CustomWslDistroDir, or DataFolder for the Hyper-V backend), else %LOCALAPPDATA%\\Docker\\wsl, as
+    disk\\docker_data.vhdx (today), data\\ext4.vhdx (older) or main\\ext4.vhdx."""
+    if os.name != "nt":
+        return None
+    bases: list[Path] = []
+    appdata = os.environ.get("APPDATA")
+    for name in ("settings-store.json", "settings.json"):
+        f = Path(appdata) / "Docker" / name if appdata else None
+        if f and f.is_file():
+            try:
+                st = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            for key in ("CustomWslDistroDir", "customWslDistroDir", "DataFolder", "dataFolder"):
+                if isinstance(st.get(key), str) and st[key].strip():
+                    bases.append(Path(st[key].strip()))
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        bases.append(Path(local) / "Docker" / "wsl")
+    for base in bases:
+        for rel in ("disk/docker_data.vhdx", "data/ext4.vhdx", "main/ext4.vhdx", "DockerDesktopWSL/disk/docker_data.vhdx",
+                    "DockerDesktop.vhdx"):
+            p = base / rel
+            try:
+                if p.is_file():
+                    return p.resolve()
+            except OSError:
+                continue
+    return None
+
+
 class Copy:
     """Where one copy lives: a Docker volume (name) or a host folder (dir). `mount` is the helper's argument for it."""
 
@@ -253,8 +286,11 @@ class ComposeService:
         return total
 
     def room_for(self, kib: int, copy: Copy) -> tuple[int, str]:
-        """(free bytes, where) for the copy: the host folder, or the disk Docker's volumes live on, which on Docker
-        Desktop is the drive its virtual disk grows on (LOCALAPPDATA's), an approximation and said to be one."""
+        """(free bytes, where) for the copy: the host folder, or the disk Docker's volumes live on. On Linux that is
+        the filesystem under DockerRootDir. On Docker Desktop it is the drive its data disk grows on, found where
+        Desktop keeps it: the folder its settings name (CustomWslDistroDir or DataFolder in
+        %APPDATA%\\Docker\\settings-store.json), else %LOCALAPPDATA%\\Docker\\wsl, with links resolved, since an owner
+        who moved the disk to another drive did it with a junction or that setting (both seen 2026-11-07)."""
         if copy.mode == "host":
             at = copy.dir if copy.dir.exists() else copy.dir.parent
             return shutil.disk_usage(at).free, str(copy.dir)
@@ -262,8 +298,11 @@ class ComposeService:
         root = out.strip() if rc == 0 else ""
         if root and os.name != "nt" and Path(root).exists():
             return shutil.disk_usage(root).free, root
+        disk = desktop_data_disk()
+        if disk:
+            return shutil.disk_usage(disk.anchor).free, f"{disk.anchor} (Docker Desktop's data disk, {disk})"
         drive = Path(os.environ.get("LOCALAPPDATA") or Path.home()).anchor or str(Path.home())
-        return shutil.disk_usage(drive).free, f"{drive} (where Docker Desktop's disk grows; approximate)"
+        return shutil.disk_usage(drive).free, f"{drive} (Docker Desktop's data disk was not found; this is a guess at its drive)"
 
     def new_copy(self, old_ver: str, backup_root: Path | None) -> Copy:
         stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{safe(old_ver)}"
