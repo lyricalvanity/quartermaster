@@ -21,7 +21,7 @@
   },
   "update": {
     "recipe": "driver",
-    "note": "The service's own driver updates it: the scheduled task or control unit, which back up as they were written to; the docker-compose driver, which copies the named volumes, pulls, recreates and rolls image and data back if the new version does not come up; or pip install -U open-webui by hand. Upstream's release notes say when a version migrates the database."
+    "note": "The service's own driver updates it: the scheduled task or control unit, which back up as they were written to; the docker-compose driver, which copies the named volumes into a Docker volume beside them (the copy is the database; compose.backup: volume, host or none), pulls, recreates and rolls image and data back if the new version does not come up; or pip install -U open-webui by hand. Upstream's release notes say when a version migrates the database."
   },
   "install": {
     "docker": ["In a folder of its own, a docker-compose.yml with one service: image ghcr.io/open-webui/open-webui:main, ports \"127.0.0.1:3000:8080\", volumes open-webui:/app/backend/data (a named volume, which is what an update copies), extra_hosts host.docker.internal:host-gateway so it can reach engines on the host, restart unless-stopped.", "docker compose up -d in that folder. A plain docker run works too, but the tile drives Compose projects only."],

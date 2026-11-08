@@ -2112,8 +2112,10 @@ def _owui_compose_run(p: Plan, st, verb: str, timeout: float) -> int:
             rc = svc.stop(say, timeout)
         else:
             c = o.get("compose") or {}
+            # the copy of the data goes into a Docker volume beside the data unless the inventory asks for a host folder
+            # (backup: host + backup_root) or for no copy (backup: none); see compose_service's docstring for why
             rc = svc.update(say, p.check, owui_health, owui_version_now,
-                            backup_root=Path(c.get("backup_root") or LOG_DIR / "update-backups" / "openwebui"),
+                            backup_root=Path(c["backup_root"]) if c.get("backup_root") else None,
                             keep=int(c.get("keep_backups") or 3),
                             health_timeout=float((o.get("timeouts") or {}).get("update_health_s") or 600))
         if rc != 0:
@@ -2205,8 +2207,15 @@ def op_owui_update(p: Plan):
     if not p.args.get("confirm"):
         raise PlanFailed("update replaces the installed version and may migrate the database one way: send confirm=true")
     if owui_driver() == "docker-compose":
-        how = owui_step("update", "copies the data volume, pulls the image, recreates the container on it and waits for "
-                                  "/health; a new version that does not come up is rolled back, image and data")
+        mode = owui_compose().mode()
+        how = owui_step("update", {
+            "volume": "copies the data volumes into a Docker volume beside them, pulls the image, recreates the container on it and "
+                      "waits for /health; a new version that does not come up is rolled back, image and data",
+            "host": "copies the data volumes into the host folder the inventory names, pulls the image, recreates the container on it "
+                    "and waits for /health; a new version that does not come up is rolled back, image and data",
+            "none": "pulls the image, recreates the container on it and waits for /health, with no copy of the data (as the "
+                    "inventory says); a new version that does not come up gets the old image back, and the database stays as it left it",
+        }[mode])
         how += ". Cancel works until the container is stopped; after that it finishes or rolls back."
     else:
         how = owui_step("update", "through its update control, which backs up and upgrades as it was written to") \

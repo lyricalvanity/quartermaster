@@ -49,6 +49,18 @@
   answers is rolled back with its own writes gone and ownership and modes intact, a cancel before the stop
   changes nothing, and old copies are pruned to `keep_backups`. Read-only against a real OpenWebUI:
   detection, readiness, and the sizing helper on its image; it has not been stopped or updated by the driver.
+- The compose driver's copy of the data now lives in a **Docker volume beside the data** by default
+  (`qm-backup-<project>-<service>-<stamp>-<version>`, labelled, with its `backup.json` inside), not in a folder
+  under `logs/`. The copy exists for one reason, OpenWebUI's one-way database migration at start, and it is the
+  database: on the host it was readable by the agent's account and everything running as it; in a volume it
+  has exactly the perimeter the data already had. `compose.backup` is `volume` (default), `host` (a tarball
+  under `backup_root`, as before, now opt-in) or `none` (no copy; a failed update rolls the image back and says
+  the database stays as the new version left it). The tarball is verified where it lies by the image's own
+  `tar`, pruning works on volumes by label, and the update step and the control log say which mode ran.
+  Proven on a throwaway Compose project (a stand-in that migrates its volume at start; only the pull faked):
+  a good move, a broken release rolled back from a volume with its migration gone and a uid-1000 mode-600
+  file intact, `none` leaving the data as the new version left it, `host` restoring from a bind-mounted
+  folder on Windows, and pruning to `keep_backups`. Setup writes `backup: volume` into new compose blocks.
 
 ## 0.2.0 - 2026-11-07
 

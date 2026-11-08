@@ -101,8 +101,15 @@ docker compose up -d --build
    so the container and its logs survive a stop and Start never moves to a new image. Update copies the
    named volumes into a tarball (made by the running image's own `tar`, as root, network off), pulls,
    recreates the container and waits for `/health`; a new version that does not come up is rolled back,
-   the image tag first and then the data. The copies go to `logs/update-backups/openwebui` (the newest
-   three are kept), and the controls write the same control log the scheduled tasks do.
+   the image tag first and then the data. The copy exists because OpenWebUI migrates its database forward
+   when a new version starts, one way: a version that migrates and then fails leaves a database the old one
+   may refuse. **The copy is that database**, so by default it goes where the data already lives, a Docker
+   named volume beside it (`qm-backup-<project>-<service>-<stamp>-<version>`, labelled with what it holds),
+   and never onto the host: whoever can read the copy could read the original. `compose.backup` chooses:
+   `volume` (the default), `host` (a tarball under `backup_root`, readable by the account the agent runs as
+   and everything running as it), or `none` (no copy; a failed update rolls the image back and says the
+   database stays as the new version left it). The newest `keep_backups` copies are kept (three), and the
+   controls write the same control log the scheduled tasks do.
 
 After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
 variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory
@@ -125,7 +132,7 @@ first time the agent loads it: the original is kept as `inventory.schema1.json` 
 | `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya`, `ollama`, `llamacpp` or `llamacpp-router` (one model of a llama.cpp router: `router_model` names it, load and unload go through the router, and the router is never stopped from the page); `start.argv` and `cwd`, or `start.systemd_user` for a server a systemd user unit keeps; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
 | `shims[]` | small proxies that front a unit on another port (an Ollama-API shim for an OpenAI-style server, say) |
 | `clients[]` | programs that consume the units (Pi, Codex CLI, Claude Code): executable, version command, and the local URLs their configuration points at. Written by setup; the page's client strip is a later stage |
-| `openwebui` | optional tile, health and version from `url`, moved by one of three drivers: `schtasks` (three named Windows scheduled tasks, `tasks`), `systemd` (`units`), or `docker-compose` (`compose`: `docker`, `project`, `project_dir`, `files`, `service`, `backup_paths`, `keep_backups`, optional `backup_root`); `stop_note` and `update_note` word the confirmations |
+| `openwebui` | optional tile, health and version from `url`, moved by one of three drivers: `schtasks` (three named Windows scheduled tasks, `tasks`), `systemd` (`units`), or `docker-compose` (`compose`: `docker`, `project`, `project_dir`, `files`, `service`, `backup_paths`, `backup` = `volume` / `host` / `none`, `backup_root` for `host`, `keep_backups`); `stop_note` and `update_note` word the confirmations |
 | `comfyui` | optional tile: start argv, port, the command-line text that identifies the process, an optional `update` section |
 | `art` | optional queue of image batches that wait for the card (needs `comfyui`) |
 

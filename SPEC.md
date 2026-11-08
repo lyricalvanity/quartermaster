@@ -99,7 +99,13 @@ proxy. One generic tile, driven by a declared **driver**:
   waits for `/health`; a version that does not come up gets the old image tag back and the copy restored into
   a container created but not started. A copy reads and a restore empties only paths that are mounts of the
   container. Cancel is honoured until the stop and not after. The same control-log lines as the tasks;
-  setup reads every field from the running container's Compose labels;
+  setup reads every field from the running container's Compose labels. The copy is justified by one thing
+  only, OpenWebUI's one-way database migration at start, and it *is* the database: by default it lives in a
+  Docker named volume beside the data (`qm-backup-<project>-<service>-<stamp>-<version>`, labelled), so it
+  never leaves the perimeter the data already has; `backup: host` (a tarball under `backup_root`, readable by
+  the agent's account) and `backup: none` (image-only rollback, said plainly) are the owner's to choose
+  (decided 2026-11-07 after review: a host-side copy by default widened the data's exposure for no gain a
+  volume could not give);
 - `schtasks`: run named Windows scheduled tasks, pass nothing (version 1's OpenWebUI driver, generalised);
 - `windows-service`: `sc start|stop`;
 - `systemd` (Linux): each control is a unit the agent starts with `systemctl [--user] --no-ask-password`,

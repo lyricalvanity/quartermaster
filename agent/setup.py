@@ -838,13 +838,15 @@ def compose_block(c: dict, port: int) -> dict | None:
         "It stays stopped, through a reboot too, until Start"
     return {
         "_comment": f"OpenWebUI as the Compose service {service} of project {project}. The agent runs docker compose on exactly these: "
-                    "start is up -d --no-recreate, stop is stop (the container stays), and update copies backup_paths with the "
-                    "running image's own tar, pulls, recreates and waits for /health, rolling image and data back if the new "
-                    "version does not come up. It reads /health and /api/version and nothing of OpenWebUI's data.",
+                    "start is up -d --no-recreate, stop is stop (the container stays), and update copies backup_paths (the data, the "
+                    "database among it) into a Docker volume beside them with the running image's own tar, pulls, recreates and waits "
+                    "for /health, rolling image and data back if the new version does not come up. backup: volume (the default), "
+                    "host (a tarball under backup_root, readable by this account) or none. It reads /health and /api/version and "
+                    "nothing of OpenWebUI's data.",
         "name": "OpenWebUI", "model": f"docker compose · {project}/{service}",
         "url": f"http://127.0.0.1:{port}", "open_url": f"http://localhost:{port}", "driver": "docker-compose",
         "compose": {"docker": c["_docker"], "project": project, "project_dir": lb.get("com.docker.compose.project.working_dir") or "",
-                    "files": files, "service": service, "backup_paths": vols, "keep_backups": 3},
+                    "files": files, "service": service, "backup": "volume", "backup_paths": vols, "keep_backups": 3},
         "stop_note": f"This stops the container for everyone using OpenWebUI (restart policy {restart}). {back}.",
     }
 
@@ -893,7 +895,7 @@ def detect_openwebui() -> dict:
         out["service"] = block
         cp = block["compose"]
         out["notes"].append(f"OpenWebUI is the Compose service {cp['service']} of {cp['project']} ({cp['project_dir']}) on :{port}; "
-                            f"an update copies {', '.join(cp['backup_paths']) or 'nothing (no named volume)'}")
+                            f"an update copies {', '.join(cp['backup_paths']) or 'nothing (no named volume)'} into a Docker volume beside the data")
         return out
     if c:
         out["notes"].append(f"OpenWebUI answers on :{port} from a container Compose did not start (docker run); "
