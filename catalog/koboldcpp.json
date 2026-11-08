@@ -8,7 +8,7 @@
   "role": "engine",
   "platforms": ["windows", "linux", "macos"],
   "driver": "http",
-  "tested": {},
+  "tested": {"windows": "2026-11-07"},
   "detect": {
     "executables": ["koboldcpp", "koboldcpp-nocuda", "koboldcpp-oldpc", "koboldcpp-linux-x64", "koboldcpp-linux-x64-nocuda", "koboldcpp-mac-arm64"],
     "roots": ["~/koboldcpp", "~/KoboldCpp"],
@@ -31,7 +31,7 @@
     "endpoints": {"version": "GET /api/extra/version", "model": "GET /api/v1/model (result: koboldcpp/<name>, or \"inactive\")", "perf": "GET /api/extra/perf (idle 0/1, queue)", "swap": "POST /api/admin/reload_config {filename} (unload_model, initial_model, or a .kcpps in --admindir)", "list": "GET /api/admin/list_options"},
     "can": ["start a unit from its .kcpps", "swap to a unit's config or unload the model through the admin API (the process relaunches itself; the port stays)", "see busy from /api/extra/perf", "stop the process"],
     "cannot": ["unload or swap a server started without --admin --admindir: stop it instead", "hold two text models at once (its --routermode swaps per request on its own; one unit sees whatever is current)"],
-    "note": "Table from the source of 1.124.2 (koboldcpp.py). Not yet driven from any machine."
+    "note": "Table from the source of 1.124.2 (koboldcpp.py), then driven on Windows 2026-11-07 with 1.124.2 and a 20 GB Qwen2.5-Coder GGUF: probe, unload (the admin relaunch gave the card back in seconds), load (8 s with the file in the page cache), busy during a generation, start from the .kcpps, stop. Two things the run taught: the process on the port is a multiprocessing child whose command line carries none of the flags (setup reads them from its parent), and Stop ends every koboldcpp process on the machine, since the parent would otherwise relaunch the child; a second KoboldCpp instance goes with it. /api/v1/model names the model koboldcpp/<file stem>."
   },
   "launch": {"argv": ["koboldcpp", "--config", "<model.kcpps>", "--admin", "--admindir", "<folder of .kcpps>", "--port", "<port>"], "never": ["--host 0.0.0.0 or --remotetunnel without --password: the UI and the API have no login otherwise", "--adminpassword on the command line of a shared machine: others read it in the process list; the admin API is loopback-only here anyway"]},
   "update": {

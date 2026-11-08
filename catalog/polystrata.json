@@ -8,7 +8,7 @@
   "role": "engine",
   "platforms": ["windows", "linux", "macos"],
   "driver": "strata",
-  "tested": {},
+  "tested": {"windows": "2026-11-07"},
   "detect": {
     "roots": ["~/PolyStrata"],
     "marker": "polystrata.py",
@@ -24,7 +24,7 @@
     "endpoints": {"health": "GET /health (loaded, status, model, max_context)", "load": "POST /v1/load {} (or {model} to switch, with switch_on_request)", "unload": "POST /v1/unload?wait=N", "metrics": "GET /metrics (live.state, requests, totals)", "switch": "GET /api/models, POST /api/models/load {model}, POST /api/models/unload"},
     "can": ["everything the Strata driver does: start a unit from its launcher, load and unload through the API, see busy from /metrics, stop the process", "park a unit that loads on any request"],
     "cannot": ["switch the loaded model inside one server (its /api/models/load): one Quartermaster unit is one run config, as with Strata; run one server per model, or switch by hand", "vision for the GLM and DeepSeek families: the engine has none"],
-    "note": "Verified against the server source (serve/server.py, 2026-11-07): /health carries `loaded`, /metrics carries the same `live` block the probe reads, and the control calls accept a request with no Origin header. Not yet driven from any machine."
+    "note": "Verified against the server source (serve/server.py, 2026-11-07): /health carries `loaded`, /metrics carries the same `live` block the probe reads, and the control calls accept a request with no Origin header. Then driven on Windows 2026-11-07, PolyStrata 0.1.45-poly.8's server fronting the Strata project's 0.1.57 engine and a Strata-built Qwen3.8-Flash-Next Q8_0 pack on a 32 GB card (the test machine had those; PolyStrata's own strata-poly engine and its model downloads were not exercised): detection from the run config and launcher, start from run-<model>.bat (211 s to loaded), the probe's engine block (context, kv, expert slots) and live state, unload through /v1/unload?wait=20 (200, card and RAM back in under 30 s), load through /v1/load (214 s), busy with tok/s during a generation, stop. The engine takes some seconds after its port closes to give its RAM back; the stop reports done when the port closes."
   },
   "launch": {"argv": ["<python>", "<root>/serve/server.py", "--engine", "strata", "--config", "<strata-model.json>", "--port", "<port>"], "never": ["--host 0.0.0.0 without --api-key: the page has no login"]},
   "update": {

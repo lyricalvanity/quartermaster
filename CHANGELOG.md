@@ -26,6 +26,12 @@
   **textgen** (oobabooga's text-generation-webui under its 2026 name; `http`: `/v1/internal/model/*`) and
   **Foundry Local** (`cli`: `foundry server start --port`, `foundry model load|unload`, the daemon on a fixed
   port). Each has a detector in `setup.py`; on a machine without them detection is unchanged.
+- Two of the six then driven on Windows the same night and marked so: **KoboldCpp** 1.124.2 with a 20 GB GGUF
+  (probe, the admin unload and reload, busy, start, stop; the process on the port turned out to be a
+  multiprocessing child carrying none of the launch flags, so its detector reads them from the parent, and Stop
+  ends every KoboldCpp process because the parent would relaunch the child) and **PolyStrata** 0.1.45-poly.8's
+  server fronting a Strata engine and pack (detection from its run config and launcher, start, the Strata
+  probe's engine and live blocks, `/v1/unload`, `/v1/load`, busy, stop). Both installs were removed afterwards.
 - An engine id is no longer derived from a kind by cutting at the first dash (`ik-llamacpp` and
   `foundry-local` are their own engines); the two sub-kinds, `strata-launch` and `llamacpp-router`, still
   fold into their parents.

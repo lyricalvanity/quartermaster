@@ -588,6 +588,23 @@ def detect_ik_llamacpp(seen: dict, running: list[dict]) -> dict:
     return out
 
 
+def _launcher(r: dict) -> dict:
+    """The process that was launched, for a server whose listener is a multiprocessing child (KoboldCpp's is:
+    `koboldcpp.exe --multiprocessing-fork parent_pid=N ...`): the flags and the argv to start it again are the
+    parent's. Walks up at most three generations; the port stays the listener's. Seen on Windows 2026-11-07."""
+    pid, cmd = r["pid"], r["cmd"]
+    for _ in range(3):
+        m = re.search(r"parent_pid=(\d+)", cmd)
+        if not m:
+            break
+        ppid = int(m.group(1))
+        pc = cmdlines([ppid]).get(ppid, "")
+        if not pc:
+            break
+        pid, cmd = ppid, pc
+    return {**r, "pid": pid, "cmd": cmd}
+
+
 def detect_koboldcpp(seen: dict, running: list[dict]) -> dict:
     """One executable; a unit is a running server's .kcpps (--config), which is what the admin API swaps to."""
     out = {"engines": [], "units": [], "notes": []}
@@ -606,12 +623,15 @@ def detect_koboldcpp(seen: dict, running: list[dict]) -> dict:
         e["version_url"], e["version_path"] = f"http://127.0.0.1:{procs[0]['port']}/api/extra/version", "version"
     out["engines"].append(e)
     for r in procs:
+        r = _launcher(r)
         m = re.search(r"--config\s+\"?([^\"\s]+)", r["cmd"])
         cfg = Path(m.group(1)).name if m else ""
-        admin = "--admin" in r["cmd"]
+        kcpps = load_json(Path(m.group(1))) if m and Path(m.group(1)).exists() else None
+        admin = "--admin" in r["cmd"] or bool(isinstance(kcpps, dict) and kcpps.get("admin"))
         note = "a KoboldCpp launch config; swap and unload go through the admin API" if admin else \
-               "started without --admin: Quartermaster can see and stop it, not swap or unload it; add --admin --admindir to its launch"
-        out["units"].append(_running_unit(r, "koboldcpp", "koboldcpp", cfg or f"koboldcpp :{r['port']}", cfg, note, seen))
+               "started without --admin: Quartermaster can see and stop it, not swap or unload it; add --admin --admindir to its launch (or admin: true in the .kcpps)"
+        model = Path(str(kcpps.get("model_param") or "")).name if isinstance(kcpps, dict) and kcpps.get("model_param") else ""
+        out["units"].append(_running_unit(r, "koboldcpp", "koboldcpp", model or cfg or f"koboldcpp :{r['port']}", cfg, note, seen))
     if exe and not procs:
         out["notes"].append(f"KoboldCpp found at {exe}; a unit is proposed from a running server (start one with --admin --admindir, then `detect`)")
     return out
