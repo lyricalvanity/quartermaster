@@ -91,7 +91,11 @@ def log(msg: str) -> None:
 PRESETS = HOME / "presets.json"
 SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
 ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI"}
-UNSTOPPABLE = ("ollama", "llamacpp-router")      # unit kinds whose process serves others too: unload, never stop
+UNSTOPPABLE = ("ollama", "llamacpp-router")      # drivers whose process serves others too: unload, never stop
+# A unit's *kind* is what it is (its catalog record, its band, its update recipe); its *driver* is how the agent
+# moves it: the code path for probe, load, unload, start and stop. Every kind here drives as itself; a fork
+# names its parent's driver in its record (PolyStrata: strata) and needs no code; `http` and `cli` read a table.
+DRIVERS = ("strata", "strata-launch", "maya", "ollama", "llamacpp", "llamacpp-router", "http", "cli")
 
 
 def migrate_schema1(data: dict) -> tuple[dict, list]:
@@ -163,7 +167,16 @@ class Inventory:
                 self.engines.append(e)
                 self.engine_by_id[e["id"]] = e
             u["group"] = u["engine"]                              # older code says group
+            u["driver"] = driver_of(u)
+            u["timeouts"] = {"start_s": 120, "load_s": 600, "unload_s": 90, **(u.get("timeouts") or {})}   # a hand-written unit may omit them
             self.servers[u["id"]] = u
+        # the card's "apps" list is filtered to engine processes: the built-in names, every catalog record's
+        # executables, and the procs a table names (a kind added by record alone is seen on the card too)
+        global ENGINE_PROCS
+        named = {x for r in CATALOG.values() if r.get("role") == "engine"
+                 for x in ((r.get("detect") or {}).get("executables") or []) + ((r.get("table") or {}).get("procs") or [])}
+        named |= {x for s in self.servers.values() for x in ((s.get("table") or {}).get("procs") or [])}
+        ENGINE_PROCS = tuple(sorted(set(ENGINE_PROCS) | {n.lower() for n in host.exe_names(tuple(named))}))
         self.shims = {s["id"]: s for s in data.get("shims", [])}
         self.clients = {c["id"]: c for c in data.get("clients", []) if c.get("id")}
         if PRESETS.exists():
@@ -238,13 +251,19 @@ except (OSError, ValueError):
     UPDATES = {}
 
 
+def driver_of(u: dict) -> str:
+    """How the agent moves a unit: the unit's own `driver`, else its kind's catalog record, else the kind itself.
+    An unknown driver is kept as written so the probe reports it rather than guessing."""
+    return str(u.get("driver") or (CATALOG.get(str(u.get("kind", ""))) or {}).get("driver") or u.get("kind") or "")
+
+
 def suggestions() -> list[dict]:
     """Rules over the inventory and the state, nothing fetched (SPEC.md 7a). Each: {kind, title, why, how}."""
     st = STATE.get()
     out = []
     has_card = bool(INV.gpu.get("total_mib"))
     engines_with_units = {s["engine"] for s in INV.servers.values()}
-    model_units = [s for s in INV.servers.values() if s["kind"] != "ollama" and not s.get("legacy")]
+    model_units = [s for s in INV.servers.values() if s["driver"] != "ollama" and not s.get("legacy")]
     if has_card and not engines_with_units:
         out.append({"kind": "engine", "title": "Nothing serves a model yet",
                     "why": "the inventory names a card but no engine with a unit",
@@ -492,6 +511,260 @@ def systemctl_user(p: Plan, st, verb: str, unit: str, timeout: float = 60):
         raise PlanFailed(f"systemctl --user {verb} {unit} failed: {(err or out).strip()[:200]}")
 
 
+# ---- the table drivers: http and cli ----------------------------------------------------------------
+# An engine whose API is "a path to call and a key to read" needs no code of its own: its catalog record says
+# `"driver": "http"` (or "cli") and carries a `table`, which a unit may override key by key. The table names:
+#   probe   {path, status}                     answering is up (default GET /health, 200)
+#   loaded  true | {path?, status?, <pred>}    the model is on the card (default: up means loaded, one model per process)
+#   busy    {path?, <pred>}                    answering a request; guards an unload
+#   load    {method, path, body, timeout_s, hold}   hold: the server answers only when done (Strata's /v1/load)
+#   unload  {method, path, body, timeout_s, hold}   absent: unloading is stopping the process (llama-server)
+#   procs   [names]                            processes swept by name after a stop, when a child outlives the server
+#   auth    {header, prefix, key_file, key_re} a header the server wants, read from a file; the key is never in a record
+# cli adds status {argv, json, <pred> | loaded_re}, load/unload/start/stop {argv, timeout_s, cwd}; its probe is
+# the port (or probe.path) for up and the status command for loaded.
+# A predicate (<pred>): `key` (dotted path; a list on the way means any element) with one of equals, not_equals,
+# in, truthy, nonempty; a key alone tests that it exists. Strings take {model} and {port} from the unit.
+# Written 2026-11-07 (Faber), for the kinds nobody here can run: the table is filled from the docs, the record's
+# `tested` says who has driven it.
+
+PRED_KEYS = ("key", "equals", "not_equals", "in", "truthy", "nonempty")
+
+
+def table_of(s: dict) -> dict:
+    """The unit's table, tokens filled: its kind's catalog `table`, with the unit's own `table` winning key by
+    key (one level)."""
+    base = (CATALOG.get(str(s.get("kind", ""))) or {}).get("table") or {}
+    out = dict(base)
+    for k, v in (s.get("table") or {}).items():
+        out[k] = {**base[k], **v} if isinstance(v, dict) and isinstance(base.get(k), dict) else v
+    return fill_tokens(out, s)
+
+
+def fill_tokens(x, s: dict, escape: bool = False):
+    """{model} and {port} in a table's strings, from the unit; inside a `loaded_re` the model is regex-escaped."""
+    if isinstance(x, str):
+        model = str(s.get("model_id") or s.get("router_model") or s.get("model") or "")
+        return x.replace("{model}", re.escape(model) if escape else model).replace("{port}", str(s.get("port") or ""))
+    if isinstance(x, list):
+        return [fill_tokens(v, s, escape) for v in x]
+    if isinstance(x, dict):
+        return {k: fill_tokens(v, s, k == "loaded_re") for k, v in x.items()}
+    return x
+
+
+def pick(data, key: str) -> list:
+    """The values at a dotted path; a list on the way contributes every element's value."""
+    vals = [data]
+    for part in key.split("."):
+        nxt = []
+        for v in vals:
+            if isinstance(v, list):
+                nxt.extend(x[part] for x in v if isinstance(x, dict) and part in x)
+            elif isinstance(v, dict) and part in v:
+                nxt.append(v[part])
+        vals = nxt
+    return vals
+
+
+def pred_part(spec) -> dict | bool:
+    """The predicate inside a table entry, or True when it has none (then the call answering is the test)."""
+    if isinstance(spec, dict) and any(k in spec for k in PRED_KEYS):
+        return {k: spec[k] for k in PRED_KEYS if k in spec}
+    return True
+
+
+def holds(data, pred) -> bool:
+    """Does a JSON answer satisfy a predicate? True (or none) is satisfied by any answer."""
+    if pred is True or pred is None:
+        return True
+    if not isinstance(pred, dict):
+        return False
+    vals = pick(data, pred["key"]) if pred.get("key") else [data]
+    if "equals" in pred:
+        return any(v == pred["equals"] for v in vals)
+    if "not_equals" in pred:
+        return bool(vals) and all(v != pred["not_equals"] for v in vals)
+    if "in" in pred:
+        return any(v in pred["in"] for v in vals)
+    if pred.get("truthy") or pred.get("nonempty"):
+        return any(bool(v) for v in vals)
+    return bool(vals)
+
+
+def unit_headers(s: dict, t: dict) -> dict:
+    """A header the server wants on every call (TabbyAPI's admin key), read from a file the unit or its table
+    names: {"header": "x-admin-key", "key_file": "~/tabbyAPI/api_tokens.yml", "key_re": "^admin_key:\\s*(\\S+)"}.
+    The value is read on each call and never logged; a missing file means no header."""
+    a = s.get("auth") or t.get("auth")
+    if not isinstance(a, dict) or not a.get("key_file"):
+        return {}
+    try:
+        text = Path(os.path.expanduser(a["key_file"])).read_text(encoding="utf-8").strip()
+    except OSError:
+        return {}
+    if a.get("key_re"):
+        m = re.search(a["key_re"], text, re.M)
+        text = m.group(1) if m else ""
+    return {a.get("header", "Authorization"): a.get("prefix", "") + text} if text else {}
+
+
+def http_get(s: dict, spec: dict | None, t: dict, default_path: str, timeout: float = 2.0):
+    """GET one table path on the unit's port. (status, data), or (None, None) when nothing answers."""
+    path = fill_tokens((spec or {}).get("path") or default_path, s)
+    try:
+        return http("GET", f"http://127.0.0.1:{s['port']}{path}", timeout=timeout, headers=unit_headers(s, t))
+    except Exception:  # noqa: BLE001 - down
+        return None, None
+
+
+def _scalars(h) -> dict:
+    return {k: v for k, v in list(h.items())[:12] if v is None or isinstance(v, (str, int, float, bool))} if isinstance(h, dict) else {}
+
+
+def _answered(st: int | None, spec: dict) -> bool:
+    return st is not None and (st == int(spec["status"]) if "status" in spec else st < 400)
+
+
+def http_probe(s: dict, info: dict) -> dict:
+    """The http driver's probe. Health shows the probe answer's scalars; state follows loaded and busy."""
+    t = table_of(s)
+    pr = t.get("probe") or {}
+    st, h = http_get(s, pr, t, "/health")
+    if not _answered(st, {"status": pr.get("status", 200)}):
+        return info
+    info["up"] = True
+    info["health"] = _scalars(h)
+    ld = t.get("loaded", True)
+    if isinstance(ld, dict):
+        if ld.get("path"):
+            st2, d = http_get(s, ld, t, "/health")
+            info["loaded"] = _answered(st2, ld) and holds(d, pred_part(ld))
+        else:
+            info["loaded"] = holds(h, pred_part(ld))
+    else:
+        info["loaded"] = bool(ld)
+    bz = t.get("busy")
+    if info["loaded"] and isinstance(bz, dict):
+        st3, d = http_get(s, bz, t, pr.get("path") or "/health", timeout=1.0)
+        info["busy"] = _answered(st3, bz) and holds(d, pred_part(bz))
+    info["state"] = "busy" if info["busy"] else "ready" if info["loaded"] else "idle"
+    return info
+
+
+def http_call(p: Plan, st, s: dict, spec: dict, t: dict, what: str, result: dict | None = None):
+    """One table call (load or unload). `hold` sends it on a thread, since the server answers only when done, and
+    the caller waits on the probe; otherwise the answer is in hand and 4xx/5xx fails the plan."""
+    method, path = str(spec.get("method", "POST")).upper(), spec["path"]
+    body = spec.get("body", {}) if method != "GET" else None
+    timeout = float(spec.get("timeout_s") or 60)
+    url = f"http://127.0.0.1:{s['port']}{path}"
+    hdr = unit_headers(s, t)
+    if spec.get("hold"):
+        result = result if result is not None else {}
+
+        def fire():
+            try:
+                result["r"] = http(method, url, body=body, timeout=timeout, headers=hdr)
+            except Exception as e:  # noqa: BLE001
+                result["r"] = (0, str(e))
+        threading.Thread(target=fire, daemon=True).start()
+        p.say(st, f"{method} {path} sent")
+        return None
+    code, r = http(method, url, body=body, timeout=timeout, headers=hdr)
+    p.say(st, f"{method} {path} -> {code} {json.dumps(r)[:160]}")
+    if code >= 400:
+        raise PlanFailed(f"{s['name']} refused to {what}: {json.dumps(r)[:200]}")
+    return code, r
+
+
+_CLI_CACHE: dict[str, tuple[float, tuple]] = {}
+
+
+def cli_run(s: dict, spec: dict, timeout: float | None = None):
+    return run([str(a) for a in spec["argv"]], timeout=timeout or float(spec.get("timeout_s") or 60),
+               cwd=spec.get("cwd") or (s.get("start") or {}).get("cwd"))
+
+
+def cli_status(s: dict, t: dict, max_age: float = 4.0) -> tuple:
+    """(rc, data, text) from the status command, data parsed as JSON when the table says `json`. Cached a few
+    seconds: a poll every two seconds must not spawn a process per unit each time."""
+    hit = _CLI_CACHE.get(s["id"])
+    if hit and time.time() - hit[0] < max_age:
+        return hit[1]
+    spec = t.get("status") or {}
+    try:
+        rc, out, err = cli_run(s, spec, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        rc, out, err = 1, "", str(e)
+    data = out
+    if spec.get("json"):
+        try:
+            data = json.loads(out or "null")
+        except ValueError:
+            data = None
+    res = (rc, data, out)
+    _CLI_CACHE[s["id"]] = (time.time(), res)
+    return res
+
+
+def cli_probe(s: dict, info: dict) -> dict:
+    """The cli driver's probe: up is probe.path answering, or anything listening on the port; loaded is the status
+    command's answer against its predicate (JSON) or loaded_re (text)."""
+    t = table_of(s)
+    pr = t.get("probe") or {}
+    if pr.get("path"):
+        st, h = http_get(s, pr, t, "/health")
+        if not _answered(st, {"status": pr.get("status", 200)}):
+            return info
+        info["health"] = _scalars(h)
+    elif not pid_listening(s["port"]):
+        return info
+    info["up"] = True
+    sp = t.get("status") or {}
+    if sp.get("argv"):
+        rc, data, text = cli_status(s, t)
+        if rc == 0:
+            if sp.get("loaded_re"):
+                info["loaded"] = bool(re.search(str(sp["loaded_re"]), text, re.M))
+            else:
+                info["loaded"] = holds(data, pred_part(sp))
+    else:
+        info["loaded"] = True
+    info["state"] = "ready" if info["loaded"] else "idle"
+    return info
+
+
+def loads_at_start(s: dict) -> bool:
+    """Does starting this unit put its model on the card? Declared on the unit, true of a launch preset, and true
+    of a table driver with no way to tell loaded from up (one model for the life of the process)."""
+    d = s["driver"]
+    if (s.get("start") or {}).get("loads_at_start") or d == "strata-launch":
+        return True
+    if d == "http":
+        return not isinstance(table_of(s).get("loaded", True), dict)
+    if d == "cli":
+        return not (table_of(s).get("status") or {}).get("argv")
+    return False
+
+
+def cli_call(p: Plan, st, s: dict, verb: str):
+    """Run the table's command for load, unload, start or stop; a non-zero exit fails the plan."""
+    spec = table_of(s).get(verb) or {}
+    if not spec.get("argv"):
+        raise PlanFailed(f"{s['name']} has no {verb} command in its table")
+    p.say(st, " ".join(str(a) for a in spec["argv"]))
+    try:
+        rc, out, err = cli_run(s, spec)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise PlanFailed(f"{verb} command failed to run: {e}") from None
+    _CLI_CACHE.pop(s["id"], None)
+    for line in (out + err).strip().splitlines()[-3:]:
+        p.say(st, line[:160])
+    if rc != 0:
+        raise PlanFailed(f"{s['name']} {verb} exited {rc}: {(err or out).strip()[-200:]}")
+
+
 # ---- state -------------------------------------------------------------------
 
 class State:
@@ -520,8 +793,15 @@ class State:
         base = f"http://127.0.0.1:{port}"
         info = {"id": s["id"], "up": False, "loaded": False, "busy": False, "state": "down", "health": None,
                 "live": None, "last_request": None, "tok_s": None, "pid": None}
-        kind = s["kind"]
+        kind = s["driver"]
         try:
+            if kind == "http":
+                return http_probe(s, info)
+            if kind == "cli":
+                return cli_probe(s, info)
+            if kind not in DRIVERS:
+                info["health"] = {"status": f"unknown driver {kind!r}"}
+                return info
             if kind == "ollama":
                 st, ps = http("GET", base + "/api/ps", timeout=2.0)
                 models = (ps or {}).get("models", []) if st == 200 else []
@@ -655,7 +935,7 @@ class State:
             except Exception:  # noqa: BLE001
                 snap["shims"][sid] = {"up": False}
         # resident
-        holders = [sid for sid, i in snap["servers"].items() if i.get("loaded") and INV.servers[sid]["kind"] != "ollama"]
+        holders = [sid for sid, i in snap["servers"].items() if i.get("loaded") and INV.servers[sid]["driver"] != "ollama"]
         oll = snap["servers"].get("ollama", {})
         snap["ollama"] = {"models": oll.get("models", []), "up": oll.get("up", False)}
         snap["holders"] = holders
@@ -909,7 +1189,7 @@ def fresh_info(sid):
 
 def op_unload_server(p: Plan, sid: str, force=False):
     s = INV.servers[sid]
-    kind = s["kind"]
+    kind = s["driver"]
     base = f"http://127.0.0.1:{s['port']}"
     info = fresh_info(sid)
     name = s["name"]
@@ -961,6 +1241,23 @@ def op_unload_server(p: Plan, sid: str, force=False):
             if code >= 400:
                 raise PlanFailed(f"{name} refused to unload: {json.dumps(r)[:200]}")
             _wait(p, st, lambda: (not fresh_info(sid).get("loaded"), "still loaded"), s["timeouts"].get("unload_s", 60), what=f"{name} to release the card")
+        elif kind == "http":
+            t = table_of(s)
+            if not t.get("unload"):
+                p.say(st, f"{name} holds its model for the life of the process; unloading is stopping it")
+                p.done_step(st)
+                op_stop_process(p, sid)
+            else:
+                http_call(p, st, s, t["unload"], t, "unload")
+                _wait(p, st, lambda: (not fresh_info(sid).get("loaded"), "still loaded"), s["timeouts"].get("unload_s", 90), what=f"{name} to release the card")
+        elif kind == "cli":
+            if not (table_of(s).get("unload") or {}).get("argv"):
+                p.say(st, f"{name} holds its model for the life of the process; unloading is stopping it")
+                p.done_step(st)
+                op_stop_process(p, sid)
+            else:
+                cli_call(p, st, s, "unload")
+                _wait(p, st, lambda: (not fresh_info(sid).get("loaded"), "still loaded"), s["timeouts"].get("unload_s", 90), what=f"{name} to release the card")
         p.done_step(st)
     finally:
         STATE.set_transient(sid, None)
@@ -987,20 +1284,28 @@ def op_stop_launch(p: Plan, sid: str, st=None):
 def op_stop_process(p: Plan, sid: str):
     """End a server process: the labelled, confirmed action. Strata: taskkill of the serve process listening on its port."""
     s = INV.servers[sid]
-    if s["kind"] == "strata-launch":
+    drv = s["driver"]
+    if drv == "strata-launch":
         return op_stop_launch(p, sid)
-    if s["kind"] == "ollama":
+    if drv == "ollama":
         raise PlanFailed("Ollama is a service; unload its models instead")
-    if s["kind"] == "llamacpp-router":
+    if drv == "llamacpp-router":
         raise PlanFailed(f"{s['name']} is one model of the llama.cpp router on :{s['port']}; Unload ends its process, and the router, "
                          "which serves the others, is not stopped from here")
     unit = (s.get("start") or {}).get("systemd_user")
-    st = p.step(f"Stop {s['name']} process", f"systemd user unit {unit}" if unit else f"the process listening on {s['port']}")
+    cli_stop = drv == "cli" and (table_of(s).get("stop") or {}).get("argv")
+    st = p.step(f"Stop {s['name']} process", f"systemd user unit {unit}" if unit else "its own stop command" if cli_stop
+                else f"the process listening on {s['port']}")
     STATE.set_transient(sid, "stopping")
     try:
         if unit:
             # a killed service is a clean exit to systemd (no restart) and a stale state; let it stop its own
             systemctl_user(p, st, "stop", unit, timeout=s["timeouts"].get("unload_s", 60) + 30)
+            _wait(p, st, lambda: (not fresh_info(sid).get("up"), "port still open"), 60, what=f"{s['name']} to exit")
+            p.done_step(st)
+            return
+        if cli_stop:
+            cli_call(p, st, s, "stop")
             _wait(p, st, lambda: (not fresh_info(sid).get("up"), "port still open"), 60, what=f"{s['name']} to exit")
             p.done_step(st)
             return
@@ -1013,11 +1318,13 @@ def op_stop_process(p: Plan, sid: str):
             p.say(st, f"end {pid}: {host.kill_tree(pid)[:120]}")
         _wait(p, st, lambda: (not fresh_info(sid).get("up"), "port still open"), 60, what=f"{s['name']} to exit")
         # the engine child sometimes outlives the server (seen with maya.exe): one more sweep by name
-        names = {"maya": host.exe_names(("maya", "maya-vision")), "strata": host.exe_names(("strata-vision",))}.get(s["kind"], ())
-        procs = process_list()
+        names = {"maya": host.exe_names(("maya", "maya-vision")), "strata": host.exe_names(("strata-vision",))}.get(drv, ())
+        if drv in ("http", "cli"):
+            names = tuple(n.lower() for n in host.exe_names(tuple(table_of(s).get("procs") or ())))
+        procs = host.process_list(names) if names else {}
         for n in names:
             for pid in procs.get(n, []):
-                if s["kind"] == "maya" or len(INV.servers) == 1:
+                if drv in ("maya", "http", "cli") or len(INV.servers) == 1:
                     host.kill(pid)
                     p.say(st, f"swept {n} {pid}")
         p.done_step(st)
@@ -1033,7 +1340,7 @@ def op_start_server(p: Plan, sid: str):
     st = p.step(f"Start {s['name']}", "")
     STATE.set_transient(sid, "starting")
     try:
-        if s["kind"] == "strata-launch":
+        if s["driver"] == "strata-launch":
             argv = [s["python"], s["strata_py"], "launch", "--preset", s["preset"], "--no-tui", "--yes"]
             p.say(st, "strata launch --preset " + s["preset"] + " --no-tui --yes")
             out_path = LOG_DIR / f"{sid}.out.log"
@@ -1046,6 +1353,11 @@ def op_start_server(p: Plan, sid: str):
         elif (s.get("start") or {}).get("systemd_user"):
             # a server systemd keeps (a router most often): start its unit, never a second copy beside it
             systemctl_user(p, st, "start", s["start"]["systemd_user"])
+            _wait(p, st, lambda: (fresh_info(sid).get("up"), "waiting for the port"), s["timeouts"].get("start_s", 120),
+                  what=f"{s['name']} to open port {s['port']}")
+        elif s["driver"] == "cli" and (table_of(s).get("start") or {}).get("argv"):
+            # the program's own start command (lms server start, foundry service start) returns once it serves
+            cli_call(p, st, s, "start")
             _wait(p, st, lambda: (fresh_info(sid).get("up"), "waiting for the port"), s["timeouts"].get("start_s", 120),
                   what=f"{s['name']} to open port {s['port']}")
         elif not (s.get("start") or {}).get("argv"):
@@ -1093,7 +1405,7 @@ def op_load_server(p: Plan, sid: str):
     p.loading.add(sid)
     result = {}
     try:
-        if s["kind"] == "strata":
+        if s["driver"] == "strata":
             # /v1/load holds the request until the model is up; fire it on a thread and poll health meanwhile
 
             def fire():
@@ -1103,7 +1415,7 @@ def op_load_server(p: Plan, sid: str):
                     result["r"] = (0, str(e))
             threading.Thread(target=fire, daemon=True).start()
             p.say(st, "/v1/load sent")
-        elif s["kind"] == "maya":
+        elif s["driver"] == "maya":
 
             def fire():
                 try:
@@ -1112,13 +1424,20 @@ def op_load_server(p: Plan, sid: str):
                     result["r"] = (0, str(e))
             threading.Thread(target=fire, daemon=True).start()
             p.say(st, "/models/load sent")
-        elif s["kind"] == "llamacpp-router":
+        elif s["driver"] == "llamacpp-router":
             # answers at once; the model's status in GET /models goes loading -> loaded
             code, r = http("POST", base + "/models/load", body={"model": s["router_model"]}, timeout=60)
             _ROUTER_CACHE.pop(s["port"], None)
             p.say(st, f"/models/load {s['router_model']} -> {code} {json.dumps(r)[:120]}")
             if code >= 400:
                 result["r"] = (code, r)
+        elif s["driver"] == "http":
+            t = table_of(s)
+            if not t.get("load"):
+                raise PlanFailed(f"{s['name']} is up without its model and its table has no load call; stop and start it")
+            http_call(p, st, s, t["load"], t, "load", result)
+        elif s["driver"] == "cli":
+            cli_call(p, st, s, "load")
         # strata-launch loads at start; nothing to send
         logp = s.get("log")
 
@@ -1132,7 +1451,7 @@ def op_load_server(p: Plan, sid: str):
             tl = tail_file(logp, 1) if logp else []
             return False, (tl[-1][:140] if tl else "loading")
         _wait(p, st, loaded, s["timeouts"]["load_s"], every=2.0, what=f"{s['name']} to load")
-        if s["kind"] == "maya":
+        if s["driver"] == "maya":
             maya_touch(p, st, s)
         p.done_step(st)
     finally:
@@ -1175,7 +1494,7 @@ def holders(exclude: str | None = None):
         if sid == exclude:
             continue
         if info.get("loaded"):
-            if INV.servers[sid]["kind"] == "ollama" and not INV.policy.get("unload_ollama_on_resident", True):
+            if INV.servers[sid]["driver"] == "ollama" and not INV.policy.get("unload_ollama_on_resident", True):
                 continue
             out.append(sid)
     return out
@@ -1183,7 +1502,7 @@ def holders(exclude: str | None = None):
 
 def op_make_resident(p: Plan):
     sid = p.target
-    if sid not in INV.servers or INV.servers[sid]["kind"] == "ollama":
+    if sid not in INV.servers or INV.servers[sid]["driver"] == "ollama":
         raise PlanFailed(f"unknown or non-resident target {sid!r}")
     s = INV.servers[sid]
     force = bool(p.args.get("force"))
@@ -1247,7 +1566,7 @@ def op_stop_all(p: Plan):
     if p.target not in INV.engine_by_id:
         raise PlanFailed("unknown engine")
     st = STATE.get()["servers"]
-    ups = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and s["kind"] not in UNSTOPPABLE and st.get(sid, {}).get("up")]
+    ups = [sid for sid, s in INV.servers.items() if s["engine"] == p.target and s["driver"] not in UNSTOPPABLE and st.get(sid, {}).get("up")]
     if not ups:
         s = p.step("Nothing running", INV.engine_by_id[p.target]["name"])
         p.done_step(s)
@@ -1334,15 +1653,16 @@ def op_start(p: Plan):
     if p.target not in INV.servers:
         raise PlanFailed("unknown server")
     s = INV.servers[p.target]
-    if s["kind"] == "ollama":
+    if s["driver"] == "ollama":
         raise PlanFailed("Ollama is a service")
     # starting a server that loads at start is a load: the card must be clear
-    if s.get("start", {}).get("loads_at_start") or s["kind"] == "strata-launch":
+    at_start = loads_at_start(s)
+    if at_start:
         hs = holders(exclude=p.target)
         if hs and not p.args.get("force"):
             raise PlanFailed(f"{', '.join(INV.servers[h]['name'] for h in hs)} holds the card; use Make resident, or unload first")
     op_start_server(p, p.target)
-    if s.get("start", {}).get("loads_at_start") or s["kind"] == "strata-launch":
+    if at_start:
         op_load_server(p, p.target)
 
 
@@ -1364,7 +1684,7 @@ def op_unpark(p: Plan):
 
 def op_set_context(p: Plan):
     s = INV.servers.get(p.target)
-    if not s or s["kind"] != "maya":
+    if not s or s["driver"] != "maya":
         raise PlanFailed("context is live-settable on Maya only")
     n = int(p.args.get("value") or p.args.get("n") or 0)
     if n not in s.get("context_choices", [n]):
@@ -1402,7 +1722,7 @@ def op_set_context(p: Plan):
 
 def op_set_budget(p: Plan):
     s = INV.servers.get(p.target)
-    if not s or s["kind"] != "maya":
+    if not s or s["driver"] != "maya":
         raise PlanFailed("thinking budget is a Maya setting")
     n = int(p.args.get("value") or p.args.get("n") or 0)
     if n != 0 and not 256 <= n <= 262144:
@@ -2270,19 +2590,19 @@ def op_art_batch(p: Plan):
         return p.done_step(snap, "the art queue is empty")
     images = sum(int(b.get("images") or 0) for b in batches)
     hs = holders()
-    prior = next((h for h in hs if INV.servers[h]["kind"] != "ollama"), None)
+    prior = next((h for h in hs if INV.servers[h]["driver"] != "ollama"), None)
     then = str(p.args.get("then") or "prior")
     if then == "prior":
         back = prior
     elif then == "none":
         back = None
-    elif then in INV.servers and INV.servers[then]["kind"] != "ollama":
+    elif then in INV.servers and INV.servers[then]["driver"] != "ollama":
         back = then
     else:
         raise PlanFailed("then must be prior, none, or a server id")
     force = bool(p.args.get("force"))
     for h in hs:
-        if INV.servers[h]["kind"] != "ollama" and fresh_info(h).get("busy") and not force:
+        if INV.servers[h]["driver"] != "ollama" and fresh_info(h).get("busy") and not force:
             raise PlanFailed(f"{INV.servers[h]['name']} is answering a request; run the queue when it is idle, or force")
     ci = comfy_probe()
     comfy_was_up = ci["up"]
@@ -2354,11 +2674,11 @@ def preset_targets(kind: str) -> list[str]:
     if kind == "unit":
         return list(INV.servers)
     if kind == "model":
-        return [sid for sid, s in INV.servers.items() if s["kind"] != "ollama"]
+        return [sid for sid, s in INV.servers.items() if s["driver"] != "ollama"]
     if kind == "parkable":
         return [sid for sid, s in INV.servers.items() if s.get("parkable")]
     if kind == "maya":
-        return [sid for sid, s in INV.servers.items() if s["kind"] == "maya"]
+        return [sid for sid, s in INV.servers.items() if s["driver"] == "maya"]
     if kind == "shim":
         return list(INV.shims)
     if kind == "engine":
@@ -2427,7 +2747,7 @@ def presets_public() -> dict:
             "ops": {op: {**spec, "targets": preset_targets(spec["target"]) if spec["target"] else [],
                          "available": not spec.get("needs") or bool(getattr(INV, spec["needs"]))}
                     for op, spec in PRESET_OPS.items()},
-            "context_choices": {sid: s.get("context_choices") or [] for sid, s in INV.servers.items() if s["kind"] == "maya"}}
+            "context_choices": {sid: s.get("context_choices") or [] for sid, s in INV.servers.items() if s["driver"] == "maya"}}
 
 
 OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_unload_all, "stop": op_stop, "stop_all": op_stop_all,

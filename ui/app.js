@@ -108,7 +108,7 @@
       const secs = live.tok_s ? Math.min(2.4, Math.max(0.6, Math.round(240 / live.tok_s) / 10)) : 1.4;
       return setVitals(w, "active", live.tok_s ? `${live.tok_s.toFixed(1)} t/s` : live.state, secs);
     }
-    const loaded = s.kind === "ollama" ? !!(i.models && i.models.length) : !!i.loaded;
+    const loaded = s.driver === "ollama" ? !!(i.models && i.models.length) : !!i.loaded;
     return loaded ? setVitals(w, "alive", "nominal") : setVitals(w, "standby", "standby");
   }
 
@@ -118,7 +118,7 @@
     const i = (STATE && STATE.servers[s.id]) || {};
     const parts = [s.model + "."];
     if (s.footprint && s.footprint.vram_gib) parts.push(`${s.footprint.vram_gib} GB VRAM, ${s.footprint.ram_gib} GB RAM.`);
-    if (s.kind === "ollama") return parts.join(" ");
+    if (s.driver === "ollama") return parts.join(" ");
     const others = STATE ? (STATE.holders || []).filter((h) => h !== s.id).map((h) => (INV.units.find((x) => x.id === h) || {}).name) : [];
     if (i.loaded) parts.push("Resident now.");
     else if (others.length) parts.push(`Making it resident unloads ${others.join(", ")}.`);
@@ -154,12 +154,12 @@
     const oll = el("div", "oll-models"); c.appendChild(oll);
     const act = el("div", "c-actions");
     const refs = { pill, live, oll, act, vit };
-    if (s.kind !== "ollama") {
+    if (s.driver !== "ollama") {
       const mk = el("button", "btn primary", "Make resident");
       mk.onclick = () => action("make_resident", s.id);
       act.appendChild(mk); refs.mk = mk;
       const un = el("button", "btn small", "Unload"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
-      if (s.kind !== "llamacpp-router") {            // a router's model has no process of its own to start or stop: Unload ends it
+      if (s.driver !== "llamacpp-router") {            // a router's model has no process of its own to start or stop: Unload ends it
         const st = el("button", "btn small", "Start"); st.onclick = () => action("start", s.id); act.appendChild(st); refs.st = st;
         const sp = el("button", "btn small danger", "Stop");
         sp.onclick = async () => { const u = usedBy(s.port); if (await confirm(`Stop ${s.name}?`, `This ends the server process on port ${s.port}. The model unloads with it.${u.length ? ` ${u.join(" and ")} point${u.length === 1 ? "s" : ""} at this port.` : ""}`)) action("stop", s.id, { confirm: true }); };
@@ -170,7 +170,7 @@
       const un = el("button", "btn small", "Unload all"); un.onclick = () => action("unload", s.id); act.appendChild(un); refs.un = un;
     }
     act.appendChild(el("span", "spacer"));
-    if (s.kind === "maya") {
+    if (s.driver === "maya") {
       const sel = el("select");
       (s.context_choices || []).forEach((n) => { const o = el("option", null, fmtK(n)); o.value = n; sel.appendChild(o); });
       sel.title = "context size (reloads the engine)";
@@ -191,7 +191,7 @@
   function hoverEvict(id, on) {
     if (!STATE) return;
     const s = INV.units.find((x) => x.id === id);
-    if (!s || s.kind === "ollama") return;
+    if (!s || s.driver === "ollama") return;
     for (const [sid, info] of Object.entries(STATE.servers)) {
       if (sid === id) continue;
       const refs = cards[sid]; if (!refs) continue;
@@ -397,7 +397,7 @@
       const info = (STATE && STATE.engines && STATE.engines[e.id]) || {};
       const planRunning = STATE && STATE.plan && STATE.plan.status === "running";
       const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.onclick = () => { closeMenus(); fn(); }; m.appendChild(b); return b; };
-      if ((INV.units || []).some((u) => u.engine === e.id && u.kind !== "ollama" && u.kind !== "llamacpp-router")) item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
+      if ((INV.units || []).some((u) => u.engine === e.id && u.driver !== "ollama" && u.driver !== "llamacpp-router")) item(`Stop all units${info.up ? ` (${info.up} up)` : ""}`, async () => {
         if (await confirm(`Stop every ${e.name} unit?`, `This ends ${info.up || 0} server process${info.up === 1 ? "" : "es"}. Their models unload with them.`)) action("stop_all", e.id, { confirm: true });
       }, planRunning || !info.up);
       updateItems(item, e.id, e.name, info, planRunning);
@@ -612,7 +612,7 @@
       const u = (INV.units || []).find((x) => x.id === h), i = (st.servers || {})[h] || {};
       if (!u) continue;
       steps.push({ op: "make_resident", target: h });
-      if (u.kind === "maya" && i.health && i.health.max_context && (u.context_choices || []).includes(i.health.max_context)) steps.push({ op: "set_context", target: h, value: i.health.max_context });
+      if (u.driver === "maya" && i.health && i.health.max_context && (u.context_choices || []).includes(i.health.max_context)) steps.push({ op: "set_context", target: h, value: i.health.max_context });
     }
     for (const sh of INV.shims || []) if (st.shims && st.shims[sh.id] && st.shims[sh.id].up) steps.push({ op: "start_shim", target: sh.id });
     if (INV.comfyui && st.comfyui && st.comfyui.up) steps.push({ op: "comfy_start" });
@@ -628,9 +628,10 @@
     const h = (t) => b.appendChild(el("h3", null, t));
     const p = (t, cls) => { const e = el("p", cls || null, t); b.appendChild(e); return e; };
     const list = (items) => { const u = el("ul"); for (const i of items || []) { const li = el("li"); li.appendChild(looksLikeCommand(i) ? el("code", null, i) : document.createTextNode(i)); u.appendChild(li); } b.appendChild(u); };
-    $("#guide-title").textContent = `${rec.name}  ·  tier ${rec.tier}, ${rec.role}`;
+    $("#guide-title").textContent = `${rec.name}  ·  tier ${rec.tier}, ${rec.role}${rec.driver && rec.driver !== rec.id ? `, driven as ${rec.driver}` : ""}`;
     p(rec.what);
     p(`Licence: ${rec.licence || "?"}   ·   ${rec.home || ""}`, "lic");
+    p(testedLine(rec), "tested");
     if (rec.fits) { h("Fits"); list((rec.fits.good || []).map((x) => "good for: " + x)); list((rec.fits.not || []).map((x) => "not for: " + x)); }
     if (rec.install) { for (const [plat, steps] of Object.entries(rec.install)) { h(`Install · ${plat}`); list(steps); } }
     if (rec.drive) { h("What Quartermaster does with it"); list((rec.drive.can || []).map((x) => "can: " + x)); list((rec.drive.cannot || []).map((x) => "cannot: " + x)); }
@@ -640,11 +641,20 @@
     $("#guide-modal").hidden = false;
   }
   function looksLikeCommand(s) { return /^(git |npm |pip |python |winget |docker |cmake |ollama |llama-server |venv|\.venv|\S+\.(bat|sh|exe)\b|[A-Za-z]:\\|\/usr\/)/.test(s) || /^[a-z0-9_.\/-]+( [-\w.\/:=<>"'\\@]+)+$/.test(s) && s.length < 90 && !/[.!?]$/.test(s); }
+  // `tested` in a record: {platform: date} for every machine someone drove it from. A tier A or B record without
+  // one was written from the documentation, and the panel says so rather than letting the tier imply otherwise.
+  const PLAT = { windows: "Windows", linux: "Linux", macos: "macOS" };
+  function testedLine(rec) {
+    const t = rec.tested && Object.keys(rec.tested).length ? Object.entries(rec.tested).map(([k, v]) => `${PLAT[k] || k} (${v})`).join(", ") : "";
+    if (t) return `Driven from: ${t}.`;
+    return rec.tier === "D" ? "Listed with its guide; Quartermaster does not drive it." : "Not yet driven by anyone we know of: the record is from the documentation. If it works for you, say so.";
+  }
   function catRow(name, tier, ver, rec) {
     const r = el("div", "cat-row");
     r.appendChild(el("span", "tier", tier || "?"));
     r.appendChild(el("span", "nm", name));
     if (ver) r.appendChild(el("span", "ver", ver));
+    if (rec && rec.tier && rec.tier !== "D" && !(rec.tested && Object.keys(rec.tested).length)) { const u = el("span", "untested", "untested"); u.title = testedLine(rec); r.appendChild(u); }
     r.appendChild(el("span", "spacer"));
     if (rec) { const g = el("button", "btn small ghost", "guide"); g.onclick = () => guideShow(rec); r.appendChild(g); }
     return r;
@@ -764,7 +774,7 @@
       let state = i.state;
       refs.pill.textContent = i.parked && state === "idle" ? "parked" : state;
       refs.pill.className = "pill " + (i.parked && state === "idle" ? "parked" : state);
-      refs.root.classList.toggle("resident", !!i.loaded && s.kind !== "ollama");
+      refs.root.classList.toggle("resident", !!i.loaded && s.driver !== "ollama");
       refs.root.classList.toggle("down", !i.up);
       refs.root.classList.toggle("parked", !!i.parked);
       const lv = [];
@@ -780,11 +790,11 @@
       } else if (i.health && i.health.max_context && i.up) {
         lv.push(`${fmtK(i.health.max_context)} ctx · ${i.health.model || ""}${i.health.version ? " · v" + i.health.version : ""}`);
       } else if (!i.up) {
-        lv.push(s.kind === "strata-launch" ? `server down · ${s.preset}` : "server down");
+        lv.push(s.driver === "strata-launch" ? `server down · ${s.preset}` : "server down");
       }
       refs.live.innerHTML = lv.join(" &nbsp; ");
       serverVitals(refs.vit, s, i);
-      if (s.kind === "ollama") {
+      if (s.driver === "ollama") {
         refs.oll.innerHTML = "";
         for (const m of i.models || []) { const r = el("div", "m"); r.appendChild(el("span", null, m.name)); r.appendChild(el("span", null, `${m.size_vram_gib} GB VRAM`)); refs.oll.appendChild(r); }
         refs.un.disabled = !(i.models && i.models.length) || planRunning;

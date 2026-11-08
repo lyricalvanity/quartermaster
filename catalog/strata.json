@@ -7,6 +7,8 @@
   "tier": "A",
   "role": "engine",
   "platforms": ["windows", "linux"],
+  "driver": "strata",
+  "tested": {"windows": "2026-11-04"},
   "detect": {
     "executables": ["strata"],
     "roots": ["~/Strata", "~/AppData/Local/Strata", "~/AppData/Local/Programs/Strata"],

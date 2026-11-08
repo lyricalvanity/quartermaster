@@ -7,6 +7,8 @@
   "tier": "A",
   "role": "engine",
   "platforms": ["windows", "linux", "macos"],
+  "driver": "ollama",
+  "tested": {"windows": "2026-11-04", "linux": "2026-11-07"},
   "detect": {
     "executables": ["ollama"],
     "roots": ["~/AppData/Local/Programs/Ollama", "/usr/local/bin", "/usr/bin"],

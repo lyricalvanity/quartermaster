@@ -129,6 +129,29 @@
       "footprint": { "vram_gib": null, "ram_gib": null },
       "timeouts": { "unload_s": 60 },
       "notes": "Service, always up. Unload = /api/generate keep_alive 0 per loaded model."
+    },
+    {
+      "id": "vllm-qwen",
+      "engine": "vllm",
+      "kind": "vllm",
+      "driver": "http",
+      "name": "vLLM Qwen 7B",
+      "model": "Qwen2.5-7B-Instruct-AWQ",
+      "model_id": "Qwen/Qwen2.5-7B-Instruct-AWQ",
+      "port": 8000,
+      "footprint": { "vram_gib": 6, "ram_gib": 4 },
+      "start": {
+        "argv": ["vllm", "serve", "Qwen/Qwen2.5-7B-Instruct-AWQ", "--port", "8000", "--enable-sleep-mode"],
+        "cwd": "/home/you"
+      },
+      "table": {
+        "probe": { "path": "/health" },
+        "loaded": { "path": "/is_sleeping", "key": "is_sleeping", "equals": false },
+        "load": { "method": "POST", "path": "/wake_up" },
+        "unload": { "method": "POST", "path": "/sleep?level=2" }
+      },
+      "timeouts": { "start_s": 300, "load_s": 120, "unload_s": 60 },
+      "_driver": "A unit of a kind with no code of its own: driver http and a table of the calls (catalog/README.md). Here the table is on the unit; a catalog record for the kind would carry it instead, and the unit would say only kind. The shape is from vLLM's documentation and has not been driven by anyone we know of; it is here to show the fields."
     }
   ],
   "shims": [

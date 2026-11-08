@@ -12,9 +12,14 @@ click will not be merged, however useful.
 directory or local addresses; put your own patterns in `local/scrub-denylist.txt`, one regular expression
 per line, which is never committed.
 
-**Adding a kind** is a catalog record (`catalog/<kind>.json`, see `catalog/README.md`), a detector in
-`agent/setup.py`, and, for an engine the state machine should drive, the probe, load, unload and stop
-branches in `agent/quartermaster_agent.py`. A record alone is tier D: listed with a guide.
+**Adding a kind** is a catalog record (`catalog/<kind>.json`, see `catalog/README.md`) and, so that `qm setup`
+finds it, a detector in `agent/setup.py`; without one the owner writes the unit by hand. For an engine the
+state machine should drive, the record names its **driver**: a fork of a known engine names its parent
+(`"driver": "strata"`); an engine with an HTTP or command-line control surface takes `http` or `cli` and a
+`table` of the calls; only an engine neither can express gets probe, load, unload and stop branches of its
+own in `agent/quartermaster_agent.py`. A record alone, with no driver, is tier D: listed with a guide.
+Fill `tested` only with a machine the kind has actually been driven from; a record from the documentation
+ships with `"tested": {}` and says so in the panel until someone reports it working.
 
 **Adding a theme** is one stylesheet scoped to `:root[data-theme="<id>"]`, a line in `ui/theme.js`, and a
 `<link>` in `ui/index.html`. Colour the engine bands by slot (`--e1`..`--e6`, `--e0` for legacy), never by

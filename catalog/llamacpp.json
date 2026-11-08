@@ -7,6 +7,8 @@
   "tier": "A",
   "role": "engine",
   "platforms": ["windows", "linux", "macos"],
+  "driver": "llamacpp",
+  "tested": {"linux": "2026-11-07"},
   "detect": {
     "executables": ["llama-server"],
     "roots": ["~/llama.cpp"],

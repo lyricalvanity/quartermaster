@@ -7,6 +7,7 @@
   "tier": "C",
   "role": "client",
   "platforms": ["windows", "linux", "macos"],
+  "tested": {"windows": "2026-11-06"},
   "detect": {
     "executables": ["claude"],
     "version": {"cmd": ["claude", "--version"]},

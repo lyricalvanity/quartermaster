@@ -65,15 +65,24 @@ timeouts. Version 1's `servers[]` are units; each gains `engine: "<id>"` and `gr
 An engine may have no units (ComfyUI), one, or many (Strata). Ollama's units are whatever it has loaded,
 listed live. `legacy: true` on a unit folds it into the collapsed band as now.
 
-Capabilities are declared per **kind**, not per install:
+Capabilities are declared per **kind**, not per install. A unit's kind is what it is (its catalog record,
+its band, its update recipe); its **driver** is how the agent moves it, the code path for probe, load,
+unload, start and stop. The driver comes from the unit, else from its kind's catalog record, else it is
+the kind itself. So a fork is a record naming its parent's driver (PolyStrata: `"driver": "strata"`), and an
+engine whose API is a path to call and a key to read is a record with `"driver": "http"` (or `"cli"` for one
+moved by its own command line) and a **table** of those paths and keys (`catalog/README.md`); neither
+needs a line of agent code. Every record also says where it has been **tested** (`{platform: date}`); a
+tier A record nobody has driven is marked *untested* in the panel (2026-11-07).
 
-| kind | serves units | holds VRAM | start/stop | load/unload | update |
+| driver | serves units | holds VRAM | start/stop | load/unload | update |
 |---|---|---|---|---|---|
 | strata, strata-launch | yes | yes | yes | yes | declared |
 | maya | yes | yes | yes | yes | declared |
 | ollama | live list | yes | service | per model | declared or self |
 | llamacpp | yes | yes | yes | no (one model per process) | declared |
 | llamacpp-router | one per model it offers | yes (its children) | the router's own unit, never from the page | per model | declared |
+| http | yes | yes | yes | as the table says: a load and unload call, or none (then unload is stop) | declared |
+| cli | yes | yes | its own commands, or as above | as the table says | declared |
 | comfyui | no | yes | yes | free | built in (version 1) |
 
 ### 3.3 Services

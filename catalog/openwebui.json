@@ -7,6 +7,7 @@
   "tier": "B",
   "role": "service",
   "platforms": ["windows", "linux", "macos"],
+  "tested": {"windows": "2026-11-07"},
   "detect": {
     "ports": [3000, 8080],
     "health": "/health",

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- A unit's **driver** is now separate from its kind. The kind is what a thing is (its record, its band, its
+  update recipe); the driver is how the agent moves it, and comes from the unit, else its kind's catalog
+  record, else the kind itself. Every existing inventory resolves exactly as before. What it buys: a fork is a
+  record naming its parent's driver (`"driver": "strata"`) and needs no code.
+- Two **table drivers**, `http` and `cli`: an engine whose control surface is a path to call and a key to read
+  (vLLM's sleep mode, SGLang, TabbyAPI, KoboldCpp, oobabooga) or a command line (`lms`, `foundry`) is a
+  record with a `table` of those calls, which a unit may override key by key (`catalog/README.md`). Probe,
+  loaded, busy, load, unload, start, stop, a process sweep, and a header read from a file for servers that
+  want an admin key. Proven against stand-ins for both shapes, including evicting one for the other; no real
+  engine of either shape has been driven yet.
+- Every catalog record says where it has been **tested** (`{platform: date}`); the panel marks a tier A or B
+  record nobody has driven *untested* and the guide says the record is from the documentation.
+- The card's process list now includes every catalog record's executables and any `procs` a table names, so an
+  engine added by record alone is seen on the card.
+- A hand-written unit may omit `timeouts`; the agent fills defaults (start 120 s, load 600 s, unload 90 s).
+
 ## 0.2.0 - 2026-11-07
 
 The first install on a second machine, a Linux laptop with Ollama and a llama.cpp router on Vulkan, and what

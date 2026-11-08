@@ -7,6 +7,8 @@
   "tier": "A",
   "role": "engine",
   "platforms": ["windows", "linux", "macos"],
+  "driver": "comfyui",
+  "tested": {"windows": "2026-11-05"},
   "detect": {
     "roots": ["~/ComfyUI/ComfyUI", "~/ComfyUI", "<drive>:/ComfyUI/ComfyUI", "<drive>:/ComfyUI"],
     "marker": "main.py beside a comfy/ directory",
