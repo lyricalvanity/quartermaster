@@ -561,6 +561,57 @@ def webui_unit(port: int, scope: str = "system") -> tuple[str, str] | None:
     return None
 
 
+def container_on(port: int, image_hint: str) -> dict | None:
+    """The running container that publishes this host port from an image whose name contains image_hint, as
+    `docker inspect` describes it; None without docker or without such a container."""
+    docker = which("docker")
+    if not docker:
+        return None
+    rc, o, _ = run([docker, "ps", "-q"], timeout=20)
+    ids = o.split() if rc == 0 else []
+    if not ids:
+        return None
+    rc, o, _ = run([docker, "inspect", *ids], timeout=40)
+    try:
+        found = json.loads(o) if rc == 0 else []
+    except ValueError:
+        return None
+    for c in found:
+        if image_hint not in ((c.get("Config") or {}).get("Image") or ""):
+            continue
+        published = {int(b["HostPort"]) for binds in ((c.get("NetworkSettings") or {}).get("Ports") or {}).values()
+                     for b in (binds or []) if str(b.get("HostPort", "")).isdigit()}
+        if port in published:
+            c["_docker"] = docker
+            return c
+    return None
+
+
+def compose_block(c: dict, port: int) -> dict | None:
+    """The openwebui tile for a container Docker Compose started (its labels say so), or None for one it did not."""
+    lb = (c.get("Config") or {}).get("Labels") or {}
+    project, service = lb.get("com.docker.compose.project"), lb.get("com.docker.compose.service")
+    if not (project and service):
+        return None
+    files = [f.strip() for f in (lb.get("com.docker.compose.project.config_files") or "").split(",") if f.strip()]
+    # what an update copies: the container's named volumes, its own state; bind mounts are the owner's folders
+    vols = [m["Destination"] for m in c.get("Mounts") or [] if m.get("Type") == "volume" and m.get("Destination")]
+    restart = ((c.get("HostConfig") or {}).get("RestartPolicy") or {}).get("Name") or "no"
+    back = "Start brings it back, and so does Docker's own next start" if restart == "always" else \
+        "It stays stopped, through a reboot too, until Start"
+    return {
+        "_comment": f"OpenWebUI as the Compose service {service} of project {project}. The agent runs docker compose on exactly these: "
+                    "start is up -d --no-recreate, stop is stop (the container stays), and update copies backup_paths with the "
+                    "running image's own tar, pulls, recreates and waits for /health, rolling image and data back if the new "
+                    "version does not come up. It reads /health and /api/version and nothing of OpenWebUI's data.",
+        "name": "OpenWebUI", "model": f"docker compose · {project}/{service}",
+        "url": f"http://127.0.0.1:{port}", "open_url": f"http://localhost:{port}", "driver": "docker-compose",
+        "compose": {"docker": c["_docker"], "project": project, "project_dir": lb.get("com.docker.compose.project.working_dir") or "",
+                    "files": files, "service": service, "backup_paths": vols, "keep_backups": 3},
+        "stop_note": f"This stops the container for everyone using OpenWebUI (restart policy {restart}). {back}.",
+    }
+
+
 def detect_openwebui() -> dict:
     out = {"notes": []}
     port = next((p for p in (3000, 8080) if get_json(f"http://127.0.0.1:{p}/health")[0] == 200), None)
@@ -599,10 +650,19 @@ def detect_openwebui() -> dict:
             "install_hint": "name a oneshot user unit of yours as units.update for an Update button"}
         out["notes"].append(f"OpenWebUI is the user unit {name} on :{port}: start and stop through it")
         return out
-    if port:
-        rc, o, _ = run(["docker", "ps", "--format", "{{.Image}}"], timeout=15)
-        how = "docker" if rc == 0 and "open-webui" in o else "a process"
-        out["notes"].append(f"OpenWebUI answers on :{port} ({how}); the generic service driver is a later stage, so no tile is written yet")
+    c = container_on(port, "open-webui/open-webui") if port else None
+    block = compose_block(c, port) if c else None
+    if block:
+        out["service"] = block
+        cp = block["compose"]
+        out["notes"].append(f"OpenWebUI is the Compose service {cp['service']} of {cp['project']} ({cp['project_dir']}) on :{port}; "
+                            f"an update copies {', '.join(cp['backup_paths']) or 'nothing (no named volume)'}")
+        return out
+    if c:
+        out["notes"].append(f"OpenWebUI answers on :{port} from a container Compose did not start (docker run); "
+                            "the tile drives Compose projects, so none is written: put it in a compose file to get one")
+    elif port:
+        out["notes"].append(f"OpenWebUI answers on :{port} from a process; no driver for that yet, so no tile is written")
     return out
 
 

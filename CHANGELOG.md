@@ -17,6 +17,15 @@
 - The card's process list now includes every catalog record's executables and any `procs` a table names, so an
   engine added by record alone is seen on the card.
 - A hand-written unit may omit `timeouts`; the agent fills defaults (start 120 s, load 600 s, unload 90 s).
+- An OpenWebUI in **Docker Compose** gets its tile: the `docker-compose` driver that SPEC.md section 3.3 had
+  planned. Setup reads the project, compose files, service and named volumes from the running container's
+  labels (before, it noted "a later stage" and wrote nothing). Start is `up -d --no-recreate`, stop is `stop`,
+  and update copies the data, pulls, recreates, waits for `/health` and rolls image and data back if the new
+  version does not come up. Proven on a throwaway project served from a local registry: stop and start keep
+  the same container, an update with nothing new says so, a real one copies and moves, a version that never
+  answers is rolled back with its own writes gone and ownership and modes intact, a cancel before the stop
+  changes nothing, and old copies are pruned to `keep_backups`. Read-only against a real OpenWebUI:
+  detection, readiness, and the sizing helper on its image; it has not been stopped or updated by the driver.
 
 ## 0.2.0 - 2026-11-07
 

@@ -170,7 +170,7 @@
     "_comment": "Optional: remove the block to hide the tile. This driver is for an OpenWebUI that runs as another user and is started, stopped and updated by three Windows scheduled tasks whose scripts live where only administrators can write. The agent runs the tasks by name and passes them nothing; it reads health and version from the URL and shows the tail of two text logs.",
     "name": "OpenWebUI",
     "model": "scheduled-task driver",
-    "_model_help": "model is the line under the name on the tile; help is the hover text; steps.start, steps.stop and steps.update describe each control in a plan, and update_note the Update confirmation, in this installation's own words. All optional. On Linux the driver is systemd: driver, scope (system or user) and units in place of tasks (contrib/openwebui-systemd).",
+    "_model_help": "model is the line under the name on the tile; help is the hover text; steps.start, steps.stop and steps.update describe each control in a plan, and update_note the Update confirmation, in this installation's own words. All optional. On Linux the driver is systemd: driver, scope (system or user) and units in place of tasks (contrib/openwebui-systemd). In Docker Compose, on either system, it is docker-compose: a compose block (docker, project, project_dir, files, service, backup_paths, keep_backups) in place of tasks, which setup writes from the running container's labels; stop_note words the Stop confirmation.",
     "url": "http://127.0.0.1:3000",
     "open_url": "http://localhost:3000",
     "tasks": { "start": "owui-ctl-start", "stop": "owui-ctl-stop", "update": "owui-ctl-update" },

@@ -37,6 +37,7 @@ import urllib.request
 import urllib.error
 
 import artqueue
+import compose_service
 import platform_host as host
 import updaters
 
@@ -189,6 +190,9 @@ class Inventory:
         self.policy = data.get("policy", {})
         self.poll_s = float(data.get("poll_s", 2.0))
         self.openwebui = data.get("openwebui")       # optional; absent = no OpenWebUI tile
+        if self.openwebui and self.openwebui.get("compose") and not self.openwebui.get("ctl_log"):
+            # the compose driver's controls are this process's own calls: it keeps their log, beside its others
+            self.openwebui["ctl_log"] = str(LOG_DIR / "owui-compose.log")
         self.comfyui = data.get("comfyui")           # optional; absent = no ComfyUI tile
         self.art = data.get("art")                   # optional; absent = no art queue (needs comfyui too)
 
@@ -1806,6 +1810,12 @@ def op_preset(p: Plan):
 # or, as {"unit": ..., "verb": "start"|"stop"|"restart"}, the app's own unit. Whatever walls OpenWebUI off
 # lives beneath those units; the agent knows their names and their log, nothing else. Who may start them is
 # polkit's to say: a unit that wants a password fails at once, since nobody can type one for this process.
+#
+# The docker-compose driver (2026-11-07) is for an OpenWebUI the owner runs in Docker Compose, which is no
+# wall at all: the containers are the owner's, and so is this process. Its controls are the agent's own calls
+# to the docker CLI on the project, files and service the inventory names (compose_service.py): start is
+# `up -d --no-recreate`, stop is `stop`, update copies the data, pulls, recreates and rolls back on a failed
+# start. It writes the same control-log lines as the tasks, so the tile and its log read the same either way.
 
 # Task names come from inventory.json (openwebui.tasks), never from a request. The inventory is already the
 # trust root for every argv the agent runs, so naming the tasks there adds nothing a request could reach.
@@ -1818,7 +1828,27 @@ def owui_tasks() -> dict:
 
 def owui_driver() -> str:
     o = INV.openwebui or {}
-    return o.get("driver") or ("systemd" if o.get("units") else "schtasks")
+    return o.get("driver") or ("systemd" if o.get("units") else "docker-compose" if o.get("compose") else "schtasks")
+
+
+_COMPOSE: dict = {"key": None, "svc": None}
+
+
+def owui_compose() -> compose_service.ComposeService:
+    """The compose driver's handle on the inventory's openwebui.compose block, rebuilt when a reload changes it."""
+    cfg = (INV.openwebui or {}).get("compose") or {}
+    key = json.dumps(cfg, sort_keys=True)
+    if _COMPOSE["key"] != key:
+        _COMPOSE["key"], _COMPOSE["svc"] = key, compose_service.ComposeService(cfg)
+    return _COMPOSE["svc"]
+
+
+def owui_version_now() -> str | None:
+    try:
+        st, v = http("GET", INV.openwebui["url"] + "/api/version", timeout=3.0)
+        return str(v.get("version"))[:40] if st == 200 and isinstance(v, dict) else None
+    except Exception:  # noqa: BLE001 - down
+        return None
 
 
 def owui_units() -> dict:
@@ -1832,7 +1862,9 @@ def owui_units() -> dict:
 
 
 def owui_controls() -> dict:
-    """verb -> the name of what it runs: a scheduled task, or a unit."""
+    """verb -> the name of what it runs: a scheduled task, a unit, or a docker compose command."""
+    if owui_driver() == "docker-compose":
+        return {"start": "docker compose up", "stop": "docker compose stop", "update": "docker compose pull"}
     return {v: u for v, (u, _) in owui_units().items()} if owui_driver() == "systemd" else owui_tasks()
 
 
@@ -1841,6 +1873,8 @@ def owui_systemctl() -> list:
 
 
 def owui_install_hint() -> str:
+    if owui_driver() == "docker-compose":
+        return owui_compose().ready()[1]
     return (INV.openwebui or {}).get("install_hint") or (
         "install the units named in openwebui.units (contrib/openwebui-systemd)" if owui_driver() == "systemd"
         else "install the scheduled tasks named in openwebui.tasks")
@@ -1853,7 +1887,10 @@ def owui_step(verb: str, default: str) -> str:
 
 def owui_task_state(verb: str) -> str:
     """'run': this process may run it. 'gated': it exists and Windows wants elevation. 'missing'.
-    A unit reads 'run' once systemd has it loaded; whether polkit lets this user start it shows on the first try."""
+    A unit reads 'run' once systemd has it loaded; whether polkit lets this user start it shows on the first try.
+    The compose driver's three read 'run' together, while docker answers and the compose file is there."""
+    if owui_driver() == "docker-compose":
+        return "run" if owui_compose().ready()[0] else "missing"
     if owui_driver() == "systemd":
         u = owui_units().get(verb)
         if not u:
@@ -1924,6 +1961,8 @@ class OwuiWatch:
             self._slow_at = time.time()
             info["tasks"] = {v: owui_task_state(v) for v in ("start", "stop", "update")}
             info["install_hint"] = owui_install_hint()
+            if owui_driver() == "docker-compose" and info["tasks"]["start"] == "run":
+                info["container"] = owui_compose().state()      # Docker's word for it; the page shows it when not running
             info["bridge_bound"], info["bridge_expected"] = owui_bridge(o)
             kl = tail_file(o["keepalive_log"], 8) if o.get("keepalive_log") else []
             last = max((i for i, l in enumerate(kl) if "starting " in l), default=None)
@@ -2021,11 +2060,62 @@ def _owui_fire(p: Plan, st, verb: str, timeout: float = 60) -> int:
 
 def _owui_run(p: Plan, st, verb: str, timeout: float) -> int:
     """Run one control to its end and return its code: the control log's done line where there is a log,
-    systemctl's own wait where a unit has none."""
+    systemctl's own wait where a unit has none, and the docker calls' own end for the compose driver."""
+    if owui_driver() == "docker-compose":
+        return _owui_compose_run(p, st, verb, timeout)
     before = _owui_fire(p, st, verb, timeout)
     if owui_driver() == "systemd" and not INV.openwebui.get("ctl_log"):
         return 0                                  # systemctl waited, and would have failed the fire otherwise
     return _owui_wait_task(p, st, verb, before, timeout)
+
+
+def _owui_compose_run(p: Plan, st, verb: str, timeout: float) -> int:
+    """Run one compose control in this thread. Every line goes to the plan and to the control log, framed by the
+    same start and done lines the scheduled tasks write."""
+    o, svc = INV.openwebui, owui_compose()
+    log_path = Path(o["ctl_log"])
+    lock = threading.Lock()
+
+    def write(line: str):
+        with lock:
+            try:
+                with log_path.open("a", encoding="utf-8", newline="\n") as f:
+                    f.write(line + "\n")
+            except OSError:
+                pass
+
+    def say(line: str):
+        p.say(st, line[:160])
+        write(line)
+    write(f"=== owui-ctl {verb} start {time.strftime('%Y-%m-%dT%H:%M:%S')}")
+    rc = 1
+    try:
+        if verb == "start":
+            rc = svc.start(say, timeout)
+        elif verb == "stop":
+            rc = svc.stop(say, timeout)
+        else:
+            c = o.get("compose") or {}
+            rc = svc.update(say, p.check, owui_health, owui_version_now,
+                            backup_root=Path(c.get("backup_root") or LOG_DIR / "update-backups" / "openwebui"),
+                            keep=int(c.get("keep_backups") or 3),
+                            health_timeout=float((o.get("timeouts") or {}).get("update_health_s") or 600))
+        if rc != 0:
+            say(compose_service.RC_MEANING.get(rc, f"docker ended with code {rc}"))
+        return rc
+    except Cancelled:
+        rc = 130
+        say("cancelled before anything changed")
+        raise
+    finally:
+        write(f"=== owui-ctl {verb} done rc={rc}")
+        owui_compose().ready(fresh=True)
+
+
+def _owui_fail(verb: str, rc: int) -> str:
+    if owui_driver() == "docker-compose":
+        return f"{verb}: {compose_service.RC_MEANING.get(rc, f'docker ended with code {rc}')}; see the OpenWebUI control log"
+    return f"the {verb} control ended with code {rc}; see the OpenWebUI control log"
 
 
 def _owui_wait_task(p: Plan, st, verb: str, before: int, timeout: float) -> int:
@@ -2074,7 +2164,7 @@ def op_owui_start(p: Plan):
         return p.done_step(st, "already up")
     rc = _owui_run(p, st, "start", 180)
     if rc != 0:
-        raise PlanFailed(f"the start control ended with code {rc}; see the OpenWebUI control log")
+        raise PlanFailed(_owui_fail("start", rc))
     p.done_step(st, "started")
     p.done_step(_owui_wait_health(p, True, 300), "200")
 
@@ -2083,12 +2173,13 @@ def op_owui_stop(p: Plan):
     _owui_need()
     if not p.args.get("confirm"):
         raise PlanFailed("stop takes OpenWebUI down for everyone using it: send confirm=true")
-    st = p.step("Stop OpenWebUI", owui_step("stop", "through its stop control; Start, or a reboot, brings it back"))
+    st = p.step("Stop OpenWebUI", owui_step("stop", "docker compose stop: the container stays, and Start brings the same one back"
+                                            if owui_driver() == "docker-compose" else "through its stop control; Start, or a reboot, brings it back"))
     if not owui_health():
         return p.done_step(st, "already down")
     rc = _owui_run(p, st, "stop", 180)
     if rc != 0:
-        raise PlanFailed(f"the stop control ended with code {rc}; see the OpenWebUI control log")
+        raise PlanFailed(_owui_fail("stop", rc))
     p.done_step(st, "stopped")
     p.done_step(_owui_wait_health(p, False, 90), "down")
 
@@ -2097,14 +2188,20 @@ def op_owui_update(p: Plan):
     _owui_need()
     if not p.args.get("confirm"):
         raise PlanFailed("update replaces the installed version and may migrate the database one way: send confirm=true")
-    st = p.step("Update OpenWebUI", owui_step("update", "through its update control, which backs up and upgrades as it was written to")
-                + ". Cancel stops the watching, not the update.")
+    if owui_driver() == "docker-compose":
+        how = owui_step("update", "copies the data volume, pulls the image, recreates the container on it and waits for "
+                                  "/health; a new version that does not come up is rolled back, image and data")
+        how += ". Cancel works until the container is stopped; after that it finishes or rolls back."
+    else:
+        how = owui_step("update", "through its update control, which backs up and upgrades as it was written to") \
+            + ". Cancel stops the watching, not the update."
+    st = p.step("Update OpenWebUI", how)
     if not owui_health():
         raise PlanFailed("OpenWebUI is not up; start it first")
     was = (OWUI_WATCH.get() or {}).get("version")
     rc = _owui_run(p, st, "update", 2400)
     if rc != 0:
-        raise PlanFailed(f"the update control ended with code {rc}; see the OpenWebUI control log")
+        raise PlanFailed(_owui_fail("update", rc))
     p.done_step(st, "update finished")
     st2 = _owui_wait_health(p, True, 300)
     now = (OWUI_WATCH.get() or {}).get("version")

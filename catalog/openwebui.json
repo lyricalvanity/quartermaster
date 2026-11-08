@@ -12,7 +12,7 @@
     "ports": [3000, 8080],
     "health": "/health",
     "version": {"url": "/api/version", "path": "version"},
-    "drivers": {"schtasks": "three Windows scheduled tasks owui-ctl-start/stop/update exist", "systemd": "a systemd unit serves it: three owui-ctl-* control units for a system unit (contrib/openwebui-systemd), or its own user unit", "docker": "a container from ghcr.io/open-webui/open-webui is running", "pip": "the open-webui package is installed in a venv"}
+    "drivers": {"schtasks": "three Windows scheduled tasks owui-ctl-start/stop/update exist", "systemd": "a systemd unit serves it: three owui-ctl-* control units for a system unit (contrib/openwebui-systemd), or its own user unit", "docker-compose": "a container from ghcr.io/open-webui/open-webui publishes the port and carries Compose labels (com.docker.compose.project, .service): setup writes the project, files, service and named volumes from them", "docker": "a container started with docker run: seen, but the tile drives Compose projects only", "pip": "the open-webui package is installed in a venv"}
   },
   "drive": {
     "endpoints": {"health": "GET /health", "version": "GET /api/version"},
@@ -21,10 +21,10 @@
   },
   "update": {
     "recipe": "driver",
-    "note": "The service's own driver updates it: the scheduled task, docker compose pull, or pip install -U open-webui. Back up its data volume first; upstream's release notes say when a version migrates the database."
+    "note": "The service's own driver updates it: the scheduled task or control unit, which back up as they were written to; the docker-compose driver, which copies the named volumes, pulls, recreates and rolls image and data back if the new version does not come up; or pip install -U open-webui by hand. Upstream's release notes say when a version migrates the database."
   },
   "install": {
-    "docker": ["docker run -d -p 127.0.0.1:3000:8080 -v open-webui:/app/backend/data --name open-webui ghcr.io/open-webui/open-webui:main", "Add --add-host=host.docker.internal:host-gateway so it can reach engines on the host."],
+    "docker": ["In a folder of its own, a docker-compose.yml with one service: image ghcr.io/open-webui/open-webui:main, ports \"127.0.0.1:3000:8080\", volumes open-webui:/app/backend/data (a named volume, which is what an update copies), extra_hosts host.docker.internal:host-gateway so it can reach engines on the host, restart unless-stopped.", "docker compose up -d in that folder. A plain docker run works too, but the tile drives Compose projects only."],
     "pip": ["python -m venv owui && owui/Scripts/pip install open-webui", "owui/Scripts/open-webui serve"],
     "then": ["Open http://127.0.0.1:3000, make the first (admin) account, point Connections at your engines' OpenAI-style endpoints."]
   },
