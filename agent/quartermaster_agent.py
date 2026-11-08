@@ -956,7 +956,13 @@ class State:
             snap["warnings"].append(f"ComfyUI is listening beyond loopback ({', '.join(comfy['exposed'])}); it has no login")
         if comfy and comfy.get("queue") and holders:
             snap["warnings"].append(f"ComfyUI is generating while {INV.servers[holders[0]]['name']} holds the card")
-        unattributed = (not holders and not comfy_holds and not PLANS.loading_now()
+        # Ollama is never resident, so it is not among the holders; but a model it reports on the card is one a server
+        # admits to. It accounts for the card only while its own processes are the only engines there: anything else
+        # beside it (Strata mid self-load, say) is still the unexplained occupant this warning exists for
+        ollama_procs = {n.lower() for n in host.exe_names(("ollama", "ollama_llama_server", "ollama-runner"))}
+        ollama_holds = (any((m.get("size_vram_gib") or 0) > 0 for m in snap["ollama"]["models"])
+                        and not {a["name"].lower() for a in g.get("apps", [])} - ollama_procs)
+        unattributed = (not holders and not comfy_holds and not ollama_holds and not PLANS.loading_now()
                         and (g.get("used_mib") or 0) > INV.gpu["free_card_mib"])
         snap["card_unattributed"] = unattributed
         if unattributed:

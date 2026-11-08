@@ -732,8 +732,12 @@
       $("#resident-main").textContent = `ComfyUI holds ${fmtGB(st.comfyui.vram_held_mib)} GB`;
       $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card${st.comfyui.queue > 0 ? " · generating" : ""} · no model resident`;
     } else if (holders.length === 0) {
-      $("#resident-main").textContent = (st.ollama && st.ollama.models.length) ? `Ollama: ${st.ollama.models.map((m) => m.name).join(", ")}` : "nothing on the card";
-      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB used by the desktop`;
+      // nothing resident: either the card is bare, or Ollama has models loaded on demand (it is never resident)
+      const om = (st.ollama && st.ollama.models) || [];
+      $("#resident-main").textContent = om.length ? `Ollama: ${om.map((m) => m.name).join(", ")}` : "nothing on the card";
+      $("#resident-sub").textContent = om.length
+        ? `${fmtGB(g.used_mib)} GB on the card · Ollama holds ${om.reduce((t, m) => t + (m.size_vram_gib || 0), 0).toFixed(1)} GB`
+        : `${fmtGB(g.used_mib)} GB used by the desktop`;
     } else {
       const names = holders.map((h) => { const s = INV.units.find((x) => x.id === h); const i = st.servers[h]; return `${s.name} on ${engineOf(s).name} ${s.port} · ${i.state}`; });
       $("#resident-main").textContent = names.join("  +  ");

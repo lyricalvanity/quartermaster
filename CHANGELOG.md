@@ -17,6 +17,11 @@
 - The card's process list now includes every catalog record's executables and any `procs` a table names, so an
   engine added by record alone is seen on the card.
 - A hand-written unit may omit `timeouts`; the agent fills defaults (start 120 s, load 600 s, unload 90 s).
+- A model Ollama reports on the card no longer reads as the card **taken by something unnamed**. Ollama is never
+  resident, so it was not among the holders, and on a machine where it is the only engine every model it loaded
+  raised the warning and hid the page's own Ollama line. The card now counts as claimed while Ollama reports a
+  model on it and its own processes are the only engines there; another engine beside it still warns. The
+  resident line says how much of the card is Ollama's instead of calling all of it the desktop's.
 
 ## 0.2.0 - 2026-11-07
 
