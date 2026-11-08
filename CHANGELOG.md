@@ -35,6 +35,11 @@
 - An engine id is no longer derived from a kind by cutting at the first dash (`ik-llamacpp` and
   `foundry-local` are their own engines); the two sub-kinds, `strata-launch` and `llamacpp-router`, still
   fold into their parents.
+- A model Ollama reports on the card no longer reads as the card **taken by something unnamed**. Ollama is never
+  resident, so it was not among the holders, and on a machine where it is the only engine every model it loaded
+  raised the warning and hid the page's own Ollama line. The card now counts as claimed while Ollama reports a
+  model on it and its own processes are the only engines there; another engine beside it still warns. The
+  resident line says how much of the card is Ollama's instead of calling all of it the desktop's.
 
 ## 0.2.0 - 2026-11-07
 
