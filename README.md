@@ -95,6 +95,15 @@ docker compose up -d --build
    for a user unit, it starts and stops that unit directly. How OpenWebUI is walled off stays beneath the
    units, and the agent reads only health, version and the controls' own log.
 
+   An OpenWebUI that runs in Docker Compose, on either system, gets the `docker-compose` driver: setup
+   reads the project, its files, the service and its named volumes from the running container's labels,
+   and the agent runs `docker compose` on exactly those. Start is `up -d --no-recreate` and Stop is `stop`,
+   so the container and its logs survive a stop and Start never moves to a new image. Update copies the
+   named volumes into a tarball (made by the running image's own `tar`, as root, network off), pulls,
+   recreates the container and waits for `/health`; a new version that does not come up is rolled back,
+   the image tag first and then the data. The copies go to `logs/update-backups/openwebui` (the newest
+   three are kept), and the controls write the same control log the scheduled tasks do.
+
 After editing the inventory: `POST /api/reload` with the bearer, or restart the agent. Two environment
 variables exist for a second instance (a test, another port): `QM_HOME` points the agent at a directory
 holding its own `inventory.json`, `presets.json` and `agent.key` (its logs go there too), and `QM_PORT`
@@ -116,7 +125,7 @@ first time the agent loads it: the original is kept as `inventory.schema1.json` 
 | `units[]` | one per model server: `engine` names its engine; `kind` is `strata`, `strata-launch`, `maya`, `ollama`, `llamacpp` or `llamacpp-router` (one model of a llama.cpp router: `router_model` names it, load and unload go through the router, and the router is never stopped from the page); `start.argv` and `cwd`, or `start.systemd_user` for a server a systemd user unit keeps; `log`; `timeouts`; `footprint`; `legacy: true` folds it into the collapsed band |
 | `shims[]` | small proxies that front a unit on another port (an Ollama-API shim for an OpenAI-style server, say) |
 | `clients[]` | programs that consume the units (Pi, Codex CLI, Claude Code): executable, version command, and the local URLs their configuration points at. Written by setup; the page's client strip is a later stage |
-| `openwebui` | optional tile; this driver runs three named Windows scheduled tasks (`tasks`) and reads health, version and two logs |
+| `openwebui` | optional tile, health and version from `url`, moved by one of three drivers: `schtasks` (three named Windows scheduled tasks, `tasks`), `systemd` (`units`), or `docker-compose` (`compose`: `docker`, `project`, `project_dir`, `files`, `service`, `backup_paths`, `keep_backups`, optional `backup_root`); `stop_note` and `update_note` word the confirmations |
 | `comfyui` | optional tile: start argv, port, the command-line text that identifies the process, an optional `update` section |
 | `art` | optional queue of image batches that wait for the card (needs `comfyui`) |
 

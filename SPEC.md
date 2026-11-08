@@ -91,7 +91,15 @@ Things with a health URL and up/down/update but **no VRAM claim**: OpenWebUI, a 
 proxy. One generic tile, driven by a declared **driver**:
 
 - `process`: start argv, stop by pid on the port with a command-line match (as ComfyUI does today);
-- `docker-compose`: `up -d` / `down` / `pull` in a named project directory;
+- `docker-compose`: the docker CLI on the project, files and service the inventory names (2026-11-07,
+  `agent/compose_service.py`). Start is `up -d --no-recreate` and stop is `stop`, not `down`: `down` removes
+  the container, and the next `up` would build one from wherever the tag points by then, so a pull made in
+  between would turn Start into an upgrade nobody backed up. Update sizes the named volumes, pulls, stops,
+  copies them with the running image's own `tar` (root, network off, through `--volumes-from`), recreates and
+  waits for `/health`; a version that does not come up gets the old image tag back and the copy restored into
+  a container created but not started. A copy reads and a restore empties only paths that are mounts of the
+  container. Cancel is honoured until the stop and not after. The same control-log lines as the tasks;
+  setup reads every field from the running container's Compose labels;
 - `schtasks`: run named Windows scheduled tasks, pass nothing (version 1's OpenWebUI driver, generalised);
 - `windows-service`: `sc start|stop`;
 - `systemd` (Linux): each control is a unit the agent starts with `systemctl [--user] --no-ask-password`,
