@@ -1,0 +1,40 @@
+{
+  "id": "ik-llamacpp",
+  "name": "ik_llama.cpp",
+  "what": "Iwan Kawrakow's fork of llama.cpp, split in mid-2024 and developed on its own since: the IQK quantization types, faster CPU and hybrid CPU/GPU inference for MoE models with experts left in RAM, MLA for DeepSeek, tensor parallel, MTP and DFlash speculation. Its llama-server is llama.cpp's of that era: one model per process, the same /health, /v1/models, /props and /slots; no router mode.",
+  "licence": "MIT",
+  "home": "https://github.com/ikawrakow/ik_llama.cpp",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux"],
+  "driver": "llamacpp",
+  "tested": {},
+  "detect": {
+    "executables": ["llama-server"],
+    "roots": ["~/ik_llama.cpp"],
+    "marker": "build/bin/llama-server (or build/bin/Release/llama-server.exe)",
+    "ports": [8080],
+    "health": "/health",
+    "version": {"cmd": ["<root>/build/bin/llama-server", "--version"], "re": "version: (\\d+) \\(", "note": "a build number and commit of its own, not llama.cpp's"},
+    "note": "the executable has llama.cpp's name: a running llama-server is this kind when its path runs through the ik_llama.cpp folder, else mainline. There are no release binaries; it is built from source, so a unit is proposed from a running server (its -m and --port) as for llama.cpp."
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health", "models": "GET /v1/models", "slots": "GET /slots (busy)"},
+    "can": ["start a unit with its recorded argv", "stop it", "treat it as loaded while it answers /health"],
+    "cannot": ["unload without stopping (one model for the server's life)", "router mode (--models-dir): the fork predates it"]
+  },
+  "launch": {"argv": ["llama-server", "-m", "<model.gguf>", "--port", "<port>", "-ngl", "99", "-c", "<context>", "-fmoe", "-mla", "3"], "never": ["-rtr with experts on the CPU for a model you want prompt processing on the GPU for: it repacks RAM tensors to a CPU-only layout (the README's own warning)", "--host 0.0.0.0 without a reverse proxy in front: there is no login"]},
+  "update": {
+    "recipe": "git-check",
+    "note": "No releases: the check tells you when main moved; pull and rebuild (cmake --build build --config Release) by hand, then restart the units."
+  },
+  "install": {
+    "windows": ["git clone https://github.com/ikawrakow/ik_llama.cpp", "cmake -B build -DGGML_CUDA=ON && cmake --build build --config Release -j (the README has a step-by-step Windows build)", "the server is build\\bin\\Release\\llama-server.exe"],
+    "linux": ["git clone https://github.com/ikawrakow/ik_llama.cpp", "cmake -B build -DGGML_CUDA=ON && cmake --build build --config Release -j$(nproc)"],
+    "then": ["./build/bin/llama-server -m model.gguf --port 8080 -ngl 99", "GET http://127.0.0.1:8080/health"]
+  },
+  "fits": {
+    "good": ["a large MoE with the experts in RAM and the rest on one card, at better token rates than mainline for the same file", "the IQK quants (IQ4_KS and kin) and repacked R4 files made for it"],
+    "not": ["the newest architectures first: mainline gets them weeks or months earlier", "switching models without a restart", "mainline's newest GGUF features (its router, some recent quant types)"]
+  }
+}

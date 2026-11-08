@@ -1,0 +1,45 @@
+{
+  "id": "polystrata",
+  "name": "PolyStrata",
+  "what": "A fork of Strata (0.1.4x line) that serves a dozen more model families through its own in-place GGUF engine, strata-poly, with a hot-expert VRAM cache and the rest of the experts in RAM; Qwen3.8-Flash-Next still runs on Strata's own engine unchanged. One server per run config, as Strata, and since poly.7 a model switch while it runs (switch_on_request). Text only for the GLM and DeepSeek families.",
+  "licence": "MIT (models and some parts under their own)",
+  "home": "https://github.com/simplexai-labs/PolyStrata",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "driver": "strata",
+  "tested": {},
+  "detect": {
+    "roots": ["~/PolyStrata"],
+    "marker": "polystrata.py",
+    "configs": "strata-*.json (not *.shared-settings.json), beside setup.py",
+    "launchers": "run-*.bat / run-*.sh beside setup.py",
+    "data": "PolyStrata-data next to the install folder, or data_dir in %APPDATA%\\PolyStrata\\settings.json (~/.config/polystrata/settings.json on Linux)",
+    "ports": [8080],
+    "health": "/health",
+    "version": {"file": "<root>/engine/BUILD.json", "key": "version", "note": "the engine's build file; /props says build_info \"PolyStrata 0.1.45-poly.N\" while a server is up"},
+    "note": "a server's command line is python <root>/serve/server.py --engine strata --config strata-<model>.json, the same shape as Strata's: detection tells them apart by the install folder's name in that path."
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health (loaded, status, model, max_context)", "load": "POST /v1/load {} (or {model} to switch, with switch_on_request)", "unload": "POST /v1/unload?wait=N", "metrics": "GET /metrics (live.state, requests, totals)", "switch": "GET /api/models, POST /api/models/load {model}, POST /api/models/unload"},
+    "can": ["everything the Strata driver does: start a unit from its launcher, load and unload through the API, see busy from /metrics, stop the process", "park a unit that loads on any request"],
+    "cannot": ["switch the loaded model inside one server (its /api/models/load): one Quartermaster unit is one run config, as with Strata; run one server per model, or switch by hand", "vision for the GLM and DeepSeek families: the engine has none"],
+    "note": "Verified against the server source (serve/server.py, 2026-11-07): /health carries `loaded`, /metrics carries the same `live` block the probe reads, and the control calls accept a request with no Origin header. Not yet driven from any machine."
+  },
+  "launch": {"argv": ["<python>", "<root>/serve/server.py", "--engine", "strata", "--config", "<strata-model.json>", "--port", "<port>"], "never": ["--host 0.0.0.0 without --api-key: the page has no login"]},
+  "update": {
+    "recipe": "github-release",
+    "github": "simplexai-labs/PolyStrata",
+    "self_cmd": ["<root>/UPDATE.bat"],
+    "note": "Releases are tagged v0.1.45-poly.N (one most weeks). UPDATE.bat (update.sh) brings the checkout and the ready-made engine up to date; the check compares the engine's build to the newest release. The repository moved from VecSzn to simplexai-labs in 2026; a clone from the old name still pulls."
+  },
+  "install": {
+    "windows": ["Download the repository as a zip (or git clone https://github.com/simplexai-labs/PolyStrata) into PolyStrata, double-click START-HERE.bat: it fetches the ready-made engine for your card, asks which model family, downloads it to PolyStrata-data next to the folder, and writes strata-<model>.json and run-<model>.bat."],
+    "linux": ["git clone https://github.com/simplexai-labs/PolyStrata && cd PolyStrata && ./setup.sh --family <name>"],
+    "then": ["run-<model>.bat (or ./run-<model>.sh) starts the server on 8080", "GET http://127.0.0.1:8080/health", "Change the port with --port when 8080 is taken (Docker Desktop and WSL relays often hold it on Windows)."]
+  },
+  "fits": {
+    "good": ["the big MoE families Strata itself does not serve (GLM, DeepSeek V4, Kimi, MiniMax, Qwen3.6/3.7 and others), text only, with experts in RAM", "a Strata owner who wants one more family without a second kind of server"],
+    "not": ["vision on GLM or DeepSeek: use Maya or mainline llama.cpp", "a model whose file exceeds RAM: it collapses to a few tokens a second", "many small models: Ollama"]
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "id": "textgen",
+  "name": "textgen (text-generation-webui)",
+  "what": "oobabooga's text-generation-webui, renamed textgen in 2026: a Gradio web UI and desktop app with several loaders (llama.cpp, ExLlamaV3, Transformers) and an OpenAI-compatible API on a port of its own, with internal routes that load, unload and list models. Portable builds per platform and backend; a model folder it loads from by name.",
+  "licence": "AGPL-3.0",
+  "home": "https://github.com/oobabooga/textgen",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "driver": "http",
+  "tested": {},
+  "detect": {
+    "roots": ["~/textgen", "~/text-generation-webui", "~/textgen-portable*"],
+    "marker": "server.py with user_data/ beside it",
+    "configs": "user_data/CMD_FLAGS.txt (--api, --api-port, --api-key, --admin-key)",
+    "ports": [5000],
+    "health": "/v1/internal/model/info",
+    "version": {"note": "no version string in the program; the portable build's folder name carries the release (4.9). The update check compares releases."},
+    "note": "the API must be on (--api, in CMD_FLAGS.txt or the start script); the web UI's own port (7860) is not the API. One server is one unit; model_id is a name from /v1/internal/model/list."
+  },
+  "table": {
+    "probe": {"path": "/v1/internal/model/info"},
+    "loaded": {"key": "model_name", "not_equals": "None"},
+    "load": {"method": "POST", "path": "/v1/internal/model/load", "body": {"model_name": "{model}"}, "hold": true},
+    "unload": {"method": "POST", "path": "/v1/internal/model/unload", "timeout_s": 60},
+    "auth": {"header": "Authorization", "prefix": "Bearer ", "key_file": "~/textgen/user_data/CMD_FLAGS.txt", "key_re": "--admin-key\\s+(\\S+)", "note": "only when --admin-key (or --api-key) is set; the admin key opens the load and unload routes"}
+  },
+  "drive": {
+    "endpoints": {"info": "GET /v1/internal/model/info (model_name is \"None\" when nothing is loaded)", "list": "GET /v1/internal/model/list", "load": "POST /v1/internal/model/load {model_name, args, instruction_template} (answers when loaded)", "unload": "POST /v1/internal/model/unload", "models": "GET /v1/models"},
+    "can": ["start a unit from its start script", "load a model by name and unload it through the internal API", "stop the process"],
+    "cannot": ["see busy: the API has no idle flag; an unload during a generation is the program's own affair", "choose the loader or its arguments from here: they are the model's saved settings, or the `args` the owner adds to the unit's table"],
+    "note": "Table from the source (modules/api/script.py, 2026-11-07). The repository was quiet from August to November 2026. Not yet driven from any machine."
+  },
+  "launch": {"argv": ["<root>/start_windows.bat"], "never": ["--listen or --public-api without --api-key: the API has no login otherwise"]},
+  "update": {
+    "recipe": "github-release",
+    "github": "oobabooga/textgen",
+    "self_cmd": ["<root>/update_wizard_windows.bat"],
+    "note": "A one-click install updates with its update wizard; a portable build is replaced by unpacking the new zip (about 900 MB with CUDA) beside the old one and moving user_data across."
+  },
+  "install": {
+    "windows": ["Portable: download textgen-portable-<ver>-windows-cuda<ver>.zip from the releases page, unpack, run start_windows.bat", "Full: git clone https://github.com/oobabooga/textgen, run start_windows.bat (installs Miniconda and the loaders)", "Put --api (and --api-port, --admin-key) in user_data/CMD_FLAGS.txt"],
+    "linux": ["Portable: textgen-portable-<ver>-linux-cuda<ver>.tar.gz, ./start_linux.sh", "or git clone and ./start_linux.sh"],
+    "then": ["GET http://127.0.0.1:5000/v1/internal/model/info", "GET http://127.0.0.1:5000/v1/internal/model/list"]
+  },
+  "fits": {
+    "good": ["one place for GGUF, EXL3 and Transformers models with a UI, characters and extensions", "a loader per model, chosen in the UI and remembered"],
+    "not": ["speed: each loader is the upstream engine with Gradio in front", "a server that is only a server: llama.cpp or TabbyAPI are lighter"]
+  }
+}

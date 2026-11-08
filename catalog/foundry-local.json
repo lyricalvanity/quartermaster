@@ -1,0 +1,48 @@
+{
+  "id": "foundry-local",
+  "name": "Foundry Local",
+  "what": "Microsoft's local inference runtime: an ONNX Runtime daemon with an OpenAI-compatible service, a catalog of ONNX models tuned per device (CPU, CUDA, WebGPU, Intel and Qualcomm NPUs), and the `foundry` command line that starts the server, downloads models and loads or unloads them. Preview software; the daemon picks a port unless told one.",
+  "licence": "Microsoft Software License Terms for the runtime; MIT for the SDK repository",
+  "home": "https://github.com/microsoft/Foundry-Local",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "macos"],
+  "driver": "cli",
+  "tested": {},
+  "detect": {
+    "executables": ["foundry"],
+    "ports": [],
+    "health": "/openai/status",
+    "version": {"cmd": ["foundry", "--version"]},
+    "note": "the daemon assigns a port each start unless started with --port; a unit needs the fixed one (foundry server start --port <port> --idle-timeout 0). Models come from Microsoft's catalog by alias; a unit's model_id is the alias or the model id as `foundry model list` shows it."
+  },
+  "table": {
+    "probe": {"path": "/openai/status"},
+    "status": {"argv": ["foundry", "model", "list", "--loaded"], "loaded_re": "^\\s*\\S*{model}"},
+    "load": {"argv": ["foundry", "model", "load", "{model}"], "timeout_s": 600},
+    "unload": {"argv": ["foundry", "model", "unload", "{model}"], "timeout_s": 120},
+    "start": {"argv": ["foundry", "server", "start", "--port", "{port}", "--idle-timeout", "0"], "timeout_s": 120},
+    "stop": {"argv": ["foundry", "server", "stop"], "timeout_s": 60}
+  },
+  "drive": {
+    "endpoints": {"status": "GET /openai/status (the service's own)", "models": "GET /v1/models", "cli": "foundry server start|stop|status, foundry model load|unload|list --loaded"},
+    "can": ["start the daemon on the unit's fixed port and stop it", "load a model by alias and unload it, through the command line", "see what is loaded (foundry model list --loaded)"],
+    "cannot": ["see busy: neither the CLI nor /openai/status says so", "serve a model that is not in Microsoft's catalog, or a GGUF", "run on Linux: Windows and Apple Silicon only (2026-10 docs)"],
+    "note": "Table from the CLI reference of 2026-10 (learn.microsoft.com, foundry-local/reference/reference-cli). The loaded_re is a guess at the list's layout and is the first thing to check when someone drives it. Not yet driven from any machine."
+  },
+  "launch": {"argv": ["foundry", "server", "start", "--port", "<port>", "--idle-timeout", "0"], "never": ["--idle-timeout left at its default for a unit: the daemon stops itself after a quiet spell and the unit reads as down"]},
+  "update": {
+    "recipe": "winget",
+    "id": "Microsoft.FoundryLocal",
+    "note": "winget upgrade --id Microsoft.FoundryLocal on Windows; brew upgrade microsoft/foundrylocal/foundrylocal on macOS. The execution-provider plugins update themselves."
+  },
+  "install": {
+    "windows": ["winget install Microsoft.FoundryLocal", "foundry model list (first run downloads the execution providers for your hardware)", "foundry server start --port 39839 --idle-timeout 0"],
+    "macos": ["brew tap microsoft/foundrylocal && brew install foundrylocal"],
+    "then": ["foundry model download <alias>", "foundry server status (shows the endpoint)", "GET http://127.0.0.1:<port>/v1/models"]
+  },
+  "fits": {
+    "good": ["small models on an NPU or a laptop GPU with no setup beyond winget", "a Windows machine that wants an OpenAI endpoint from Microsoft's own catalog, with the vendor's execution providers"],
+    "not": ["anything outside the catalog, or a model file you already have", "a sovereign setup: the catalog, the execution providers and their updates come from Microsoft's servers on first use", "large models: the catalog is small and quantized for devices"]
+  }
+}

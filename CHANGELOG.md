@@ -17,6 +17,18 @@
 - The card's process list now includes every catalog record's executables and any `procs` a table names, so an
   engine added by record alone is seen on the card.
 - A hand-written unit may omit `timeouts`; the agent fills defaults (start 120 s, load 600 s, unload 90 s).
+- Six kinds added by record, each from its project's source or current documentation and none yet driven
+  (`tested: {}`, marked *untested* in the panel): **PolyStrata** (driven as Strata: its `/health`, `/metrics`
+  and `/v1/load`, `/v1/unload` are Strata's, confirmed in `serve/server.py`), **ik_llama.cpp** (driven as
+  llama.cpp; told apart from mainline by the folder its `llama-server` runs from), **KoboldCpp** (`http`:
+  `/api/v1/model`, `/api/extra/perf`, the admin `reload_config` with `unload_model`), **TabbyAPI** (`http`:
+  `/v1/model`, `/v1/model/load` held open for the load, the admin key read from `api_tokens.yml`),
+  **textgen** (oobabooga's text-generation-webui under its 2026 name; `http`: `/v1/internal/model/*`) and
+  **Foundry Local** (`cli`: `foundry server start --port`, `foundry model load|unload`, the daemon on a fixed
+  port). Each has a detector in `setup.py`; on a machine without them detection is unchanged.
+- An engine id is no longer derived from a kind by cutting at the first dash (`ik-llamacpp` and
+  `foundry-local` are their own engines); the two sub-kinds, `strata-launch` and `llamacpp-router`, still
+  fold into their parents.
 
 ## 0.2.0 - 2026-11-07
 

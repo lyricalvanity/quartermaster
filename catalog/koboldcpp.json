@@ -1,0 +1,51 @@
+{
+  "id": "koboldcpp",
+  "name": "KoboldCpp",
+  "what": "A single executable around llama.cpp with its own web UI (Kobold Lite), the Kobold API and an OpenAI-compatible one; GGUF text models plus optional image, speech and embedding models in the same process. One model per launch, saved as a .kcpps config; in admin mode it relaunches itself into another config on request, which is how a dashboard swaps or unloads its model.",
+  "licence": "AGPL-3.0",
+  "home": "https://github.com/LostRuins/koboldcpp",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux", "macos"],
+  "driver": "http",
+  "tested": {},
+  "detect": {
+    "executables": ["koboldcpp", "koboldcpp-nocuda", "koboldcpp-oldpc", "koboldcpp-linux-x64", "koboldcpp-linux-x64-nocuda", "koboldcpp-mac-arm64"],
+    "roots": ["~/koboldcpp", "~/KoboldCpp"],
+    "configs": "*.kcpps (the launch configs; --admindir names the folder the admin API may switch between)",
+    "ports": [5001],
+    "health": "/api/extra/version",
+    "version": {"url": "/api/extra/version", "path": "version"},
+    "note": "a unit is one .kcpps config; its model_id is the file's name as --admindir lists it, which is what the admin API loads. A server started without --admin can be seen and stopped but not swapped or unloaded."
+  },
+  "table": {
+    "probe": {"path": "/api/extra/version"},
+    "loaded": {"path": "/api/v1/model", "key": "result", "not_equals": "inactive"},
+    "busy": {"path": "/api/extra/perf", "key": "idle", "equals": 0},
+    "load": {"method": "POST", "path": "/api/admin/reload_config", "body": {"filename": "{model}"}, "timeout_s": 30},
+    "unload": {"method": "POST", "path": "/api/admin/reload_config", "body": {"filename": "unload_model"}, "timeout_s": 30},
+    "procs": ["koboldcpp", "koboldcpp-nocuda", "koboldcpp-oldpc", "koboldcpp-linux-x64"],
+    "auth": {"header": "Authorization", "prefix": "Bearer ", "key_file": "~/koboldcpp/admin-password.txt", "note": "only when the server runs with --adminpassword: the file holds that password and nothing else"}
+  },
+  "drive": {
+    "endpoints": {"version": "GET /api/extra/version", "model": "GET /api/v1/model (result: koboldcpp/<name>, or \"inactive\")", "perf": "GET /api/extra/perf (idle 0/1, queue)", "swap": "POST /api/admin/reload_config {filename} (unload_model, initial_model, or a .kcpps in --admindir)", "list": "GET /api/admin/list_options"},
+    "can": ["start a unit from its .kcpps", "swap to a unit's config or unload the model through the admin API (the process relaunches itself; the port stays)", "see busy from /api/extra/perf", "stop the process"],
+    "cannot": ["unload or swap a server started without --admin --admindir: stop it instead", "hold two text models at once (its --routermode swaps per request on its own; one unit sees whatever is current)"],
+    "note": "Table from the source of 1.124.2 (koboldcpp.py). Not yet driven from any machine."
+  },
+  "launch": {"argv": ["koboldcpp", "--config", "<model.kcpps>", "--admin", "--admindir", "<folder of .kcpps>", "--port", "<port>"], "never": ["--host 0.0.0.0 or --remotetunnel without --password: the UI and the API have no login otherwise", "--adminpassword on the command line of a shared machine: others read it in the process list; the admin API is loopback-only here anyway"]},
+  "update": {
+    "recipe": "github-release",
+    "github": "LostRuins/koboldcpp",
+    "note": "Each release is a new executable (about 600 MB with CUDA, 90 MB without): download it over the old one and restart the unit. The check compares /api/extra/version to the newest release."
+  },
+  "install": {
+    "windows": ["Download koboldcpp.exe (CUDA) or koboldcpp-nocuda.exe from the releases page into a folder of its own", "Run it once: the launcher window picks the model and settings; Save Config writes a .kcpps", "For swapping from Quartermaster, start it with --admin --admindir <that folder>"],
+    "linux": ["Download koboldcpp-linux-x64 (or -nocuda), chmod +x", "./koboldcpp-linux-x64 --config model.kcpps --admin --admindir ."],
+    "then": ["GET http://127.0.0.1:5001/api/extra/version", "GET http://127.0.0.1:5001/api/v1/model"]
+  },
+  "fits": {
+    "good": ["one download, no install, any GGUF, a UI of its own; the roleplay and story-writing community's server", "image, speech and embedding models beside the text model in one process"],
+    "not": ["long-context MoE at Strata's speeds: it is llama.cpp inside", "a model store or pull command: bring the files"]
+  }
+}

@@ -90,12 +90,22 @@ def log(msg: str) -> None:
 
 PRESETS = HOME / "presets.json"
 SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
-ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI"}
+ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI",
+                "polystrata": "PolyStrata", "ik-llamacpp": "ik_llama.cpp", "koboldcpp": "KoboldCpp", "tabbyapi": "TabbyAPI",
+                "textgen": "textgen", "foundry-local": "Foundry Local"}
 UNSTOPPABLE = ("ollama", "llamacpp-router")      # drivers whose process serves others too: unload, never stop
 # A unit's *kind* is what it is (its catalog record, its band, its update recipe); its *driver* is how the agent
 # moves it: the code path for probe, load, unload, start and stop. Every kind here drives as itself; a fork
 # names its parent's driver in its record (PolyStrata: strata) and needs no code; `http` and `cli` read a table.
 DRIVERS = ("strata", "strata-launch", "maya", "ollama", "llamacpp", "llamacpp-router", "http", "cli")
+SUB_KINDS = {"strata-launch": "strata", "llamacpp-router": "llamacpp"}   # unit kinds that belong to another kind's engine
+
+
+def engine_of_kind(kind) -> str:
+    """The engine a unit of this kind belongs to when it names none: its parent for a sub-kind, else the kind itself
+    (a kind with a dash in its name, ik-llamacpp or foundry-local, is its own engine)."""
+    k = str(kind or "")
+    return SUB_KINDS.get(k, k)
 
 
 def migrate_schema1(data: dict) -> tuple[dict, list]:
@@ -111,7 +121,7 @@ def migrate_schema1(data: dict) -> tuple[dict, list]:
     engines, by_id, units = [], {}, []
     for s in data.get("servers", []):
         u = dict(s)
-        kind = str(s.get("kind", "")).split("-")[0] or "engine"
+        kind = engine_of_kind(s.get("kind")) or "engine"
         eid = s.get("group") or kind
         if eid == "legacy":                       # the folded group was never an engine
             eid = kind
@@ -160,7 +170,7 @@ class Inventory:
         self.engine_by_id = {e["id"]: e for e in self.engines}
         self.servers = {}
         for u in data.get("units", []):
-            u.setdefault("engine", str(u.get("kind", "")).split("-")[0])
+            u.setdefault("engine", engine_of_kind(u.get("kind")))
             if u["engine"] not in self.engine_by_id:          # a unit naming no declared engine still gets a band
                 e = {"id": u["engine"], "kind": u["engine"], "name": ENGINE_NAMES.get(u["engine"], u["engine"].capitalize()),
                      "slot": f"e{min(len(self.engines) + 1, SLOTS)}"}

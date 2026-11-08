@@ -1,0 +1,48 @@
+{
+  "id": "tabbyapi",
+  "name": "TabbyAPI",
+  "what": "The OpenAI-compatible server for ExLlamaV3 (and V2): EXL3 and EXL2 quantized models that live entirely on the card, with a model folder it loads from and unloads to on request, an admin key for those calls and an API key for inference. A Python project run from a checkout; its start script keeps the dependencies current.",
+  "licence": "AGPL-3.0",
+  "home": "https://github.com/theroyallab/tabbyAPI",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["windows", "linux"],
+  "driver": "http",
+  "tested": {},
+  "detect": {
+    "roots": ["~/tabbyAPI", "~/tabbyapi"],
+    "marker": "main.py with config.yml beside it",
+    "configs": "config.yml (network.port, model.model_dir, model.model_name)",
+    "ports": [5000],
+    "health": "/health",
+    "version": {"note": "a git checkout without a version of its own; the update check compares commits"},
+    "note": "one TabbyAPI server is one unit; its model_id is the folder name under model_dir that /v1/model/load takes. The server shares 5000 with textgen's API by default: give one of them another port."
+  },
+  "table": {
+    "probe": {"path": "/health"},
+    "loaded": {"path": "/v1/model", "status": 200},
+    "load": {"method": "POST", "path": "/v1/model/load", "body": {"model_name": "{model}"}, "hold": true},
+    "unload": {"method": "POST", "path": "/v1/model/unload", "timeout_s": 60},
+    "auth": {"header": "x-admin-key", "key_file": "~/tabbyAPI/api_tokens.yml", "key_re": "^admin_key:\\s*(\\S+)", "note": "the admin key serves the api-key routes too; without it /v1/model answers 401 and the unit reads as unloaded"}
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health (healthy/unhealthy)", "current": "GET /v1/model (a model card; 400 when none is loaded)", "load": "POST /v1/model/load {model_name} (an SSE stream for the whole load)", "unload": "POST /v1/model/unload", "status": "GET /v1/status (jobs, cache, counters)", "list": "GET /v1/model/list"},
+    "can": ["start a unit from start.bat / start.sh", "load a model from model_dir and unload it through the API, with the admin key read from api_tokens.yml", "stop the process"],
+    "cannot": ["see busy: /v1/status lists recent jobs with finished ones, and the table has no shape for that yet; an unload while generating is TabbyAPI's own skip_wait", "offload to RAM: ExLlama is all-GPU, so the model must fit the card"],
+    "note": "Table from the source (endpoints/core/router.py, common/auth.py, 2026-11-07). Not yet driven from any machine."
+  },
+  "launch": {"argv": ["<root>/start.bat"], "never": ["network.host 0.0.0.0 with disable_auth: true", "the admin key anywhere but api_tokens.yml"]},
+  "update": {
+    "recipe": "git-check",
+    "note": "The check tells you when main moved; start.bat --update-deps (start.sh on Linux) pulls and refreshes the wheels, then restart the unit."
+  },
+  "install": {
+    "windows": ["git clone https://github.com/theroyallab/tabbyAPI", "copy config_sample.yml to config.yml and api_tokens_sample.yml to api_tokens.yml; set model.model_dir", "start.bat (makes the venv, installs ExLlamaV3 for your CUDA, starts on 5000)"],
+    "linux": ["git clone https://github.com/theroyallab/tabbyAPI && cd tabbyAPI && ./start.sh"],
+    "then": ["Put an EXL3 (or EXL2) model folder under model_dir", "GET http://127.0.0.1:5000/health", "curl -X POST -H 'x-admin-key: ...' -d '{\"model_name\": \"<folder>\"}' http://127.0.0.1:5000/v1/model/load"]
+  },
+  "fits": {
+    "good": ["dense models that fit the card entirely, at the quality EXL3 gets per bit", "several EXL models taking turns on one card through load and unload"],
+    "not": ["MoE with experts in RAM: it does not offload", "GGUF files: convert, or use llama.cpp"]
+  }
+}

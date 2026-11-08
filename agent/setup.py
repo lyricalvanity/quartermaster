@@ -34,6 +34,8 @@ HOMEDIR = Path.home()
 LOCAL = Path(os.environ.get("LOCALAPPDATA") or HOMEDIR / "AppData" / "Local")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 KINDS = [("strata", "Strata"), ("maya", "Maya"), ("ollama", "Ollama"), ("llamacpp", "llama.cpp (llama-server)"),
+         ("polystrata", "PolyStrata"), ("ik-llamacpp", "ik_llama.cpp"), ("koboldcpp", "KoboldCpp"), ("tabbyapi", "TabbyAPI"),
+         ("textgen", "textgen (text-generation-webui)"), ("foundry-local", "Foundry Local"),
          ("comfyui", "ComfyUI"), ("openwebui", "OpenWebUI"), ("pi", "Pi coding agent"), ("codex", "Codex CLI"),
          ("claude", "Claude Code")]
 SECRET_NAMES = re.compile(r"(auth|token|secret|credential|password|\.key$)", re.I)
@@ -268,13 +270,23 @@ def running_servers() -> list[dict]:
         cmd = cl.get(pid, "")
         low = cmd.lower()
         kind = None
-        if "serve\\server.py" in low and "--engine" in low and "strata" in low or "strata.exe" in low or "strata-dsv41" in low:
+        if "polystrata" in low and ("server.py" in low or "polystrata.py" in low):
+            kind = "polystrata"                    # the same serve/server.py --engine strata shape as Strata: the folder's name decides
+        elif "serve\\server.py" in low and "--engine" in low and "strata" in low or "strata.exe" in low or "strata-dsv41" in low:
             kind = "strata"
         elif "maya.py" in low or "maya.exe" in low:
             kind = "maya"
         elif "llama-server" in low:
-            # Ollama ships its runner as lib/ollama/llama-server: that one is Ollama's, not a llama.cpp install
-            kind = "ollama-runner" if "ollama" in low.split("llama-server", 1)[0] else "llamacpp"
+            # Ollama ships its runner as lib/ollama/llama-server: that one is Ollama's, not a llama.cpp install;
+            # ik_llama.cpp builds a llama-server of the same name, told apart by the folder its path runs through
+            before = low.split("llama-server", 1)[0]
+            kind = "ollama-runner" if "ollama" in before else "ik-llamacpp" if "ik_llama" in before else "llamacpp"
+        elif "koboldcpp" in low:
+            kind = "koboldcpp"
+        elif "tabbyapi" in low and ("main.py" in low or "start.py" in low):
+            kind = "tabbyapi"
+        elif ("textgen" in low or "text-generation-webui" in low) and "server.py" in low:
+            kind = "textgen"
         elif "comfyui" in low and "main.py" in low:
             kind = "comfyui"
         elif "ollama" in low:
@@ -484,6 +496,211 @@ def detect_llamacpp(seen: dict, running: list[dict]) -> dict:
         seen[r["port"]] = f"llama-{r['port']}"
     if exe and not procs:
         out["notes"].append(f"llama-server found at {exe}; a unit is proposed only while one is running (start it, then `detect`)")
+    return out
+
+
+# ---- the kinds added by record (2026-11-07): detectors written from each project's layout, not from a machine that
+# runs it; `tested` in the catalog says which have been. Each proposes an engine when the install is found and a
+# unit where the layout names one (a run config, a config file with a port) or a server is running.
+
+def _first_root(cands, marker) -> Path | None:
+    for r in cands:
+        for p in (sorted(r.parent.glob(r.name)) if any(ch in r.name for ch in "*?") else [r]):
+            if (p / marker).exists():
+                return p
+    return None
+
+
+def _running_unit(r: dict, engine: str, kind: str, name: str, model_id: str, note: str, seen: dict) -> dict:
+    """A unit for a server found running, as detect_llamacpp proposes them: its argv is how to start it again."""
+    argv = argv_of(r["pid"], r["cmd"])
+    start, how = start_for(r, argv)
+    seen[r["port"]] = f"{engine}-{r['port']}"
+    return {"id": f"{engine}-{r['port']}", "engine": engine, "kind": kind, "name": name, "model": name, "model_id": model_id,
+            "context": None, "vision": False, "quant": quant_of(name), "port": r["port"], "footprint": {"vram_gib": None, "ram_gib": None},
+            "start": start, "log": "", "timeouts": {"start_s": 300, "load_s": 600, "unload_s": 90}, "notes": note + how, "source": ""}
+
+
+def detect_polystrata(seen: dict) -> dict:
+    """PolyStrata keeps Strata's layout (strata-<model>.json and run-<model>.bat beside setup.py) in a folder of its
+    own; the record drives it as Strata. Shared-settings files match the config glob and are not configs."""
+    out = {"engines": [], "units": [], "notes": []}
+    root = _first_root([HOMEDIR / "PolyStrata", LOCAL / "PolyStrata"], "polystrata.py")
+    if not root:
+        return out
+    py = py_in(root) or Path(sys.executable)
+    e = {"id": "polystrata", "kind": "polystrata", "name": "PolyStrata", "root": str(root)}
+    build = root / "engine" / "BUILD.json"
+    if build.exists():
+        e["version_file"] = str(build)
+    out["engines"].append(e)
+    bats = {b: b.read_text(encoding="utf-8", errors="replace") for b in root.glob("run-*.bat" if WIN else "run-*.sh")}
+    for cfg in sorted(root.glob("strata-*.json")):
+        if cfg.name.endswith(".shared-settings.json"):
+            continue
+        d = load_json(cfg)
+        if not isinstance(d, dict) or not d.get("port"):
+            continue
+        uid = "poly-" + cfg.stem[len("strata-"):]
+        bat = next((b for b, t in bats.items() if cfg.name in t), None)
+        argv = [str(bat)] if bat else [str(py), str(root / "serve" / "server.py"), "--engine", "strata", "--config", str(cfg), "--port", str(d["port"])]
+        idle = d.get("idle_unload_s")
+        out["units"].append({
+            "id": uid, "engine": "polystrata", "kind": "polystrata", "name": d.get("model_name") or uid, "model": d.get("model_name") or "",
+            "model_id": d.get("model_name"), "context": None, "vision": bool(d.get("vision")), "quant": "", "port": int(d["port"]),
+            "footprint": {"vram_gib": None, "ram_gib": None},
+            "start": {"argv": argv, "cwd": str(d.get("cwd") or root), "loads_at_start": True},
+            "log": d.get("log") or str(root / f"{cfg.stem}.log"), "config": str(cfg),
+            "timeouts": {"start_s": 360, "load_s": 360, "unload_s": 90},
+            "notes": f"PolyStrata run config; idle_unload_s {idle}" + ("; loads on the first inference request from anyone" if idle == 0 else ""),
+            "parkable": idle == 0, "source": ""})
+        if int(d["port"]) in seen:
+            out["notes"].append(f"PolyStrata {uid} shares port {d['port']} with {seen[int(d['port'])]}: one of them must move")
+        seen.setdefault(int(d["port"]), uid)
+    return out
+
+
+def detect_ik_llamacpp(seen: dict, running: list[dict]) -> dict:
+    """ik_llama.cpp is built from source into build/bin; its server has llama.cpp's name, so a running one is this
+    kind only when its path runs through the ik_llama.cpp folder (running_servers decides)."""
+    out = {"engines": [], "units": [], "notes": []}
+    root = next((r for r in (HOMEDIR / "ik_llama.cpp", LOCAL / "ik_llama.cpp") if r.is_dir()), None)
+    exe = None
+    if root:
+        exe = next((p for p in (root / "build" / "bin" / "Release" / "llama-server.exe", root / "build" / "bin" / "llama-server.exe",
+                                root / "build" / "bin" / "llama-server") if p.exists()), None)
+    procs = [r for r in running if r["kind"] == "ik-llamacpp" and r["port"] not in seen]
+    if not exe and not procs:
+        return out
+    e = {"id": "ik-llamacpp", "kind": "ik-llamacpp", "name": "ik_llama.cpp", "root": str(root or Path(argv_of(procs[0]["pid"], procs[0]["cmd"])[0]).parent)}
+    if exe:
+        e["version_cmd"], e["version_re"] = [str(exe), "--version"], r"version: (\d+) \("
+    out["engines"].append(e)
+    for r in procs:
+        m = re.search(r"(?:-m|--model)\s+\"?([^\"\s]+)", r["cmd"])
+        model = Path(m.group(1)).stem if m else f"llama-server :{r['port']}"
+        u = _running_unit(r, "ik-llamacpp", "ik-llamacpp", model, model, "described from the running process; one model for the server's life, unload = stop", seen)
+        if u["start"].get("argv"):
+            u["start"]["loads_at_start"] = True
+        out["units"].append(u)
+    if exe and not procs:
+        out["notes"].append(f"ik_llama.cpp server found at {exe}; a unit is proposed only while one is running (start it, then `detect`)")
+    return out
+
+
+def detect_koboldcpp(seen: dict, running: list[dict]) -> dict:
+    """One executable; a unit is a running server's .kcpps (--config), which is what the admin API swaps to."""
+    out = {"engines": [], "units": [], "notes": []}
+    names = ["koboldcpp", "koboldcpp-nocuda", "koboldcpp-oldpc", "koboldcpp-linux-x64", "koboldcpp-linux-x64-nocuda"]
+    exe = next((which(n) for n in names if which(n)), None)
+    if not exe:
+        for root in (HOMEDIR / "koboldcpp", HOMEDIR / "KoboldCpp", LOCAL / "koboldcpp"):
+            exe = next((str(p) for n in names for p in (root / (n + ".exe" if WIN else n),) if p.exists()), None)
+            if exe:
+                break
+    procs = [r for r in running if r["kind"] == "koboldcpp" and r["port"] not in seen]
+    if not exe and not procs:
+        return out
+    e = {"id": "koboldcpp", "kind": "koboldcpp", "name": "KoboldCpp", "root": str(Path(exe).parent) if exe else ""}
+    if procs:
+        e["version_url"], e["version_path"] = f"http://127.0.0.1:{procs[0]['port']}/api/extra/version", "version"
+    out["engines"].append(e)
+    for r in procs:
+        m = re.search(r"--config\s+\"?([^\"\s]+)", r["cmd"])
+        cfg = Path(m.group(1)).name if m else ""
+        admin = "--admin" in r["cmd"]
+        note = "a KoboldCpp launch config; swap and unload go through the admin API" if admin else \
+               "started without --admin: Quartermaster can see and stop it, not swap or unload it; add --admin --admindir to its launch"
+        out["units"].append(_running_unit(r, "koboldcpp", "koboldcpp", cfg or f"koboldcpp :{r['port']}", cfg, note, seen))
+    if exe and not procs:
+        out["notes"].append(f"KoboldCpp found at {exe}; a unit is proposed from a running server (start one with --admin --admindir, then `detect`)")
+    return out
+
+
+def _yaml_scalar(text: str, key: str) -> str:
+    """One top-level-ish `key: value` from a simple YAML file, without a YAML library (TabbyAPI's config.yml)."""
+    m = re.search(rf"^\s*{re.escape(key)}:\s*([^#\n]+)", text, re.M)
+    return m.group(1).strip().strip("'\"") if m else ""
+
+
+def detect_tabbyapi(seen: dict, running: list[dict]) -> dict:
+    """A checkout with config.yml: one server, its port and model_name read from there."""
+    out = {"engines": [], "units": [], "notes": []}
+    root = _first_root([HOMEDIR / "tabbyAPI", HOMEDIR / "tabbyapi", LOCAL / "tabbyAPI"], "main.py")
+    procs = [r for r in running if r["kind"] == "tabbyapi" and r["port"] not in seen]
+    if not root and not procs:
+        return out
+    if not root and procs:
+        root = Path(argv_of(procs[0]["pid"], procs[0]["cmd"])[-1]).parent
+    e = {"id": "tabbyapi", "kind": "tabbyapi", "name": "TabbyAPI", "root": str(root)}
+    out["engines"].append(e)
+    cfg = root / "config.yml"
+    text = cfg.read_text(encoding="utf-8", errors="replace") if cfg.exists() else ""
+    port = int(_yaml_scalar(text, "port") or 5000) if (_yaml_scalar(text, "port") or "5000").isdigit() else 5000
+    model = _yaml_scalar(text, "model_name")
+    if port in seen:
+        out["notes"].append(f"TabbyAPI's port {port} is {seen[port]}'s too: give one of them another (network.port in config.yml)")
+        return out
+    start = root / ("start.bat" if WIN else "start.sh")
+    u = {"id": "tabbyapi", "engine": "tabbyapi", "kind": "tabbyapi", "name": model or "TabbyAPI", "model": model or "(loads by name)", "model_id": model,
+         "context": None, "vision": False, "quant": "", "port": port, "footprint": {"vram_gib": None, "ram_gib": None},
+         "start": {"argv": [str(start)], "cwd": str(root)}, "log": "", "config": str(cfg) if cfg.exists() else "",
+         "auth": {"header": "x-admin-key", "key_file": str(root / "api_tokens.yml"), "key_re": r"^admin_key:\s*(\S+)"},
+         "timeouts": {"start_s": 300, "load_s": 600, "unload_s": 60},
+         "notes": "model_id is a folder under model_dir; set it to the model this unit should load" if not model else "model_name from config.yml", "source": ""}
+    out["units"].append(u)
+    seen[port] = "tabbyapi"
+    if not cfg.exists():
+        out["notes"].append("TabbyAPI has no config.yml yet (copy config_sample.yml); the unit assumes port 5000")
+    return out
+
+
+def detect_textgen(seen: dict, running: list[dict]) -> dict:
+    """textgen (text-generation-webui): the API port and keys live in user_data/CMD_FLAGS.txt; --api must be on."""
+    out = {"engines": [], "units": [], "notes": []}
+    root = _first_root([HOMEDIR / "textgen", HOMEDIR / "text-generation-webui", HOMEDIR / "textgen-portable*", LOCAL / "textgen"], "server.py")
+    procs = [r for r in running if r["kind"] == "textgen" and r["port"] not in seen]
+    if not root and not procs:
+        return out
+    if not root:
+        root = Path(argv_of(procs[0]["pid"], procs[0]["cmd"])[-1]).parent
+    e = {"id": "textgen", "kind": "textgen", "name": "textgen", "root": str(root)}
+    m = re.search(r"textgen-portable-(\d+\.\d+)", root.name)
+    if m:
+        e["version"] = m.group(1)
+    out["engines"].append(e)
+    flags_file = root / "user_data" / "CMD_FLAGS.txt"
+    flags = flags_file.read_text(encoding="utf-8", errors="replace") if flags_file.exists() else ""
+    api_on = "--api" in flags or any("--api" in r["cmd"] for r in procs)
+    m = re.search(r"--api-port\s+(\d+)", flags) or next((re.search(r"--api-port\s+(\d+)", r["cmd"]) for r in procs if "--api-port" in r["cmd"]), None)
+    port = int(m.group(1)) if m else 5000
+    if not api_on:
+        out["notes"].append(f"textgen at {root} has its API off: put --api (and --api-port, --admin-key) in {flags_file} and `detect` again")
+        return out
+    if port in seen:
+        out["notes"].append(f"textgen's API port {port} is {seen[port]}'s too: set --api-port to another")
+        return out
+    start = root / ("start_windows.bat" if WIN else "start_linux.sh")
+    out["units"].append({"id": "textgen", "engine": "textgen", "kind": "textgen", "name": "textgen", "model": "(loads by name)", "model_id": "",
+                         "context": None, "vision": False, "quant": "", "port": port, "footprint": {"vram_gib": None, "ram_gib": None},
+                         "start": {"argv": [str(start)], "cwd": str(root)}, "log": "", "config": str(flags_file) if flags_file.exists() else "",
+                         "auth": {"header": "Authorization", "prefix": "Bearer ", "key_file": str(flags_file), "key_re": r"--admin-key\s+(\S+)"},
+                         "timeouts": {"start_s": 300, "load_s": 600, "unload_s": 60},
+                         "notes": "set model_id to a name from GET /v1/internal/model/list; the admin key is read from CMD_FLAGS.txt when --admin-key is set", "source": ""})
+    seen[port] = "textgen"
+    return out
+
+
+def detect_foundry(seen: dict) -> dict:
+    """The foundry CLI; a unit needs the fixed port the owner starts the daemon on, so only the engine is proposed."""
+    out = {"engines": [], "units": [], "notes": []}
+    exe = which("foundry")
+    if not exe:
+        return out
+    out["engines"].append({"id": "foundry-local", "kind": "foundry-local", "name": "Foundry Local", "root": str(Path(exe).parent),
+                           "version_cmd": [exe, "--version"]})
+    out["notes"].append("Foundry Local: start its daemon on a fixed port (foundry server start --port <port> --idle-timeout 0) and add a unit of kind "
+                        "foundry-local with that port and a model alias as model_id; the catalog guide shows it")
     return out
 
 
@@ -714,6 +931,18 @@ def detect_all(kinds: set[str]) -> dict:
         take(detect_ollama(seen))
     if "llamacpp" in kinds:
         take(detect_llamacpp(seen, running))
+    if "polystrata" in kinds:
+        take(detect_polystrata(seen))
+    if "ik-llamacpp" in kinds:
+        take(detect_ik_llamacpp(seen, running))
+    if "koboldcpp" in kinds:
+        take(detect_koboldcpp(seen, running))
+    if "tabbyapi" in kinds:
+        take(detect_tabbyapi(seen, running))
+    if "textgen" in kinds:
+        take(detect_textgen(seen, running))
+    if "foundry-local" in kinds:
+        take(detect_foundry(seen))
     if "comfyui" in kinds:
         r = take(detect_comfyui(seen, running))
         if r.get("service"):
@@ -726,7 +955,7 @@ def detect_all(kinds: set[str]) -> dict:
     for r in running:
         if r["port"] in seen:
             continue
-        if r["kind"] in ("strata", "maya") and not any(e["id"] == r["kind"] for e in found["engines"]):
+        if r["kind"] in ("strata", "maya", "polystrata", "koboldcpp", "tabbyapi", "textgen") and not any(e["id"] == r["kind"] for e in found["engines"]):
             found["notes"].append(f"a {r['kind']} server is listening on :{r['port']} (pid {r['pid']}) but its install was not found: {r['cmd'][:120]}")
     skip = set(ARGS["skip"] or [])
     if skip:

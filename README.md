@@ -133,7 +133,13 @@ counts and has a menu: stop every unit of that engine, and the update entries be
 
 `catalog/<kind>.json` is one record per kind Quartermaster knows (what it is, licence, tier, how to detect
 and drive it, its update recipe, how to install it, what it fits); it ships with the code and `git pull`
-is how it updates. An engine or client takes its **update recipe** from its kind's record unless its
+is how it updates. Fifteen kinds today: the engines Strata, Maya, Ollama, llama.cpp, PolyStrata,
+ik_llama.cpp, KoboldCpp, TabbyAPI, textgen (text-generation-webui), Foundry Local and ComfyUI; the service
+OpenWebUI; the clients Pi, Codex CLI and Claude Code. Each record says where it has been **tested**; the six
+added from their documentation and source in November 2026 carry an *untested* mark in the panel until
+someone drives one and says so, and a record names its **driver**, so a fork or an engine with a plain HTTP
+or command-line control surface is a record and no code (`catalog/README.md`). An engine or client takes
+its **update recipe** from its kind's record unless its
 inventory entry overrides it (`"update": {"recipe": "git-check"}` for a custom build). Recipes:
 `npm-global`, `pnpm-global`, `pip`, `winget`, `git-pull-pip-e`, `git-check`, `github-release`, `self`,
 `script`, `comfy`, `driver`, `none` (`catalog/README.md`). Setup writes `pnpm-global` for a client that pnpm
