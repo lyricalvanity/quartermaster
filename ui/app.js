@@ -198,8 +198,9 @@
       refs.root.classList.toggle("will-unload", on && !!info.loaded);
     }
   }
-  // ---- OpenWebUI: looked at from outside, moved by three fixed tasks (see the agent) ----
+  // ---- OpenWebUI: looked at from outside, moved by three fixed controls (see the agent) ----
   let owui = null;
+  const owuiDriver = (o) => o.driver || (o.units ? "systemd" : o.compose ? "docker-compose" : "schtasks");
   function owuiCard(o) {
     const c = el("div", "card service");
     const oport = Number(new URL(o.url, location.href).port);
@@ -207,8 +208,8 @@
     const top = el("div", "c-top");
     const left = el("div");
     left.appendChild(el("div", "c-name", o.name || "OpenWebUI"));
-    const sysd = o.driver === "systemd" || (!o.driver && !!o.units);
-    left.appendChild(el("div", "c-model", o.model || (sysd ? "systemd driver" : "scheduled-task driver")));     // the inventory may describe how it runs
+    const drv = owuiDriver(o);
+    left.appendChild(el("div", "c-model", o.model || { systemd: "systemd driver", "docker-compose": "docker compose driver" }[drv] || "scheduled-task driver"));     // the inventory may describe how it runs
     top.appendChild(left);
     const pill = el("span", "pill", "—"); top.appendChild(pill);
     c.appendChild(top);
@@ -219,16 +220,21 @@
     const act = el("div", "c-actions");
     const st = el("button", "btn small", "Start"); st.onclick = () => action("owui_start"); act.appendChild(st);
     const sp = el("button", "btn small danger", "Stop");
-    sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", "This takes it down for everyone using it. Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
+    sp.onclick = async () => { if (await confirm("Stop OpenWebUI?", o.stop_note || "This takes it down for everyone using it. Start, or a reboot, brings it back.")) action("owui_stop", null, { confirm: true }); };
     act.appendChild(sp);
     const up = el("button", "btn small", "Update");
-    up.onclick = async () => { if (await confirm("Update OpenWebUI?", o.update_note || "Runs its update control, which backs up the data and restarts it on the new version as that control was written to. A release with schema changes migrates the database one way.")) action("owui_update", null, { confirm: true }); };
+    const updateNote = drv === "docker-compose"
+      ? "Copies its data volume, pulls the image, recreates the container on it and waits for /health. A new version that does not come up is rolled back, image and data. A release with schema changes migrates the database one way; the copy is how you would go back later."
+      : "Runs its update control, which backs up the data and restarts it on the new version as that control was written to. A release with schema changes migrates the database one way.";
+    up.onclick = async () => { if (await confirm("Update OpenWebUI?", o.update_note || updateNote)) action("owui_update", null, { confirm: true }); };
     act.appendChild(up);
     act.appendChild(el("span", "spacer"));
     const open = el("a", "btn small ghost", "open"); open.href = o.open_url || o.url; open.target = "_blank"; open.rel = "noopener"; act.appendChild(open);
     if (o.ctl_log) { const lg = el("button", "btn small ghost", "log"); lg.onclick = () => openLog("openwebui", "OpenWebUI · control log"); act.appendChild(lg); }
     c.appendChild(act);
-    c.onmouseenter = () => setHelp(o.help || `OpenWebUI, driven by ${sysd ? "units" : "scheduled tasks"} the agent starts by name and passes nothing; the tile reads only health and version.`);
+    c.onmouseenter = () => setHelp(o.help || (drv === "docker-compose"
+      ? "OpenWebUI in Docker Compose: the agent runs docker compose on the project and service the inventory names; the tile reads only health and version."
+      : `OpenWebUI, driven by ${drv === "systemd" ? "units" : "scheduled tasks"} the agent starts by name and passes nothing; the tile reads only health and version.`));
     c.onmouseleave = () => setHelp("");
     owui = { root: c, pill, meta, live, note, st, sp, up, vit };
     return c;
@@ -252,11 +258,14 @@
     if (i.keepalive_last) lv.push(`started ${i.keepalive_last}`);
     if (i.keepalive_exited) lv.push("keepalive is restarting it");
     if (i.session_warning) lv.push("login path degraded until a reboot");
+    if (i.container && i.container !== "running") lv.push(`container ${i.container}`);
     owui.live.textContent = lv.join(" · ");
     const t = i.tasks || {};
     const missing = ["start", "stop", "update"].filter((v) => (t[v] || "missing") === "missing");
     const gated = ["start", "stop", "update"].filter((v) => t[v] === "gated");
-    owui.note.textContent = missing.length ? `controls not installed (${missing.join(", ")}): ${i.install_hint || "see the inventory's openwebui.tasks"}`
+    // the compose driver's controls are all there or none are, and its hint says why (no docker, no compose file)
+    owui.note.textContent = missing.length ? (owuiDriver(INV.openwebui) === "docker-compose" ? i.install_hint || "docker is not answering"
+      : `controls not installed (${missing.join(", ")}): ${i.install_hint || "see the inventory's openwebui.tasks"}`)
       : gated.length ? `Windows asks for approval on: ${gated.join(", ")}` : "";
     const busy = !!plan;
     owui.st.disabled = busy || i.up || t.start === "missing" || !t.start;
