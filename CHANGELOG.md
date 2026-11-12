@@ -74,6 +74,15 @@
   uploaded under. They now go to `copy-errors.txt` in the backup folder. The script makes that folder
   root-only on every run, not only when it creates it. An update now measures the room for the copy before it
   stops the service, and refuses with rc 9, changing nothing, when there is not enough.
+- A commit's **author line** is published like its files and its message, and the scrub tool now reads it.
+  Both hooks refuse a commit whose author or committer address is not a no-reply one
+  (`git config scrub.allowAuthorEmail true` for a contributor who means to publish theirs); the addresses git
+  is configured with on the machine join the identifiers the tool derives; and the full scan reads the
+  history every ref reaches, every author, committer and tagger address and every message line. The hooks
+  call the script in the tree, so they need no reinstall.
+- **History was rewritten on 2026-11-12** so that every commit carries a no-reply address. Trees, dates and
+  messages are as they were; every hash is new, and both release tags moved with their commits. A clone from
+  before then needs `git fetch origin --tags --force` and `git reset --hard origin/main`.
 
 ## 0.2.0 - 2026-11-07
 
