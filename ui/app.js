@@ -35,7 +35,8 @@
   // back to whoever its canon addressed. No name is written here.
   const OWNER_DEFAULT = { hal: "Dave", matrix: "Neo", wopr: "Falken", codec: "Colonel", tron: "program", muthur: "Ripley",
     castlevania: "Belmont", lcars: "Picard", cyberpunk: "V", cortex: "Raven", concord: "Raven", precrime: "Anderton",
-    ocp: "Murphy", magi: "Ikari", gits: "Kusanagi", aperture: "Chell", jurassic: "Nedry", t800: "Connor", bladerunner: "Deckard" };
+    ocp: "Murphy", magi: "Ikari", gits: "Kusanagi", aperture: "Chell", jurassic: "Nedry", t800: "Connor", bladerunner: "Deckard",
+    goldeneye: "007", hexen: "mortal" };
   function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "operator"; }
   function fill(s, theme) {
     const host = (INV && INV.host) || "HOST", gpu = (INV && INV.gpu && INV.gpu.name) || "";
@@ -63,6 +64,8 @@
     codec: { killall: { title: "Snake? Snake?! SNAAAAKE!", yes: "Exit", no: "Continue" } },
     tron: { killall: { title: "Derezz every program?", yes: "Derezz", no: "Stay on the Grid" } },
     bladerunner: { killall: { title: "It's too bad they won't live. But then again, who does?", yes: "Retire them", no: "Let them live" } },
+    goldeneye: { killall: { title: "Abort mission, {owner}?", yes: "Abort", no: "Continue" } },
+    hexen: { killall: { title: "Shall I remove them from the board, {owner}?", yes: "Remove them", no: "Leave them be" } },
   };
   function confirm(title, text, key) {
     return new Promise((res) => {
@@ -714,6 +717,7 @@
     $("#gpu-rounds").textContent = g.total_mib != null && g.used_mib != null ? String(Math.max(0, Math.round(g.total_mib - g.used_mib))).padStart(5, "0") : "-----";
     const full = g.total_mib ? g.used_mib / g.total_mib : 0;                 // load level for themes that show #defcon
     $("#defcon").dataset.level = full >= 0.8 ? 1 : full >= 0.6 ? 2 : full >= 0.4 ? 3 : full >= 0.2 ? 4 : 5;
+    document.documentElement.style.setProperty("--gpu-full", Math.min(1, Math.max(0, full)).toFixed(3));   // the same, 0 to 1, for a theme that places something by it
     $("#gpu-free").style.left = g.total_mib && INV ? (100 * INV.gpu.free_card_mib / g.total_mib).toFixed(1) + "%" : "0";
     $("#gpu-util").textContent = `util ${g.util ?? "—"}%`;
     $("#gpu-temp").textContent = `${g.temp_c ?? "—"} °C`;
@@ -982,6 +986,11 @@
       "EXAMINER: {OWNER}, BLADE RUNNER.",
       "REACTION TIME IS A FACTOR IN THIS, SO PLEASE PAY ATTENTION.", "",
       "DESCRIBE IN SINGLE WORDS ONLY THE GOOD THINGS", "THAT COME INTO YOUR MIND ABOUT YOUR MODELS."],
+    goldeneye: ["GoldenEye", "ON HER MAJESTY'S SECRET SERVICE", "FOR YOUR EYES ONLY", "", "MISSION .................. {HOST}",
+      "BRIEFING ................. Q BRANCH", "GADGETS .................. ISSUED", "AGENT .................... {OWNER}", "",
+      "Good luck, {owner}. "],
+    hexen: ["Hexen", "BEYOND {HOST}", "", "THE SEVEN PORTALS STAND OPEN.", "BLUE MANA FOR THE CARD. GREEN FOR THE MACHINE.", "",
+      "GREETINGS, {OWNER}.", "ARE YOU READY TO DIE?"],
   };
   // ---- falling code, for the theme that wants it (#rain is hidden everywhere else and nothing is drawn) ----
   const GLYPHS = Array.from({ length: 56 }, (_, i) => String.fromCharCode(0xFF66 + i)).join("") + "0123456789:.=*+-<>";

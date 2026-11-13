@@ -83,6 +83,17 @@
 - **History was rewritten on 2026-11-12** so that every commit carries a no-reply address. Trees, dates and
   messages are as they were; every hash is new, and both release tags moved with their commits. A clone from
   before then needs `git fetch origin --tags --force` and `git reset --hard origin/main`.
+- Two themes, **GoldenEye** and **Hexen**, which makes twenty-one. GoldenEye is the Nintendo 64 game's two
+  screens at once: the units are sheets in the MI6 dossier (typed, punched, the state a rubber stamp, the
+  resident model stamped 00 AGENT, every guide a briefing marked for your eyes only) and the header, the side
+  panels and the line at the foot are the wristwatch, with its segmented health and armour bars; the view
+  down the barrel turns behind the page. It is the first theme with a light ground under part of the page:
+  the paper surfaces redefine the palette for what sits on them. Hexen is the status bar in stone: blue and
+  green mana vials for VRAM and RAM, the artifact box for the resident model, a mana crystal on every unit
+  (dull, blue, green, and the red of combined mana while it works), and the life chain along the header's
+  foot, lit as far as the card is full, the gem riding its end between two gargoyles.
+- The page keeps how full the card is in `--gpu-full` (0 to 1) on the root element, for a theme that places
+  something by it.
 
 ## 0.2.0 - 2026-11-07
 

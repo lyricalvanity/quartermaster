@@ -1,0 +1,236 @@
+/* Hexen: Beyond Heretic (Raven Software, 1995). The header is the status bar: carved stone, the two mana
+   vials (blue for the card's memory, green for the machine's), the artifact box holding whatever is resident,
+   and along its foot the life chain, lit as far as the card is full with the red gem riding its end, a
+   gargoyle at either side. Units are stone slabs studded with iron, named in the menu's carved red capitals;
+   each carries a mana crystal that is dull when the server is down, blue on standby, green while a model is
+   loaded and the red of combined mana while it works. The line at the foot speaks as the game did, in yellow
+   capitals across the middle. Torches burn at the edges of the wall.
+   The gem needs to know how full the card is: the page keeps that in --gpu-full (0 to 1) on the root. */
+@keyframes hx-torch { 0%, 100% { opacity: 1; } 18% { opacity: .82; } 31% { opacity: .96; } 47% { opacity: .74; } 62% { opacity: .92; } 80% { opacity: .8; } }
+@keyframes hx-gem { 50% { filter: brightness(1.5) drop-shadow(0 0 6px #FF3B2F); } }
+@keyframes hx-crystal { 50% { opacity: .55; transform: scale(.88); } }
+@keyframes hx-blink { 50% { opacity: 0; } }
+
+:root[data-theme="hexen"] {
+  --gold: #D9B24A; --gold2: #8F6F17; --blood: #C0281C; --fire: #FF8A2A; --mana-b: #5B8CFF; --mana-g: #5FD068; --tan: #E8D9A8;
+  --iron: #0A0B08; --lip: #5D6153; --socket: #14150F;
+  --bg: #121310; --bg2: #24261F; --bg3: #1A1B16; --line: #3A3D33; --line2: #5A5D4E;
+  --fg: #DDD3B4; --fg2: #B0A584; --fg3: #8A8369;
+  --e1: #5B8CFF; --e2: #5FD068; --e3: #E8B84A; --e4: #D8452E; --e0: #8C8877;
+  --ok: #5FD068; --warn: #E8C84A; --bad: #E8442E; --busy: #FF8A2A; --idle: #B0A584;
+  --goth: "Old English Text MT", "Palatino Linotype", Georgia, serif;
+  --carve: "Felix Titling", "Perpetua Titling MT", "Palatino Linotype", Georgia, serif;
+  --sans: "Book Antiqua", "Palatino Linotype", Georgia, serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --stone: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  --chain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8'%3E%3Cellipse cx='5' cy='4' rx='4.1' ry='2.6' fill='none' stroke='%23E8C55A' stroke-width='1.4'/%3E%3Crect x='8.3' y='3.1' width='6.6' height='1.8' rx='.9' fill='%23B8902A'/%3E%3C/svg%3E");
+  --chain-dim: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8'%3E%3Cellipse cx='5' cy='4' rx='4.1' ry='2.6' fill='none' stroke='%236E5A22' stroke-width='1.4'/%3E%3Crect x='8.3' y='3.1' width='6.6' height='1.8' rx='.9' fill='%234A3C14'/%3E%3C/svg%3E");
+  --gargoyle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 28'%3E%3Cg fill='%2377786A' stroke='%2316170F' stroke-linejoin='round'%3E%3Cpath d='M20 14L2 4l4 8-5 2 6 3-3 6 16-5z'/%3E%3Cpath d='M20 14L38 4l-4 8 5 2-6 3 3 6-16-5z'/%3E%3Cpath d='M14 10l-3-8 6 6zM26 10l3-8-6 6z'/%3E%3Ccircle cx='20' cy='15' r='7'/%3E%3C/g%3E%3Ccircle cx='17.4' cy='14' r='1.3' fill='%23FF5A2A'/%3E%3Ccircle cx='22.6' cy='14' r='1.3' fill='%23FF5A2A'/%3E%3Cpath d='M17 18.5h6' stroke='%2316170F'/%3E%3C/svg%3E");
+  --gem: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 .5l7.5 7.5L8 15.5.5 8z' fill='%23C4161A' stroke='%233A0406'/%3E%3Cpath d='M8 2.2L13.8 8H2.2z' fill='%23FF6A5E' fill-opacity='.8'/%3E%3Cpath d='M8 3.4l2 2.4H6z' fill='%23fff' fill-opacity='.75'/%3E%3C/svg%3E");
+  --slab: var(--stone), linear-gradient(160deg, #34372F, #25271F 60%, #1D1F19);
+  --studs: radial-gradient(circle at 7px 7px, #8A8D7C 0 1.2px, #2B2D25 1.7px 2.7px, transparent 3.2px),
+           radial-gradient(circle at calc(100% - 7px) 7px, #8A8D7C 0 1.2px, #2B2D25 1.7px 2.7px, transparent 3.2px),
+           radial-gradient(circle at 7px calc(100% - 7px), #8A8D7C 0 1.2px, #2B2D25 1.7px 2.7px, transparent 3.2px),
+           radial-gradient(circle at calc(100% - 7px) calc(100% - 7px), #8A8D7C 0 1.2px, #2B2D25 1.7px 2.7px, transparent 3.2px);
+  scrollbar-color: var(--line2) var(--iron);
+
+  /* the wall: coursed blocks, mottled, dark at the edges */
+  background:
+    radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,.62) 100%),
+    var(--stone),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.36) 0 2px, transparent 2px 46px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.24) 0 2px, transparent 2px 92px),
+    linear-gradient(#1C1E18, #121310);
+  background-attachment: fixed;
+  body { background: transparent; font-size: 13.5px; }
+  ::selection { background: var(--blood); color: #fff; }
+  /* two torches, one at either edge, behind the page */
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; animation: hx-torch 4.3s ease-in-out infinite;
+    background: radial-gradient(ellipse 34% 58% at 0% 34%, rgba(255,138,42,.20), transparent 72%),
+                radial-gradient(ellipse 34% 58% at 100% 34%, rgba(255,138,42,.20), transparent 72%); }
+
+  /* ---- header: the status bar ---- */
+  header { position: relative; padding-bottom: 28px; background: var(--stone), linear-gradient(#3B3E35, #24261F); border-bottom: 2px solid var(--iron);
+    box-shadow: inset 0 1px 0 var(--lip), inset 0 -1px 0 var(--socket), 0 10px 22px -12px #000; }
+  /* the life chain: the whole run unlit, a gargoyle holding either end */
+  header::before { content: ""; position: absolute; left: 8px; right: 8px; bottom: 3px; height: 20px; pointer-events: none;
+    background: var(--gargoyle) 0 50% / 30px 20px no-repeat, var(--gargoyle) 100% 50% / 30px 20px no-repeat, var(--chain-dim) 0 50% / 14px 8px repeat-x; }
+  /* the lit run and the gem at its end: as far along as the card is full */
+  header::after { content: ""; position: absolute; left: 38px; bottom: 3px; height: 20px; pointer-events: none;
+    width: calc(16px + (100% - 92px) * var(--gpu-full, 0)); transition: width .6s; filter: drop-shadow(0 0 5px rgba(255,59,47,.75));
+    background: var(--gem) 100% 50% / 16px 16px no-repeat, var(--chain) 0 50% / 14px 8px repeat-x; }
+  /* a red gem in a gold setting */
+  .mark { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--gold);
+    background: radial-gradient(circle, #3B3E35, #15160F 75%); box-shadow: 0 0 0 1px var(--iron), inset 0 0 6px #000; }
+  .mark::after { inset: 4px; border-radius: 0; background: var(--gem) center / contain no-repeat; animation: hx-gem 3.4s ease-in-out infinite; }
+  .title { font: 400 25px/1 var(--goth); letter-spacing: .5px; color: transparent; white-space: nowrap;
+    background: linear-gradient(#EFEBDD, #A19D8B 55%, #55534A); -webkit-background-clip: text; background-clip: text;
+    filter: drop-shadow(0 1px 0 #000) drop-shadow(0 0 9px rgba(224,48,30,.5)); }
+  .sub { color: var(--fg3); text-transform: uppercase; letter-spacing: .5px; }
+  /* in a narrow column the reading drops to a line of its own, whole, before any word breaks */
+  .gauge .g-label { justify-content: flex-start; flex-wrap: wrap; gap: 0 8px; font: 11px var(--carve); letter-spacing: 1px; color: var(--fg3);
+    white-space: nowrap; }
+  #g-gpu .g-label::before { content: "BLUE MANA"; color: var(--mana-b); }
+  #g-ram .g-label::before { content: "GREEN MANA"; color: var(--mana-g); }
+  .gauge .g-val { margin-left: auto; font: 11.5px var(--mono); color: var(--tan); }
+  /* the vials: glass over the fill, sunk in the stone */
+  .bar { height: 13px; border: 1px solid var(--iron); border-radius: 7px; background: #0D0E0B; box-shadow: inset 0 2px 3px #000, 0 1px 0 #4A4D42; }
+  .bar::after { content: ""; position: absolute; inset: 0; border-radius: 7px; pointer-events: none;
+    background: linear-gradient(rgba(255,255,255,.36), rgba(255,255,255,.05) 40%, transparent 58%, rgba(0,0,0,.28)); }
+  .fill { background: linear-gradient(90deg, #1B3AB0, var(--mana-b)); box-shadow: 0 0 10px var(--mana-b); }
+  .fill.ram { background: linear-gradient(90deg, #1B742F, var(--mana-g)); box-shadow: 0 0 10px var(--mana-g); }
+  .mark-line { background: var(--tan); width: 2px; z-index: 1; }
+  .g-foot { color: var(--fg3); text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: center; grid-column: 2; grid-row: 1 / span 3; }   /* the life count's red numerals */
+  .rounds .r-v { font: 700 23px/1.05 var(--carve); color: #E8442E; text-shadow: 0 1px 0 #000, 0 0 10px rgba(232,68,46,.45); }
+  .rounds .r-k { font: 9.5px var(--carve); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); }
+  /* the artifact box */
+  #resident-line { border: 2px solid var(--iron) !important; padding: 5px 14px !important; background: #0E0F0B;
+    box-shadow: inset 0 0 0 1px var(--gold2), inset 0 0 14px #000, 0 1px 0 #4A4D42; }
+  .r-label { font: 10px var(--carve); letter-spacing: 2px; color: var(--gold); }
+  .r-main { font: 400 16px/1.25 var(--carve); letter-spacing: 1px; color: var(--tan); }
+  .r-sub { color: var(--fg3); }
+  .conn.on { color: var(--mana-g); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- headings: carved capitals, the slot's gem, a length of chain ---- */
+  h2 { display: flex; align-items: center; gap: 10px; margin: 18px 0 11px; font: 400 13px var(--carve); letter-spacing: 3px; color: #D8C690;
+    text-shadow: 0 1px 0 #000; }
+  h2::before { content: ""; flex: none; width: 8px; height: 8px; transform: rotate(45deg); background: var(--accent, var(--blood));
+    box-shadow: 0 0 0 1px var(--iron), 0 0 7px var(--accent, var(--blood)); }
+  h2::after { content: ""; flex: 1; height: 8px; background: var(--chain-dim) 0 50% / 14px 8px repeat-x;
+    -webkit-mask-image: linear-gradient(90deg, #000, transparent 82%); mask-image: linear-gradient(90deg, #000, transparent 82%); }
+  .band-head { align-items: center; }
+  .band-head h2 { flex: 1; }
+
+  /* ---- slabs ---- */
+  .card, .panel, .preset, .modal-box { border-radius: 2px; border: 2px solid var(--iron); background: var(--slab);
+    box-shadow: inset 1px 1px 0 var(--lip), inset -1px -1px 0 #121310, 0 9px 20px -11px #000; }
+  .card, .panel { background: var(--studs), var(--slab); }
+  .card { padding: 15px 16px 13px 24px; }
+  /* the slot's colour, a sliver of glass let into the edge */
+  .card::before { left: 9px; top: 14px; bottom: 14px; width: 4px; border-radius: 0;
+    background: linear-gradient(var(--accent), color-mix(in srgb, var(--accent) 40%, #000));
+    box-shadow: 0 0 0 1px var(--iron), 0 0 9px -1px var(--accent); }
+  .card.resident { border-color: var(--gold2);
+    box-shadow: inset 1px 1px 0 var(--lip), inset -1px -1px 0 #121310, 0 0 0 1px var(--gold), 0 0 28px -4px rgba(255,138,42,.65); }
+  .card.down { opacity: .82; }
+  .card.will-unload { border-color: var(--blood); }
+  .c-name { width: fit-content; font: 400 17px/1.2 var(--carve); letter-spacing: 1.5px; text-transform: uppercase; color: transparent;
+    background: linear-gradient(#FFA070, #EC4A30 50%, #AC2012); -webkit-background-clip: text; background-clip: text;
+    filter: drop-shadow(0 1px 0 #000); }
+  .card.resident .c-name { background-image: linear-gradient(#FFEDB4, var(--gold) 52%, var(--gold2)); }
+  .c-model { color: var(--fg2); font-style: italic; }
+  .c-source { font-family: var(--mono); color: var(--fg3); }
+  .tag { border-radius: 0; background: var(--socket); border: 1px solid var(--line); color: var(--fg2); }
+  .tag.vision { color: var(--mana-g); border-color: #2F5A36; }
+  .tag.bad { background: var(--blood); border-color: var(--blood); color: #fff; }
+  .c-live { color: var(--fg2); }
+  .c-live b { color: var(--fire); }
+  .pill { border-radius: 0; padding: 3px 9px 2px; font: 10.5px var(--carve); letter-spacing: 1.5px; text-transform: uppercase;
+    background: var(--socket); border-color: var(--iron); color: var(--fg3); box-shadow: inset 0 1px 2px #000, 0 1px 0 #4A4D42; }
+  .pill.ready { color: var(--mana-g); border-color: var(--iron); text-shadow: 0 0 8px rgba(95,208,104,.6); }
+  .pill.busy { color: #1D0C02; background: linear-gradient(#FFB85E, var(--fire)); border-color: #5A2A05; }
+  .pill.idle { color: var(--fg2); border-color: var(--iron); }
+  .pill.down { color: var(--fg3); border-style: dashed; border-color: var(--line2); box-shadow: none; }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { color: var(--warn); border-color: var(--gold2); }
+  .pill.parked { color: #FFF1E8; background: var(--blood); border-color: #4A0A06; }
+  .will { font: 10.5px var(--carve); letter-spacing: 1.5px; text-transform: uppercase; color: var(--warn); }
+
+  /* the mana crystal */
+  .vitals { --crystal: #55584C; display: flex; align-items: center; gap: 11px; height: 28px; padding: 0 3px; border-top: 1px solid var(--socket);
+    box-shadow: inset 0 1px 0 #3D4036; }
+  .vitals svg { display: none; }
+  .v-k { position: relative; flex: none; width: 12px; height: 19px; font-size: 0; filter: drop-shadow(0 0 5px var(--crystal)); }
+  .v-k::before { content: ""; position: absolute; inset: 0; clip-path: polygon(50% 0, 100% 30%, 100% 70%, 50% 100%, 0 70%, 0 30%);
+    background: linear-gradient(118deg, rgba(255,255,255,.6) 0 20%, transparent 34%),
+                linear-gradient(var(--crystal), color-mix(in srgb, var(--crystal) 38%, #000)); }
+  .v-s { font: 10.5px var(--carve); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); }
+  .vitals[data-mode="flat"] .v-k { filter: none; opacity: .7; }
+  .vitals[data-mode="standby"] { --crystal: var(--mana-b); }
+  .vitals[data-mode="standby"] .v-k { opacity: .78; }
+  .vitals[data-mode="alive"] { --crystal: var(--mana-g); }
+  .vitals[data-mode="alive"] .v-s { color: var(--mana-g); }
+  .vitals[data-mode="active"] { --crystal: #FF3B2F; }
+  .vitals[data-mode="active"] .v-k { animation: hx-crystal .7s ease-in-out infinite; }
+  .vitals[data-mode="active"] .v-s { color: var(--fire); }
+
+  /* ---- controls: stone keys ---- */
+  .btn { border-radius: 0; border: 1px solid var(--iron); color: #D8C690; font: 11px var(--carve); letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 7px 12px 5px; background: linear-gradient(#3D4037, #292B24); box-shadow: inset 0 1px 0 var(--lip), inset 0 -1px 0 #17180F; }
+  .btn.small { padding: 5px 9px 3px; font-size: 10.5px; }
+  .btn:not(:disabled):hover { color: #FFD9A0; border-color: var(--gold2); text-shadow: 0 0 8px rgba(255,138,42,.7); filter: none; }
+  .btn:disabled { opacity: .42; }
+  .btn.primary { color: #FBE3A0; border-color: #2A0503; font-weight: 400; background: linear-gradient(#9A2116, #5C0F09);
+    box-shadow: inset 0 1px 0 #D0503E, inset 0 -1px 0 #2A0503; }
+  .btn.primary:not(:disabled):hover { color: #FFF3CC; background: linear-gradient(#C0301E, #7A150C); border-color: var(--gold2); }
+  .btn.ghost { background: transparent; box-shadow: none; border-color: var(--line); }
+  .btn.danger { color: var(--bad); border-color: #4A0A06; }
+  .btn.danger:not(:disabled):hover { color: #FFF1E8; background: var(--blood); border-color: var(--blood); text-shadow: none; }
+  select, input { border-radius: 0; background: var(--socket); border-color: var(--iron); color: var(--fg); box-shadow: inset 0 1px 2px #000; }
+  .menu { border-radius: 0; border: 2px solid var(--iron); background: var(--slab); }
+  .preset { padding: 11px 16px; }
+  .preset:hover { border-color: var(--gold2); }
+  .preset .n { font: 400 13.5px var(--carve); letter-spacing: 1px; text-transform: uppercase; color: var(--tan); }
+  .preset .d { color: var(--fg3); font-style: italic; }
+  .client { border-radius: 0; border: 1px solid var(--iron); background: var(--slab); box-shadow: inset 1px 1px 0 var(--lip); }
+  .client .cl-name { font: 400 12px var(--carve); letter-spacing: 1px; text-transform: uppercase; color: var(--tan); }
+
+  /* ---- side panels ---- */
+  .panel { padding: 14px 16px; }
+  .p-head { font: 400 12px var(--carve); letter-spacing: 2.5px; color: #E8523A; text-shadow: 0 1px 0 #000;
+    border-bottom: 1px solid var(--socket); box-shadow: 0 1px 0 #3D4036; padding-bottom: 7px; }
+  .p-head .p-status { color: var(--fg2); letter-spacing: 0; text-shadow: none; }
+  .kpi { border-radius: 0; background: var(--socket); border: 1px solid var(--iron); box-shadow: inset 0 1px 3px #000, 0 1px 0 #3D4036; }
+  .kpi .k { font-family: var(--carve); letter-spacing: 1.5px; color: #B8973A; }
+  .kpi .v { color: var(--tan); }
+  .kpi:nth-child(1) .v { color: var(--mana-b); text-shadow: 0 0 9px rgba(91,140,255,.45); }
+  .kpi:nth-child(2) .v { color: var(--mana-g); text-shadow: 0 0 9px rgba(95,208,104,.45); }
+  .kpi .u { color: var(--fg3); }
+  .stepper .dot { border-radius: 0; transform: rotate(45deg) scale(.8); }
+  .plan-err { color: #FFF1E8; background: var(--blood); padding: 3px 8px; }
+  .reqs th { color: #B8973A; border-bottom-color: var(--line); }
+  .history .failed { color: #FFF1E8; background: var(--blood); padding: 0 4px; }
+  .cat-sub { font-family: var(--carve); color: #B8973A; }
+
+  /* ---- notices ---- */
+  .warn { background: #1B1708; border: 1px solid var(--gold2); border-radius: 0; color: var(--warn); }
+  .toast { border-radius: 0; border: 2px solid var(--iron); background: var(--slab); color: var(--fg); box-shadow: inset 1px 1px 0 var(--lip), 0 10px 24px -8px #000; }
+  .toast.ok { border-color: #2F5A36; }
+  .toast.bad { border-color: var(--blood); color: #FFD3C8; }
+
+  /* ---- dialogs ---- */
+  .modal { background: rgba(5,5,3,.82); }
+  .modal-box { box-shadow: inset 1px 1px 0 var(--lip), inset 0 0 0 4px #24261F, inset 0 0 0 5px var(--gold2), 0 20px 50px -14px #000; padding: 16px 18px; }
+  .m-head { font: 400 20px/1.2 var(--goth); letter-spacing: .5px; color: #E8523A; text-shadow: 0 1px 0 #000; }
+  .modal-box.small { padding: 20px 22px; }
+  .modal-box.small .m-head { font-size: 23px; }
+  #confirm-text { color: var(--fg); font-size: 14.5px; line-height: 1.5; }
+  #log-body { border-radius: 0; background: #0D0E0B; border-color: var(--iron); color: var(--fg2); box-shadow: inset 0 2px 4px #000; }
+
+  /* ---- the line at the foot: the game's messages, yellow capitals across the middle ---- */
+  #helpbar { display: block; flex: none; margin: 0 18px 10px; padding: 4px 14px 2px; min-height: 26px; text-align: center;
+    font: 12.5px/1.5 var(--carve); letter-spacing: 1.5px; text-transform: uppercase; color: var(--warn); text-shadow: 0 1px 0 #000;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: linear-gradient(90deg, transparent, rgba(0,0,0,.5) 18% 82%, transparent); }
+
+  /* ---- title card ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer; align-items: center; justify-content: center;
+    transition: opacity .35s; background: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(224,48,30,.16), transparent 70%), #070806; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; padding: 0 16px; min-height: 270px; text-align: center; white-space: pre-wrap; max-width: 92vw;
+    font: min(15px, 3.2vw)/2 var(--carve); letter-spacing: 3px; color: #D8C690; }
+  .bootscreen .boot-h { font: 400 min(76px, 15vw)/1.35 var(--goth); letter-spacing: 1px; color: transparent;
+    background: linear-gradient(#EFEBDD, #A19D8B 55%, #55534A); -webkit-background-clip: text; background-clip: text;
+    filter: drop-shadow(0 2px 0 #000) drop-shadow(0 0 16px rgba(224,48,30,.6)); }
+  .bootscreen pre::after { content: ""; display: inline-block; width: 9px; height: 9px; margin-left: 10px; transform: rotate(45deg);
+    background: var(--blood); box-shadow: 0 0 8px #FF3B2F; animation: hx-blink 1s steps(1) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="hexen"] body::before,
+  :root[data-theme="hexen"] .mark::after,
+  :root[data-theme="hexen"] .vitals[data-mode="active"] .v-k { animation: none; }
+}

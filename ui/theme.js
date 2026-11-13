@@ -8,7 +8,7 @@
     ["hal", "HAL 9000"], ["gits", "Section 9"], ["wopr", "WOPR"],
     ["aperture", "Aperture Science"], ["jurassic", "Jurassic Park"],
     ["t800", "T-800"], ["codec", "Codec"], ["tron", "The Grid"],
-    ["bladerunner", "Voight-Kampff"]];
+    ["bladerunner", "Voight-Kampff"], ["goldeneye", "GoldenEye"], ["hexen", "Hexen"]];
   const KEY = "qm-theme";
   let t = "plain";
   try { t = localStorage.getItem(KEY) || "plain"; } catch (e) { /* private window: stay plain */ }

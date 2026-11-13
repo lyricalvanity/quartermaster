@@ -1,0 +1,230 @@
+/* GoldenEye 007 (Nintendo 64, 1997). Two of its screens share the page. The cards are the MI6 dossier: typed
+   sheets with punched margins under manila tabs, a unit's state a rubber stamp, the resident model stamped
+   00 AGENT, and every guide a briefing marked for your eyes only. The header, the side panels and the line at
+   the foot are the wristwatch: black glass, scan lines, green readouts, and the two segmented bars every hit
+   lit up, health in red and body armour in blue. Behind it all is the view down the barrel, turning slowly.
+   The page's name needed no change: the Quartermaster is Q.
+   Paper wants dark ink and glass wants light, so the paper surfaces redefine the palette for what sits on
+   them (--fg, --bg2, --ok and the rest), and every control is drawn from --btn-* on either ground. */
+@keyframes ge-turn { to { transform: rotate(360deg); } }
+@keyframes ge-trace { from { stroke-dashoffset: 300; } to { stroke-dashoffset: 0; } }
+@keyframes ge-blink { 50% { opacity: 0; } }
+@keyframes ge-dot { from { transform: translateX(-22vh); } to { transform: translateX(calc(100vw + 22vh)); } }
+
+:root[data-theme="goldeneye"] {
+  --gold: #D9B24A; --gold2: #A8842A; --lcd-g: #7CF2B4; --red: #E0452B; --blue: #3F8DE8;
+  --manila: #E2C988; --manila2: #C9AC66; --paper: #EDE4CC; --ink: #1B1814; --ink2: #4A4338; --ink3: #7A705F;
+  --stamp-red: #B3231C; --stamp-green: #1F6B3A; --stamp-blue: #1E4E8C; --stamp-amber: #8F6200;
+  --bg: #07090D; --bg2: #0B1110; --bg3: #101917; --line: #1C2A24; --line2: #2E5444;
+  --fg: #D8E6DC; --fg2: #8FB3A0; --fg3: #5E7A6C;
+  --e1: #E0452B; --e2: #3F8DE8; --e3: #D9B24A; --e4: #4FB36C; --e0: #7C8790;
+  --ok: #7CF2B4; --warn: #F2C14B; --bad: #FF5A46; --busy: #59B4FF; --idle: #8FB3A0;
+  --type: "Courier Prime", "Courier New", Courier, monospace;
+  --lcd: "OCR A Extended", Consolas, "Lucida Console", monospace;
+  --logo: "Michroma", "Agency FB", "Segoe UI", sans-serif;
+  --stamp: "Agency FB", Impact, "Arial Narrow", sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --sans: "Segoe UI", Tahoma, sans-serif;
+  --glass: repeating-linear-gradient(0deg, rgba(0,0,0,.34) 0 1px, transparent 1px 3px), linear-gradient(#08100D, #050807);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .1 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  --btn-font: 400 11px/1.2 var(--lcd);
+  --btn-bg: rgba(124,242,180,.05); --btn-line: var(--line2); --btn-fg: #BFF5D6;
+  --btn-hover-bg: var(--lcd-g); --btn-hover-fg: #04100A;
+  --btn-pri-bg: var(--gold); --btn-pri-fg: #171204; --btn-pri-hover-bg: #F4DA85; --btn-pri-hover-fg: #171204;
+  --field-bg: #0A1410;
+  scrollbar-color: var(--line2) var(--bg);
+
+  background: radial-gradient(ellipse 70% 60% at 22% 0%, rgba(217,178,74,.07), transparent 60%), linear-gradient(#0B0F14, #05070A);
+  background-attachment: fixed;
+  body { background: transparent; }
+  ::selection { background: var(--gold); color: #000; }
+
+  /* the view down the barrel: eight lands of rifling round the bore, behind the page, moved by transform only */
+  body::before { content: ""; position: fixed; z-index: -1; pointer-events: none; right: -22vh; top: 50%; width: 124vh; height: 124vh;
+    margin-top: -62vh; animation: ge-turn 240s linear infinite;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'%3E%3Cdefs%3E%3Cpath id='l' d='M270 200Q345.5 237.6 328.6 353.2A200 200 0 0 1 261.8 390.2Q320.9 289.2 264.9 226.2A70 70 0 0 0 270 200Z'/%3E%3C/defs%3E%3Cg fill='%23fff' fill-opacity='.045'%3E%3Cuse href='%23l'/%3E%3Cuse href='%23l' transform='rotate(45 200 200)'/%3E%3Cuse href='%23l' transform='rotate(90 200 200)'/%3E%3Cuse href='%23l' transform='rotate(135 200 200)'/%3E%3Cuse href='%23l' transform='rotate(180 200 200)'/%3E%3Cuse href='%23l' transform='rotate(225 200 200)'/%3E%3Cuse href='%23l' transform='rotate(270 200 200)'/%3E%3Cuse href='%23l' transform='rotate(315 200 200)'/%3E%3C/g%3E%3Ccircle cx='200' cy='200' r='70' fill='%23fff' fill-opacity='.035' stroke='%23fff' stroke-opacity='.13'/%3E%3Ccircle cx='200' cy='200' r='199' fill='none' stroke='%23fff' stroke-opacity='.07'/%3E%3C/svg%3E") center / contain no-repeat; }
+
+  /* ---- header: the watch ---- */
+  header { background: linear-gradient(#131A1F, #080B0E); border-bottom: 2px solid var(--gold2); box-shadow: 0 1px 0 #000, 0 10px 24px -14px #000; }
+  /* the muzzle, seen from the wrong end */
+  .mark { width: 30px; height: 30px; border: 0; border-radius: 50%; animation: ge-turn 16s linear infinite;
+    background: radial-gradient(circle, #F2F2F2 0 21%, #000 23% 31%, transparent 32%), repeating-conic-gradient(#474D54 0 20deg, #0E1013 20deg 45deg);
+    box-shadow: 0 0 0 1px #000, 0 0 0 2px #59616A; }
+  .mark::after { display: none; }
+  .title { font: 400 13px/1.2 var(--logo); letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; color: transparent;
+    background: linear-gradient(#FFF3C2, #E8BD42 46%, #8A5E12 54%, #F1D072); -webkit-background-clip: text; background-clip: text; }
+  .sub { font: 10px var(--lcd); color: var(--fg3); text-transform: uppercase; }
+  .gauge .g-label { font: 11px var(--lcd); letter-spacing: 1.5px; color: var(--fg2); align-items: baseline; }
+  .gauge .g-val { font: 12px var(--lcd); color: var(--lcd-g); }
+  .bar { height: 12px; border: 1px solid #000; border-radius: 0; background: #0D1114; box-shadow: 0 0 0 1px #222B31; }
+  .bar::after { content: ""; position: absolute; inset: 0; pointer-events: none;                       /* twenty segments */
+    background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 2px), #07090D calc(5% - 2px) 5%); }
+  .fill { background: linear-gradient(#FF9A4A, var(--red) 55%, #97200F); }                             /* health */
+  .fill.ram { background: linear-gradient(#9AD0FF, var(--blue) 55%, #1B4C96); }                        /* body armour */
+  .mark-line { background: #fff; width: 2px; z-index: 1; }
+  .g-foot { font: 10px var(--lcd); color: var(--fg3); text-transform: uppercase; }
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: flex-end; grid-column: 2; grid-row: 1 / span 3; }   /* the ammunition count */
+  .rounds .r-v { font: 25px/1 var(--lcd); color: var(--lcd-g); letter-spacing: 1px; text-shadow: 0 0 10px rgba(124,242,180,.5); }
+  .rounds .r-k { font: 9.5px var(--lcd); letter-spacing: 1px; text-transform: uppercase; color: var(--fg3); }
+  #resident-line { border: 1px solid var(--line2) !important; background: var(--glass); padding: 4px 12px;
+    box-shadow: inset 0 0 18px -8px var(--lcd-g); }
+  .r-label { font: 10px var(--lcd); letter-spacing: 2px; color: var(--fg3); }
+  .r-main { font: 15px/1.3 var(--lcd); text-transform: uppercase; color: var(--lcd-g); text-shadow: 0 0 8px rgba(124,242,180,.45); }
+  .r-sub { font: 10px var(--lcd); color: var(--fg2); text-transform: uppercase; }
+  .conn.on { color: var(--ok); }
+  .hdr-actions .btn { white-space: nowrap; }
+
+  /* ---- group headings: the folder's tab, a coloured sticker for the slot ---- */
+  h2 { width: fit-content; margin: 14px 0 10px; padding: 5px 22px 3px 10px; font: 700 12px/1.3 var(--type); letter-spacing: 2px;
+    color: #2A2115; background: linear-gradient(var(--manila), var(--manila2));
+    clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 100%, 0 100%); }
+  h2::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
+    background: var(--accent, #6B5B38); box-shadow: inset 0 -1px 1px rgba(0,0,0,.35); }
+  .band-head { align-items: flex-end; margin-bottom: 10px; border-bottom: 2px solid var(--manila2); }
+  .band-head h2 { margin-bottom: 0; }
+  .band-tools { font-family: var(--lcd); text-transform: uppercase; padding-bottom: 3px; }
+
+  /* ---- paper: the sheets in the folder, and anything else typed ---- */
+  .card, .preset, .client, .modal-box {
+    --fg: var(--ink); --fg2: var(--ink2); --fg3: var(--ink3); --bg2: var(--paper); --bg3: #E0D5B8; --line: #CDBF9C; --line2: #A2936E;
+    --ok: var(--stamp-green); --warn: var(--stamp-amber); --bad: var(--stamp-red); --busy: var(--stamp-blue); --idle: var(--ink3);
+    --btn-font: 700 11px/1.2 var(--type);
+    --btn-bg: transparent; --btn-line: var(--ink2); --btn-fg: var(--ink);
+    --btn-hover-bg: var(--ink); --btn-hover-fg: var(--paper);
+    --btn-pri-bg: var(--ink); --btn-pri-fg: #F6E7AE; --btn-pri-hover-bg: var(--stamp-red); --btn-pri-hover-fg: #FFF6E0;
+    --field-bg: #F7F0DC; scrollbar-color: #A2936E #E0D5B8;
+    color: var(--ink); font-family: var(--type); border: 0; border-radius: 1px;
+    background: var(--grain), linear-gradient(#F1E9D3, var(--paper));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 2px 3px 0 -1px #CFC3A2, 4px 6px 0 -2px #B9AD8C, 0 14px 26px -14px #000; }
+  /* two holes punched in the margin */
+  .card { padding: 15px 16px 12px 30px;
+    background: radial-gradient(circle at 12px 32%, #0A0D11 0 3.5px, rgba(0,0,0,.25) 4px, transparent 4.6px),
+                radial-gradient(circle at 12px 68%, #0A0D11 0 3.5px, rgba(0,0,0,.25) 4px, transparent 4.6px),
+                var(--grain), linear-gradient(#F1E9D3, var(--paper)); }
+  /* the slot's colour is an index tab on the top edge */
+  .card::before { left: 30px; top: -6px; bottom: auto; width: 44px; height: 7px; border-radius: 3px 3px 0 0; background: var(--accent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
+  .card.resident { box-shadow: 0 0 0 2px var(--gold), 0 0 28px -4px rgba(217,178,74,.7), 2px 3px 0 1px #CFC3A2, 0 14px 26px -14px #000; }
+  .card.down { opacity: .9; }
+  .card.will-unload { box-shadow: 0 0 0 2px var(--stamp-red), 2px 3px 0 1px #CFC3A2, 0 14px 26px -14px #000; }
+  .c-name { font: 700 16px/1.25 var(--type); letter-spacing: 1px; text-transform: uppercase; }
+  .card.resident .c-name::after { content: "00 AGENT"; display: block; width: fit-content; margin: 5px 0 2px; padding: 1px 8px 0;
+    border: 2px solid var(--stamp-red); border-radius: 3px; color: var(--stamp-red); font: 700 12px/1.3 var(--stamp); letter-spacing: 3px;
+    transform: rotate(-2deg); mix-blend-mode: multiply; opacity: .9; }
+  .c-model { font-size: 12.5px; color: var(--ink2); }
+  .c-source, .c-used { font-family: var(--type); color: var(--ink3); }
+  .tag { border-radius: 0; background: none; border: 1px solid var(--line2); color: var(--ink2); font-family: var(--type); font-size: 11px; }
+  .tag.vision { color: var(--stamp-blue); border-color: var(--stamp-blue); }
+  .tag.bad { background: var(--stamp-red); border-color: var(--stamp-red); color: var(--paper); }
+  .c-live { font: 11.5px/1.4 var(--type); color: var(--ink2); }
+  .c-live b { color: var(--stamp-red); }
+  .oll-models { font-family: var(--type); }
+  /* the state is stamped on, a little crooked, in the ink that suits it */
+  .pill { border: 2px solid currentColor; border-radius: 3px; padding: 2px 8px 0; font: 700 12px/1.35 var(--stamp); letter-spacing: 2.5px;
+    text-transform: uppercase; transform: rotate(-4deg); mix-blend-mode: multiply; opacity: .9; }
+  .pill.ready { color: var(--stamp-green); }
+  .pill.busy { color: var(--stamp-red); }
+  .pill.idle { color: var(--ink3); }
+  .pill.down { color: var(--ink3); border-style: dashed; opacity: .65; }
+  .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { color: var(--stamp-amber); border-color: var(--stamp-amber); }
+  .pill.parked { color: var(--paper); background: var(--stamp-red); border-color: var(--stamp-red); mix-blend-mode: normal; }
+  .will { color: var(--stamp-red); background: none; border: 2px solid var(--stamp-red); border-radius: 3px; padding: 2px 8px 0;
+    font: 700 12px/1.35 var(--stamp); letter-spacing: 2.5px; text-transform: uppercase; transform: rotate(-4deg); }
+  /* the watch, laid on the page: its trace follows the unit */
+  .vitals { display: grid; grid-template-columns: auto 1fr auto; gap: 9px; align-items: center; padding: 3px 9px; border: 1px solid #000;
+    border-radius: 2px; background: var(--glass); box-shadow: 0 0 0 1px #8D8468, inset 0 0 14px -6px var(--lcd-g); }
+  .v-k { font: 9.5px var(--lcd); letter-spacing: 1px; text-transform: uppercase; color: #4E9B7A; }
+  .vitals svg { width: 100%; height: 18px; display: block; overflow: hidden; }
+  .vitals path { fill: none; stroke: var(--lcd-g); stroke-width: 1.2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .v-base { opacity: .25; }
+  .v-sweep { stroke-dasharray: 46 254; animation: ge-trace 3s linear infinite; filter: drop-shadow(0 0 2px var(--lcd-g)); }
+  .v-s { min-width: 62px; text-align: right; font: 10px var(--lcd); text-transform: uppercase; white-space: nowrap; color: #4E9B7A; }
+  .vitals[data-mode="alive"] .v-s, .vitals[data-mode="active"] .v-s { color: var(--lcd-g); }
+  .vitals[data-mode="flat"] path { stroke: #FF5A46; }
+  .vitals[data-mode="flat"] .v-s { color: #FF5A46; }
+  .preset { padding: 10px 14px; }
+  .preset:hover { box-shadow: 0 0 0 2px var(--gold), 2px 3px 0 1px #CFC3A2, 0 14px 26px -14px #000; }
+  .preset .n { font: 700 13px var(--type); letter-spacing: 1px; text-transform: uppercase; }
+  .preset .d { color: var(--ink3); }
+  .client { padding: 6px 8px 5px 12px; }
+  .client .cl-name { font: 700 12px var(--type); text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ---- controls, on either ground ---- */
+  .btn { border-radius: 0; background: var(--btn-bg); border: 1px solid var(--btn-line); color: var(--btn-fg); font: var(--btn-font);
+    letter-spacing: 1px; text-transform: uppercase; padding: 6px 11px 5px; }
+  .btn.small { padding: 4px 8px 3px; font-size: 10.5px; }
+  .btn:not(:disabled):hover { background: var(--btn-hover-bg); border-color: var(--btn-hover-bg); color: var(--btn-hover-fg); filter: none; }
+  .btn:disabled { opacity: .4; }
+  .btn.primary { background: var(--btn-pri-bg); border-color: var(--btn-pri-bg); color: var(--btn-pri-fg); }
+  .btn.primary:not(:disabled):hover { background: var(--btn-pri-hover-bg); border-color: var(--btn-pri-hover-bg); color: var(--btn-pri-hover-fg); }
+  .btn.ghost { background: transparent; }
+  .btn.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+  .btn.danger:not(:disabled):hover { background: var(--bad); border-color: var(--bad); color: var(--btn-hover-fg); }
+  select, input { border-radius: 0; background: var(--field-bg); border-color: var(--line2); color: var(--fg); }
+  .menu { border-radius: 0; }
+
+  /* ---- side panels: the watch's pages, health down one edge and armour down the other ---- */
+  .panel { border: 1px solid var(--line); border-radius: 3px; padding: 12px 18px;
+    background: repeating-linear-gradient(0deg, var(--red) 0 6px, transparent 6px 9px) 5px 12px / 3px calc(100% - 24px) no-repeat,
+                repeating-linear-gradient(0deg, var(--blue) 0 6px, transparent 6px 9px) calc(100% - 5px) 12px / 3px calc(100% - 24px) no-repeat,
+                var(--glass);
+    box-shadow: inset 0 0 0 1px #000, inset 0 0 44px -22px var(--lcd-g); }
+  .p-head { font: 12px var(--lcd); letter-spacing: 2px; color: var(--lcd-g); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .p-head .p-status { font: 10.5px var(--lcd); letter-spacing: 0; color: var(--fg2); }
+  .kpi { border-radius: 0; background: rgba(124,242,180,.04); border: 1px solid var(--line); }
+  .kpi .k { font: 10px var(--lcd); letter-spacing: 1px; color: var(--fg3); }
+  .kpi .v { font: 21px/1.2 var(--lcd); color: var(--lcd-g); text-shadow: 0 0 8px rgba(124,242,180,.4); }
+  .kpi .v.small { font: 12px/1.3 var(--lcd); text-transform: uppercase; text-shadow: none; }
+  .kpi .u { color: var(--fg3); text-transform: uppercase; }
+  .reqs th { color: var(--fg2); border-bottom-color: var(--line2); text-transform: uppercase; }
+  .stepper .dot { border-radius: 0; }
+  .plan-err { background: var(--bad); color: #000; padding: 3px 8px; }
+  .history .failed { background: var(--bad); color: #000; padding: 0 4px; }
+  .cat-sub { font-family: var(--lcd); }
+
+  /* ---- notices ---- */
+  .warn { background: #170806; border: 1px solid #7A1F17; border-radius: 0; color: #FFC0B3; }
+  .warn::before { content: "MI6  //  "; font: 12px var(--lcd); letter-spacing: 1px; color: var(--bad); }
+  .toast { background: var(--glass); border: 1px solid var(--line2); border-radius: 0; color: #BFF5D6; font: 12px var(--lcd); }
+  .toast.ok { border-color: var(--lcd-g); }
+  .toast.bad { border-color: var(--bad); color: #FFC0B3; }
+  .toast.bad::after { content: "  MISSION FAILED"; color: var(--bad); letter-spacing: 1px; }
+
+  /* ---- dialogs: memoranda; a guide is a briefing ---- */
+  .modal { background: rgba(3,4,6,.82); }
+  .modal-box { padding: 16px 20px; }
+  .m-head { font: 700 14px var(--type); letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid var(--line2); padding-bottom: 8px; }
+  .modal-box.small .m-head { text-transform: none; letter-spacing: .5px; font-size: 16px; }
+  .guide-box .m-head .spacer { text-align: right; }
+  .guide-box .m-head .spacer::after { content: "FOR YOUR EYES ONLY"; display: inline-block; padding: 1px 8px 0; border: 2px solid var(--stamp-red);
+    border-radius: 3px; color: var(--stamp-red); font: 700 12px/1.3 var(--stamp); letter-spacing: 3px; transform: rotate(-2deg); opacity: .85; }
+  .guide { font: 13px/1.6 var(--type); }
+  .guide h3 { color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+  #confirm-text { font: 13.5px/1.55 var(--type); color: var(--ink); }
+  #log-body { border-radius: 0; background: var(--glass); border-color: #000; color: #A9E8C8; box-shadow: 0 0 0 1px #8D8468; }
+
+  /* ---- the line at the foot: Q, over the watch ---- */
+  #helpbar { display: block; flex: none; margin: 0 18px 10px; padding: 5px 14px 4px; min-height: 26px; background: var(--glass);
+    border: 1px solid var(--line); color: var(--fg); font: 12px/1.4 var(--lcd); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #helpbar::before { content: "Q BRANCH  >  "; color: var(--gold); letter-spacing: 1px; }
+
+  /* ---- start-up screen: the white dot crosses, then the briefing is typed ---- */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer; align-items: center; justify-content: center;
+    overflow: hidden; background: #000; transition: opacity .35s, background-color .2s; }
+  .bootscreen.out { opacity: 0; background: #8C0B0B; }
+  .bootscreen::before { content: ""; position: absolute; left: 0; top: 50%; width: 14vh; height: 14vh; margin-top: -7vh; border-radius: 50%;
+    background: #fff; animation: ge-dot 1.15s cubic-bezier(.35,0,.3,1) both; }
+  .bootscreen pre { position: relative; margin: 0; padding: 0 16px; min-height: 260px; max-width: min(720px, 92vw); white-space: pre-wrap;
+    font: min(14px, 3vw)/1.9 var(--type); letter-spacing: 1px; color: #E9E2CC; }
+  .bootscreen .boot-h { font: 400 min(38px, 8vw)/1.7 var(--logo); letter-spacing: 6px; text-transform: uppercase; color: transparent;
+    background: linear-gradient(#FFF3C2, #E8BD42 46%, #8A5E12 54%, #F1D072); -webkit-background-clip: text; background-clip: text; }
+  .bootscreen pre::after { content: "_"; color: var(--gold); animation: ge-blink .9s steps(1) infinite; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="goldeneye"] body::before,
+  :root[data-theme="goldeneye"] .mark,
+  :root[data-theme="goldeneye"] .v-sweep { animation: none; }
+}

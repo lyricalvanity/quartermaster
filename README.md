@@ -4,7 +4,7 @@ A dashboard for one machine that runs local inference: it shows what is on the G
 model **resident** with one click, unloading whatever held the card first. It drives the engines through their
 own APIs (Strata, Maya, Ollama), starts and stops the processes you have told it about, keeps ComfyUI and
 OpenWebUI in view, runs **presets** (a whole working arrangement in one button), and dresses itself in
-nineteen themes because a status page you look at every day should be a pleasure to look at.
+twenty-one themes because a status page you look at every day should be a pleasure to look at.
 
 It was built on one workstation and generalised so it can be installed on yours: `setup.py` finds what the
 machine runs and writes the inventory; a catalog of kinds carries detection, update recipes and guides. It
