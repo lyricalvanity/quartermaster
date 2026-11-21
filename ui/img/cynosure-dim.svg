@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 340">
+<defs>
+<clipPath id="disc"><circle cx="160" cy="170" r="100"/></clipPath>
+<mask id="eye" maskUnits="userSpaceOnUse" x="50" y="60" width="220" height="220">
+<g clip-path="url(#disc)" fill="#fff"><rect x="60" y="71.5" width="200" height="2.9"/><rect x="60" y="80.3" width="200" height="5.9"/><rect x="60" y="90.6" width="200" height="8.8"/><rect x="60" y="105.3" width="200" height="8.8"/><rect x="60" y="118.5" width="200" height="8.9"/><rect x="60" y="133.2" width="200" height="23.6"/><rect x="60" y="162.65" width="200" height="14.7"/><rect x="60" y="183.2" width="200" height="23.6"/><rect x="60" y="212.6" width="200" height="8.9"/><rect x="60" y="225.9" width="200" height="8.8"/><rect x="60" y="240.6" width="200" height="8.8"/><rect x="60" y="253.8" width="200" height="5.9"/><rect x="60" y="265.6" width="200" height="2.9"/></g>
+<circle cx="160" cy="170" r="52" fill="#fff"/>
+<circle cx="160" cy="170" r="28" fill="#000"/><rect x="119" y="165.6" width="82" height="8.8" fill="#000"/>
+<circle cx="160" cy="170" r="6" fill="#fff"/>
+</mask>
+<g id="mark"><rect x="50" y="60" width="220" height="220" mask="url(#eye)"/></g>
+<g id="name" font-family="'Perpetua Titling MT', 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-weight="700">
+<text x="296" y="180" font-size="150" textLength="878" lengthAdjust="spacingAndGlyphs">CYNOSURE</text>
+</g>
+<g id="motto" font-family="Arial, Helvetica, sans-serif">
+<text x="308" y="234" font-size="37" textLength="872" lengthAdjust="spacing">ENCRYPTION MEASURES &amp; DEFENSIVE ICE</text>
+</g>
+<pattern id="raster" width="8" height="7" patternUnits="userSpaceOnUse"><rect width="8" height="5" fill="#fff"/></pattern>
+<mask id="lines"><rect width="1240" height="340" fill="url(#raster)"/></mask>
+<filter id="glow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="9"/></filter>
+</defs>
+<g opacity="0.34" fill="#ff5a52">
+<g filter="url(#glow)" opacity=".5"><use href="#mark"/><use href="#name"/><use href="#motto"/></g>
+<use href="#mark"/>
+<g mask="url(#lines)"><use href="#name"/><use href="#motto"/></g>
+</g>
+</svg>

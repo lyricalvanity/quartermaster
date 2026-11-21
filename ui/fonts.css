@@ -1,6 +1,6 @@
 /* Display fonts the themes rely on, served by the page itself.
    Some browsers hide every font that did not ship with Windows from web pages (Firefox does this under
-   strict tracking protection and in private windows), and these five arrived with Office. Each face
+   strict tracking protection and in private windows), and these six arrived with Office. Each face
    tries the installed copy first and falls back to a file in fonts/, if the owner has copied one there from
    their own Windows Fonts folder. They are Microsoft's fonts: they are not in the repository (.gitignore),
    and a missing file costs nothing but a 404 and the next family in the stack. */
@@ -20,3 +20,5 @@
   src: local("Old English Text MT"), url("fonts/OLDENGL.TTF") format("truetype"); }
 @font-face { font-family: "Felix Titling"; font-display: swap;
   src: local("Felix Titling"), url("fonts/FELIXTI.TTF") format("truetype"); }
+@font-face { font-family: "Perpetua Titling MT"; font-weight: 700; font-display: swap;
+  src: local("Perpetua Titling MT Bold"), url("fonts/PERTIBD.TTF") format("truetype"); }

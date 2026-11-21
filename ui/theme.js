@@ -3,7 +3,7 @@
    The choice is kept per origin in localStorage (8790 and 8800 remember separately). */
 (() => {
   const LIST = [["plain", "Plain"], ["muthur", "MU/TH/UR 6000"], ["castlevania", "Castlevania"], ["lcars", "LCARS"], ["cyberpunk", "Night City"],
-    ["cortex", "Global Cortex"], ["concord", "Nerves Concord"],
+    ["cynosure", "Cynosure"], ["cortex", "Global Cortex"], ["concord", "Nerves Concord"],
     ["matrix", "The Matrix"], ["precrime", "Precrime"], ["ocp", "OCP"], ["magi", "MAGI"],
     ["hal", "HAL 9000"], ["gits", "Section 9"], ["wopr", "WOPR"],
     ["aperture", "Aperture Science"], ["jurassic", "Jurassic Park"],

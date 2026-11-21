@@ -94,6 +94,17 @@
   foot, lit as far as the card is full, the gem riding its end between two gargoyles.
 - The page keeps how full the card is in `--gpu-full` (0 to 1) on the root element, for a theme that places
   something by it.
+- **Cynosure**, which makes twenty-two: MU/TH/UR 6000 turned from green to the Blackwall's red (Cyberpunk 2077:
+  Phantom Liberty). Its faces, raster, rolling bar, vitals trace and free-memory counter are MU/TH/UR's; the
+  facility's mark is on the ground, in the header and on the start-up screen (`tools/make_cynosure.py` draws
+  it). Red is the text, so failure is hot pink, caution stays yellow and ready stays green. One new thing
+  moves: the Blackwall's residue (`#residue`, drawn by `app.js`), upright wireframe growths near the window's
+  edges, laid over the page. A click passes through it, and each piece is drawn at full strength on open
+  ground and as a faint trace over anything to be read or pressed. It stops, with the rest, under
+  `prefers-reduced-motion`. `fonts.css` gains Perpetua Titling MT (Office) for the title. Looked at in
+  Firefox and Chromium on Windows against the example inventory with every server down; the ready, busy
+  and resident dress was checked by setting those classes by hand, not by driving an engine. The README's
+  list of themes gains GoldenEye and Hexen with it.
 
 ## 0.2.0 - 2026-11-07
 

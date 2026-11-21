@@ -1,0 +1,191 @@
+/* Cynosure. Militech's black site under Pacifica, and the Blackwall it was dug to reach through
+   (Cyberpunk 2077: Phantom Liberty). It is MU/TH/UR 6000 turned from green to the Blackwall's red: the
+   same faces, phosphor, raster, rolling bar and square corners, and the same working instruments (a trace
+   per unit, the free-memory counter), with the facility's mark where the radar was. Red on black:
+   - Red cannot be as bright as green. MU/TH/UR's text is 15:1 on its panels; the brightest red that still
+     reads as red is 6.6:1, with the two quieter steps at 4.9:1 and 3.8:1. That is the price of the look,
+     and it is why the ground is kept nearly black.
+   - Red can no longer mean "failed": a failure in red would be one more red line. The alarm is hot pink,
+     the one hue here hotter than the text. Caution stays yellow and "ready" stays green.
+   - What MU/TH/UR draws in cyan (what is live or selected, the first band) is pale rose, the colour the
+     lit mainframe screen is written in.
+   One thing moves that MU/TH/UR has not: the Blackwall's residue, which app.js draws over the page.
+   Everything is scoped to the theme; fonts are ones that ship with Windows and Office (no downloads). */
+@keyframes cy-trace { from { stroke-dashoffset: 300; } to { stroke-dashoffset: 0; } }
+@keyframes cy-blink { 50% { opacity: 0; } }
+@keyframes cy-roll { from { transform: translateY(-30vh); } to { transform: translateY(130vh); } }
+
+:root[data-theme="cynosure"] {
+  --bg: #0a0203; --bg2: #110405; --bg3: #1a0708; --line: #5a161b; --line2: #8f2630;
+  --fg: #ff5a52; --fg2: #e0463f; --fg3: #bd3f3d;
+  --e1: #ffdcd5; --e2: #ff5a52; --e3: #fcee0a; --e4: #5ef6ff; --e0: #bd3f3d;
+  --ok: #1affa3; --warn: #fcee0a; --bad: #ff4fc3; --busy: #ffdcd5; --idle: #bd3f3d;
+  --mono: "Cascadia Mono", Consolas, "Lucida Console", monospace;
+  --sans: "Cascadia Mono", Consolas, "Lucida Console", monospace;
+  --disp: "OCR A Extended", "Cascadia Mono", Consolas, monospace;
+  --label: "Bahnschrift SemiCondensed", "Bahnschrift", "Agency FB", "Arial Narrow", sans-serif;
+  --serif: "Perpetua Titling MT", "Felix Titling", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --led: #ffdcd5;
+  scrollbar-color: var(--line2) var(--bg);
+
+  /* The facility's mainframe screen, turned far down. From the top layer: the mark (ui/img/cynosure-dim.svg,
+     drawn by tools/make_cynosure.py); the darker band that crosses that screen below its middle; its maroon
+     field, black at the top and bottom edges. The cards are opaque, so it shows in the open ground.
+     The mark is centred on the window, as MU/TH/UR's is, until that would put the end of its name behind
+     the side panels (a W can lose an arm to them; a word cannot lose a letter). Then it moves left to end
+     where the cards' column does: the panels' 380px, the two 18px gutters, and room for a scrollbar. The
+     name ends 95% of the way across the drawing. */
+  --mark-w: min(1500px, 62vw);
+  --mark-x: min(calc((100vw - var(--mark-w)) / 2), calc(100vw - 436px - var(--mark-w) * .95));
+  body { text-shadow: 0 0 5px color-mix(in srgb, currentColor 32%, transparent);
+    background:
+      url("img/cynosure-dim.svg") var(--mark-x) 56% / var(--mark-w) auto no-repeat fixed,
+      linear-gradient(180deg, transparent 54%, rgba(0,0,0,.20) 60%, rgba(0,0,0,.08) 66%, transparent 74%) fixed,
+      linear-gradient(180deg, #0a0203 0%, #160405 18%, #1c0507 38%, #1a0506 60%, #130405 80%, #0a0203 100%) fixed; }
+  ::selection { background: var(--fg); color: var(--bg); text-shadow: none; }
+  /* scanlines and tube vignette, above everything, never in the way of a click */
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px),
+                radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.45) 100%); }
+  /* the refresh bar that rolls down a tube picture, as MU/TH/UR's does */
+  body::before { content: ""; position: fixed; left: 0; right: 0; top: 0; height: 22vh; pointer-events: none; z-index: 59;
+    background: linear-gradient(transparent, rgba(255,150,140,.04) 45%, rgba(255,150,140,.075) 50%, transparent);
+    animation: cy-roll 7s linear infinite; }
+  /* The Blackwall's residue (app.js draws it; see residueTick there): over the page, under the raster.
+     A click goes through it, and so does the eye: the whole of it is a little see-through, and over
+     anything to be read or pressed app.js draws it much fainter still. It is light, not ink: it glows. */
+  #residue { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 58; pointer-events: none;
+    opacity: .85; filter: drop-shadow(0 0 3px rgba(255,48,58,.55)); }
+
+  /* ---- header ---- */
+  header { border-bottom: 2px solid var(--line2); }
+  .hdr-actions .btn { white-space: nowrap; }
+  /* the mark: a disc of bars with an eye at its centre (a lit ring, a dark iris, a lit pupil) */
+  .mark { border-radius: 50%; border: 0; overflow: hidden;
+    background: repeating-linear-gradient(0deg, var(--fg) 0 2px, transparent 2px 3px); }
+  .mark::after { inset: 0; background: radial-gradient(circle, var(--fg) 0 1.6px, var(--bg2) 2.1px 4.6px, var(--fg) 5.1px 8.2px, transparent 8.7px); }
+  /* the name, as the screen sets it: inscriptional capitals */
+  .title { font-family: var(--serif); text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+  .sub { text-transform: uppercase; color: var(--fg2); }
+  .sub::before { content: "NODE "; }
+  .gauge .g-label, .r-label { font-family: var(--label); letter-spacing: 1.5px; font-size: 12px; }
+  .bar { height: 12px; border-radius: 0; border-color: var(--line2); background: var(--bg); }
+  .fill { background: var(--e2);
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px);
+            mask: repeating-linear-gradient(90deg, #000 0 5px, transparent 5px 7px); }
+  .fill.ram { background: var(--e1); }
+  .mark-line { background: var(--warn); width: 2px; }
+  .g-foot { text-transform: uppercase; }
+  /* free memory, in the pale rose of what is live: MU/TH/UR's counter is red, which here would be one more red number */
+  #g-gpu { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: center; }
+  #g-gpu > .g-label, #g-gpu > .bar, #g-gpu > .g-foot { grid-column: 1; }
+  .rounds { display: flex; flex-direction: column; align-items: center; grid-column: 2; grid-row: 1 / span 3;
+    background: var(--bg); border: 1px solid var(--line2); padding: 1px 8px 2px; text-shadow: none; }
+  .rounds .r-v { font: 22px/1.1 var(--disp); color: var(--led); letter-spacing: 2px; text-shadow: 0 0 8px rgba(255,220,213,.55); }
+  .rounds .r-k { font: 9px var(--label); letter-spacing: 1.5px; color: var(--fg3); text-transform: uppercase; }
+  #resident-line { border-left-width: 2px; }
+  .r-main { font-family: var(--disp); text-transform: uppercase; font-weight: 400; font-size: 15px; letter-spacing: 1px; }
+  .r-main::after { content: " \2588"; color: var(--fg2); animation: cy-blink 1.1s steps(1) infinite; }
+  .r-sub { text-transform: uppercase; }
+  #btn-killall { background: repeating-linear-gradient(-45deg, #171100 0 8px, #3d2e00 8px 16px); color: var(--warn); border-color: var(--warn); }
+  #btn-killall:not(:disabled):hover { background: var(--warn); color: #000; }
+
+  /* ---- sections and unit cards ---- */
+  h2 { font-family: var(--label); font-size: 12px; letter-spacing: 2px; font-weight: 600; color: var(--bg);
+    background: var(--fg2); width: fit-content; padding: 1px 10px 1px 8px; text-shadow: none; }
+  h2::before { content: "\25A0  "; }
+  .group { counter-reset: unit; }
+  .card { border-radius: 0; border-color: var(--line2); counter-increment: unit; padding-top: 14px; }
+  .card::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 3px; border-radius: 0; }
+  .card.resident { box-shadow: 0 0 0 1px var(--accent), 0 0 22px -6px var(--accent); }
+  .c-name { font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; font-weight: 400; width: fit-content; }
+  .card.resident .c-name { background: var(--accent); color: var(--bg); padding: 0 6px; text-shadow: none; }
+  .c-model { text-transform: uppercase; }
+  .c-source { font-family: var(--mono); }
+  .c-meta::before { content: "UNIT " counter(unit, decimal-leading-zero); font: 600 10.5px var(--label); letter-spacing: 1.5px;
+    background: var(--accent); color: var(--bg); padding: 1px 6px; text-shadow: none; }
+  .tag { border-radius: 0; background: transparent; border: 1px solid var(--line); text-transform: uppercase; }
+  .tag.vision { color: var(--e1); border-color: var(--e1); }
+  .tag.bad { border-color: var(--bad); }
+  .c-live { text-transform: uppercase; }
+  .pill { border-radius: 0; font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; }
+  .pill.ready { background: var(--ok); color: var(--bg); text-shadow: none; }
+  .pill.busy { background: var(--busy); color: var(--bg); text-shadow: none; }
+  .will { text-transform: uppercase; }
+  .card.will-unload { border-color: var(--warn); }
+
+  /* vitals, as MU/TH/UR keeps them: a trace per unit, which flatlines in the alarm colour when the server is down */
+  .vitals { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+    border: 1px solid var(--line); background: var(--bg); padding: 2px 6px; }
+  .vitals svg { width: 100%; height: 22px; display: block; overflow: hidden; }
+  .vitals path { fill: none; stroke: var(--accent); stroke-width: 1.3; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .v-base { opacity: .26; }
+  .v-sweep { stroke-dasharray: 46 254; animation: cy-trace 3s linear infinite; filter: drop-shadow(0 0 2px var(--accent)); }
+  .v-k, .v-s { font: 10px var(--label); letter-spacing: 1.5px; text-transform: uppercase; color: var(--fg3); white-space: nowrap; }
+  .v-s { min-width: 62px; text-align: right; }
+  .vitals[data-mode="alive"] .v-s { color: var(--fg); }
+  .vitals[data-mode="active"] .v-s { color: var(--busy); }
+  .vitals[data-mode="flat"] path { stroke: var(--bad); }
+  .vitals[data-mode="flat"] .v-base { opacity: .6; }
+  .vitals[data-mode="flat"] .v-s { color: var(--bad); }
+
+  /* ---- controls ---- */
+  .btn { border-radius: 0; background: transparent; border-color: var(--fg3); font-family: var(--label);
+    font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; }
+  .btn:not(:disabled):hover { background: var(--fg); color: var(--bg); border-color: var(--fg); text-shadow: none; filter: none; }
+  .btn.primary { background: var(--accent, var(--fg)); color: var(--bg); border-color: var(--accent, var(--fg)); text-shadow: none; }
+  .btn.primary:not(:disabled):hover { background: var(--busy); border-color: var(--busy); }
+  .btn.danger { border-color: var(--bad); color: var(--bad); }
+  .btn.danger:not(:disabled):hover { background: var(--bad); color: #000; border-color: var(--bad); }
+  select, input { border-radius: 0; background: var(--bg); border-color: var(--line2); text-transform: uppercase; }
+  #log-filter { text-transform: none; }
+  .preset { border-radius: 0; border-color: var(--line2); }
+  .preset:hover { border-color: var(--fg); }
+  .preset .n { font-family: var(--label); text-transform: uppercase; letter-spacing: 1.2px; }
+
+  /* ---- side panels ---- */
+  .panel { border-radius: 0; border-color: var(--line2); }
+  .p-head { font-family: var(--label); font-size: 12px; letter-spacing: 2px; color: var(--fg2);
+    border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .kpi { border-radius: 0; background: var(--bg); border: 1px solid var(--line); }
+  .kpi .k { font-family: var(--label); letter-spacing: 1.2px; }
+  .kpi .v { font-family: var(--disp); font-weight: 400; }
+  .stepper .dot { border-radius: 0; }
+  .warn { background: #1a1300; border-color: var(--warn); border-radius: 0; text-transform: uppercase; }
+  .warn::before { content: "\25B2  CAUTION   "; font-family: var(--label); letter-spacing: 1.5px; }
+
+  /* ---- modals and toasts ---- */
+  .modal { background: rgba(8,0,1,.80); }
+  .modal-box { border-radius: 0; border-color: var(--fg2); }
+  .modal-box.small::before { content: ""; height: 10px; margin: -12px -14px 10px; flex: none;
+    background: repeating-linear-gradient(-45deg, var(--warn) 0 10px, #000 10px 20px); }
+  .m-head { font-family: var(--disp); text-transform: uppercase; letter-spacing: 1px; font-weight: 400; }
+  #log-body { border-radius: 0; text-shadow: none; }
+  .toast { border-radius: 0; text-transform: uppercase; }
+
+  /* ---- boot screen: the mainframe screen lit, at its own colours ----
+     Its lines are in the pale rose the lit screen is written in, not the working red: red on this maroon
+     is 4.8:1, and the screen itself has no red lettering. */
+  .bootscreen { display: flex; position: fixed; inset: 0; z-index: 40; cursor: pointer;
+    flex-direction: column; gap: 26px; align-items: center; justify-content: center; transition: opacity .35s;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px),
+      linear-gradient(180deg, transparent 54%, rgba(0,0,0,.22) 60%, rgba(0,0,0,.10) 66%, transparent 74%),
+      linear-gradient(180deg, #120304 0%, #2c0708 12%, #470b0b 34%, #490d0d 44%, #36080a 62%, #3a0a0b 78%, #2c0808 90%, #110302 100%); }
+  .bootscreen::before { content: ""; flex: none; width: min(640px, 82vw); aspect-ratio: 1240 / 340;
+    background: url("img/cynosure.svg") center / contain no-repeat; }
+  .bootscreen.out { opacity: 0; }
+  .bootscreen pre { margin: 0; min-width: min(560px, 90vw); min-height: 230px; font: 15px/1.75 var(--disp); letter-spacing: 1px; color: var(--e1); }
+  .bootscreen pre::after { content: "\2588"; animation: cy-blink 1s steps(1) infinite; }
+}
+
+/* one column, no side panels beside the cards (style.css): the mark is simply centred */
+@media (max-width: 1100px) {
+  :root[data-theme="cynosure"] { --mark-x: 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="cynosure"] .v-sweep,
+  :root[data-theme="cynosure"] .r-main::after { animation: none; }
+  :root[data-theme="cynosure"] body::before { animation: none; display: none; }
+  :root[data-theme="cynosure"] #residue { display: none; }
+}

@@ -223,6 +223,6 @@ select, input { background: var(--bg3); border: 1px solid var(--line2); color: v
 }
 
 /* theme-only instruments: a theme stylesheet turns these on */
-.vitals, .rounds, .defcon, .freq, .bootscreen, #helpbar, #rain, #pulse { display: none; }
+.vitals, .rounds, .defcon, .freq, .bootscreen, #helpbar, #rain, #pulse, #residue { display: none; }
 
 .c-source { font-size: 11px; color: var(--fg3, var(--fg2)); margin-top: 2px; font-family: ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }

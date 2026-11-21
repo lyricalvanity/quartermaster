@@ -34,7 +34,7 @@
   // them in. Every start-up screen addresses the installation's owner (inventory "owner"); without one, each falls
   // back to whoever its canon addressed. No name is written here.
   const OWNER_DEFAULT = { hal: "Dave", matrix: "Neo", wopr: "Falken", codec: "Colonel", tron: "program", muthur: "Ripley",
-    castlevania: "Belmont", lcars: "Picard", cyberpunk: "V", cortex: "Raven", concord: "Raven", precrime: "Anderton",
+    castlevania: "Belmont", lcars: "Picard", cyberpunk: "V", cynosure: "Songbird", cortex: "Raven", concord: "Raven", precrime: "Anderton",
     ocp: "Murphy", magi: "Ikari", gits: "Kusanagi", aperture: "Chell", jurassic: "Nedry", t800: "Connor", bladerunner: "Deckard",
     goldeneye: "007", hexen: "mortal" };
   function owner(theme) { return (INV && INV.owner) || OWNER_DEFAULT[theme] || "operator"; }
@@ -49,6 +49,7 @@
     castlevania: { killall: { title: "But enough talk…", yes: "Have at you!", no: "Not yet" } },
     lcars: { killall: { title: "Awaiting command", yes: "Make it so", no: "Belay that" } },
     cyberpunk: { killall: { title: "Flatline every engram?", yes: "Flatline 'em", no: "Nah, delta" } },
+    cynosure: { killall: { title: "Purge the neural matrix?", yes: "Purge it", no: "Hold the wall" } },
     cortex: { killall: { title: "Purge all units?", yes: "Purge", no: "Abort" } },
     concord: { killall: { title: "Purge all units?", yes: "Purge", no: "Abort" } },
     matrix: { killall: { title: "This is your last chance.", yes: "Red pill", no: "Blue pill" } },
@@ -954,6 +955,9 @@
     cyberpunk: ["Quartermaster", "CYBERDECK // {HOST} MK.{N}", "", "ICE ....................... ACTIVE",
       "ENGRAM VAULT .............. MOUNTED", "RELIC ..................... STABLE, FOR NOW", "NETRUNNER ................. {OWNER}", "",
       "WAKE THE FUCK UP, SAMURAI.", "WE HAVE TOKENS TO BURN."],
+    cynosure: ["MILITECH  //  PROJECT CYNOSURE", "SITE C MAINFRAME  -  NODE {HOST}", "", "NEURAL MATRIX ............ ONLINE",
+      "DEFENSIVE ICE ............ ARMED", "BLACKWALL ................ HOLDING", "OPERATOR ................. {OWNER}", "",
+      "SOMETHING ON THE FAR SIDE IS LISTENING."],
     cortex: ["Global Cortex", "LAYERED  -  SECTION {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
       "RADIATOR ................. OK", "PILOT .................... {OWNER}", "", "MAIN SYSTEM: ACTIVATING COMBAT MODE"],
     concord: ["Nerves Concord", "RAVEN TERMINAL  -  {HOST}", "", "GENERATOR ................ OK", "FCS ...................... OK",
@@ -1066,6 +1070,198 @@
     pulse.on = true;
     pulse.lamps.forEach((l) => pulseNext(l, true));
   }
+  // ---- the Blackwall's residue, for the Cynosure theme (#residue is hidden everywhere else and nothing is drawn) ----
+  // What the Blackwall leaves where it has touched: red growths of upright wireframe blocks. Each is a stand of
+  // narrow columns, every column a stack of outlined rectangles with a face lit here and there; hairlines run on
+  // past the tops; a little right-angled wiring leaves the sides; motes hang about its edge. A stand rises from its
+  // foot over a second, flickers while it stands, and comes apart piece by piece; while it stands, an arc may crawl
+  // up it. Everything in it is upright: having almost nothing horizontal is what makes it read as the Blackwall and
+  // not as a broken picture. Two or three faint growths are always there, and brighter ones come and go, all close
+  // to the window's edges and mostly the right and the bottom.
+  //
+  // It is drawn OVER the page, cleared and redrawn every tick, so it must never wash out what is read or pressed.
+  // A click passes through the canvas (the theme makes it deaf to the pointer). For the eye, every piece knows what
+  // it lies over: on open ground it is drawn at full strength, and over anything else it is veiled, down to a faint
+  // trace. One transparency for the whole layer cannot do both jobs: thin enough to leave the text under a dense
+  // stand legible, it is as thin on open ground, where there is nothing to protect.
+  const BW_LINE = "255,48,58", BW_FACE = "255,112,128", BW_CORE = "255,226,220";     // the residue's red; a lit face; the heart of an arc
+  // Open ground is the page and its big empty parts. Whatever else lies under a piece is something to read or press.
+  const BW_GROUND = "html, body, header, main, #cards, #bands, #side, .group, .grid, .clients, .presets, .band-head, #warnings, .modal";
+  const BW_VEILED = 0.3;                              // the share of its strength a piece keeps over something that matters
+  const residue = { timer: null, growths: [], sheaves: [] };
+  const pick = (count) => Math.floor(Math.random() * count);
+  const between = (low, high) => low + Math.random() * (high - low);
+  const ink = (rgb, alpha) => `rgba(${rgb},${Math.max(0, Math.min(1, alpha)).toFixed(2)})`;
+  function overSomething(x, y) {
+    const under = document.elementFromPoint(x, y);    // the canvas is deaf to the pointer, so this sees through it
+    return !!under && !under.matches(BW_GROUND);      // nothing there: off the window
+  }
+  // A piece is veiled if any point it is judged by lies over something: both ends and the middle of an upright piece
+  // (a tall one can stand on open ground and reach across a button), and every corner of a piece of wiring.
+  function veiled(part) {
+    const x = part.x + (part.w || 0) / 2;
+    const spots = part.kind === "wire" ? part.path
+      : part.kind === "mote" ? [[part.x, part.y]]
+      : [[x, part.y + 1], [x, part.y + part.h / 2], [x, part.y + part.h - 1]];
+    return spots.some(([px, py]) => overSomething(px, py));
+  }
+  // Where a growth takes root: close to an edge. `toward` is the way it grows (-1 up, +1 down). On a side edge it is
+  // a strip, narrow and tall; along the bottom or the top it is a wider stand.
+  function footNearEdge(width, height, lingering) {
+    const [right, bottom, left] = lingering ? [0.35, 0.65, 0.85] : [0.5, 0.85, 0.93];     // the rest is the top
+    const side = Math.random(), depth = Math.random() ** 2 * 0.14;      // depth: how far in from its edge, as a share of the window
+    if (side < right) return { x: (1 - depth) * width, y: between(0.3, 1) * height, toward: -1, strip: true };
+    if (side < bottom) return { x: Math.random() * width, y: (1 - depth) * height, toward: -1, strip: false };
+    if (side < left) return { x: depth * width, y: between(0.3, 1) * height, toward: -1, strip: true };
+    return { x: Math.random() * width, y: depth * height, toward: 1, strip: false };
+  }
+  // A growth is built whole when it takes root, each part stamped with the tick it appears on, so that it rises from
+  // its foot. Drawing it is then only a matter of which parts are due.
+  function seedGrowth(width, height, lingering) {
+    const size = Math.min(1.6, Math.max(0.8, height / 900));
+    const foot = footNearEdge(width, height, lingering);
+    const span = (foot.strip ? between(28, 90) : between(70, 220)) * size;        // how wide the stand is
+    const rise = (foot.strip ? between(110, 300) : between(60, 200)) * size;      // how tall its tallest column
+    const grow = 8 + pick(10);
+    const due = (reach) => Math.floor(Math.min(1, reach / rise) * grow) + pick(3);
+    const at = (reach) => foot.y + foot.toward * reach;        // a height above the foot, as a place in the window
+    const parts = [];
+    for (let n = Math.round(span / between(3.5, 6)); n > 0; n--) {
+      const offset = between(-0.5, 0.5) * span, x = Math.round(foot.x + offset);
+      const top = rise * (1 - 1.5 * Math.abs(offset) / span) * between(0.25, 1);     // tallest near the middle
+      const wide = [3, 4, 4, 6, 6, 8, 10, 14][pick(8)];
+      let reach = between(0, 10);
+      while (reach < top) {
+        const tall = Math.round(Math.random() < 0.75 ? between(4, 22) : between(22, 52)), lit = Math.random();     // mostly small
+        parts.push({ kind: "box", x, y: Math.round(Math.min(at(reach), at(reach + tall))), w: wide, h: tall,
+          face: lit < 0.08 ? 0.65 : lit < 0.45 ? between(0.12, 0.34) : 0, bright: lit < 0.08, due: due(reach) });
+        reach += tall + (Math.random() < 0.6 ? 0 : between(2, 8));
+      }
+      if (Math.random() < 0.34) {                       // a hairline running on past the column's top
+        const length = Math.round(between(0.3, 0.9) * rise);
+        parts.push({ kind: "hair", x: x + pick(wide), y: Math.round(Math.min(at(reach), at(reach + length))), h: length, due: due(reach) });
+      }
+    }
+    for (let n = 2 + pick(5); n > 0; n--) {             // wiring: it leaves the stand sideways, turns at right angles, and ends in a node
+      let x = foot.x + between(-0.5, 0.5) * span, reach = between(0.1, 0.8) * rise;
+      const path = [[Math.round(x), Math.round(at(reach))]];
+      for (let turn = 0, turns = 2 + pick(2); turn < turns; turn++) {
+        if (turn % 2 === 0) x += (Math.random() < 0.5 ? -1 : 1) * between(10, 60); else reach += between(8, 46);
+        path.push([Math.round(x), Math.round(at(reach))]);
+      }
+      parts.push({ kind: "wire", path, due: due(reach) });
+    }
+    for (let n = 16 + pick(28); n > 0; n--) {
+      parts.push({ kind: "mote", x: Math.round(foot.x + between(-0.7, 0.7) * span), y: Math.round(at(between(0.2, 1.25) * rise)),
+        w: 1 + pick(3), due: grow - pick(4) });
+    }
+    for (const part of parts) part.veiled = veiled(part);
+    return { foot, span, rise, parts, grow, age: 0, arc: null,
+      hold: lingering ? 90 + pick(90) : 10 + pick(30),        // ticks it stands once risen
+      gain: lingering ? 0.45 : 1,                             // how brightly it is drawn
+      arcs: lingering ? 0.015 : 0.09 };                       // the chance, each tick, that an arc starts
+  }
+  function drawGrowth(pen, growth) {
+    for (const part of growth.parts) {
+      if (part.due > growth.age || Math.random() < 0.07) continue;       // not risen yet, or blinking
+      // The page beneath may have scrolled or changed since it was last looked at, so a few pieces look again each
+      // tick: a stand catches up within a second or two.
+      if (Math.random() < 0.05) part.veiled = veiled(part);
+      const gain = growth.gain * (part.veiled ? BW_VEILED : 1);
+      if (part.kind === "box") {
+        if (part.face) { pen.fillStyle = ink(part.bright ? BW_FACE : BW_LINE, part.face * gain * between(0.7, 1)); pen.fillRect(part.x, part.y, part.w, part.h); }
+        pen.strokeStyle = ink(BW_LINE, 0.75 * gain);
+        pen.strokeRect(part.x + 0.5, part.y + 0.5, part.w - 1, part.h - 1);
+      } else if (part.kind === "hair") {                // in three lengths, each fainter than the last, counted from the end nearest the foot
+        const third = part.h / 3;
+        for (let i = 0; i < 3; i++) {
+          pen.fillStyle = ink(BW_LINE, 0.6 * gain * (1 - (growth.foot.toward < 0 ? 2 - i : i) * 0.33));
+          pen.fillRect(part.x, part.y + i * third, 1, third);
+        }
+      } else if (part.kind === "wire") {
+        pen.fillStyle = ink(BW_LINE, 0.55 * gain);
+        for (let i = 1; i < part.path.length; i++) {
+          const [x1, y1] = part.path[i - 1], [x2, y2] = part.path[i];
+          pen.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1) || 1, Math.abs(y2 - y1) || 1);
+        }
+        const [x, y] = part.path[part.path.length - 1];
+        pen.fillRect(x - 1, y - 1, 3, 3);
+      } else {
+        pen.fillStyle = ink(BW_LINE, 0.7 * gain * between(0.4, 1));
+        pen.fillRect(part.x, part.y, part.w, part.w);
+      }
+    }
+  }
+  // An arc is a jagged thread with a bright heart. It is drawn afresh each tick from a point that climbs the stand,
+  // which is what makes it crawl.
+  function drawArc(pen, growth) {
+    const arc = growth.arc, toward = growth.foot.toward;
+    let x = arc.x, y = arc.y;
+    pen.beginPath(); pen.moveTo(x, y);
+    for (let joint = 0; joint < arc.joints; joint++) {
+      x += between(-13, 13); y += toward * between(3, 15);
+      pen.lineTo(x, y);
+      if (Math.random() < 0.25) { pen.lineTo(x + between(-12, 12), y + toward * between(2, 10)); pen.moveTo(x, y); }     // a short fork, then back
+    }
+    const gain = growth.gain * (overSomething(arc.x, arc.y) || overSomething(x, y) ? BW_VEILED : 1);     // judged at both ends of the thread
+    pen.lineWidth = 3; pen.strokeStyle = ink(BW_LINE, 0.4 * gain); pen.stroke();
+    pen.lineWidth = 1; pen.strokeStyle = ink(BW_CORE, 0.95 * gain); pen.stroke();
+    arc.x += between(-5, 5); arc.y += toward * between(4, 14);
+    if (--arc.life <= 0) growth.arc = null;
+  }
+  function residueTick() {
+    if (document.hidden) return;
+    const c = $("#residue"), width = innerWidth, height = innerHeight, ratio = devicePixelRatio || 1;
+    if (c.width !== Math.round(width * ratio) || c.height !== Math.round(height * ratio)) {
+      c.width = Math.round(width * ratio); c.height = Math.round(height * ratio);
+    }
+    const pen = c.getContext("2d");
+    pen.setTransform(ratio, 0, 0, ratio, 0, 0);          // draw in CSS pixels, at the screen's own sharpness
+    pen.clearRect(0, 0, width, height);
+    pen.lineWidth = 1;
+    const lingering = residue.growths.filter((g) => g.gain < 1).length;
+    if (lingering < 3 && Math.random() < 0.05) residue.growths.push(seedGrowth(width, height, true));
+    if (residue.growths.length - lingering < 3 && Math.random() < 0.03) residue.growths.push(seedGrowth(width, height, false));
+    for (const growth of residue.growths) {
+      growth.age += 1;
+      if (growth.age > growth.grow + growth.hold) {
+        growth.parts = growth.parts.filter(() => Math.random() > 0.13);       // it comes apart piece by piece
+        growth.arc = null;
+      } else if (!growth.arc && growth.age > growth.grow / 2 && Math.random() < growth.arcs) {
+        growth.arc = { x: growth.foot.x + between(-0.3, 0.3) * growth.span, y: growth.foot.y + growth.foot.toward * between(0, 0.4) * growth.rise,
+          joints: 4 + pick(5), life: 5 + pick(7) };
+      }
+      drawGrowth(pen, growth);
+      if (growth.arc) drawArc(pen, growth);
+    }
+    residue.growths = residue.growths.filter((g) => g.age <= g.grow + g.hold || g.parts.length);
+    // a sheaf of hairlines falling through one place for a few ticks, with no stand under it
+    if (Math.random() < 0.02) {
+      const foot = footNearEdge(width, height, false);
+      const hairs = Array.from({ length: 4 + pick(8) }, () => {
+        const x = Math.round(foot.x + between(-40, 40)), y = Math.round(foot.y + between(-160, 40)), length = between(40, 220);
+        return { x, y, length, veiled: overSomething(x, y + length / 2) };
+      });
+      residue.sheaves.push({ hairs, life: 2 + pick(4) });
+    }
+    for (const sheaf of residue.sheaves) {
+      for (const hair of sheaf.hairs) {
+        if (Math.random() < 0.25) continue;
+        pen.fillStyle = ink(BW_LINE, between(0.2, 0.55) * (hair.veiled ? BW_VEILED : 1));
+        pen.fillRect(hair.x, hair.y, 1, hair.length);
+      }
+      sheaf.life -= 1;
+    }
+    residue.sheaves = residue.sheaves.filter((s) => s.life > 0);
+  }
+  function residueSync() {
+    const on = window.QM_THEME.get() === "cynosure" && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (on && !residue.timer) residue.timer = setInterval(residueTick, 90);
+    else if (!on && residue.timer) {
+      clearInterval(residue.timer); residue.timer = null; residue.growths = []; residue.sheaves = [];
+      const c = $("#residue"); c.width = c.width;        // wiped
+    }
+  }
   // A two-second boot screen, once per tab (or when the theme is picked). Any key or click skips it.
   function bootScreen(force) {
     const theme = window.QM_THEME.get(), lines = (BOOT_LINES[theme] || []).map((l) => fill(l, theme));
@@ -1089,8 +1285,8 @@
     const sel = $("#theme-sel");
     for (const [id, name] of window.QM_THEME.list) { const o = el("option", null, name); o.value = id; sel.appendChild(o); }
     sel.value = window.QM_THEME.get();
-    sel.onchange = () => { window.QM_THEME.set(sel.value); sel.blur(); rainSync(); pulseSync(); bootScreen(true); };
-    rainSync(); pulseSync();
+    sel.onchange = () => { window.QM_THEME.set(sel.value); sel.blur(); rainSync(); pulseSync(); residueSync(); bootScreen(true); };
+    rainSync(); pulseSync(); residueSync();
     bootScreen(false);
   }
 

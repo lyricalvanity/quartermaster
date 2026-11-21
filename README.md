@@ -4,7 +4,7 @@ A dashboard for one machine that runs local inference: it shows what is on the G
 model **resident** with one click, unloading whatever held the card first. It drives the engines through their
 own APIs (Strata, Maya, Ollama), starts and stops the processes you have told it about, keeps ComfyUI and
 OpenWebUI in view, runs **presets** (a whole working arrangement in one button), and dresses itself in
-twenty-one themes because a status page you look at every day should be a pleasure to look at.
+twenty-two themes because a status page you look at every day should be a pleasure to look at.
 
 It was built on one workstation and generalised so it can be installed on yours: `setup.py` finds what the
 machine runs and writes the inventory; a catalog of kinds carries detection, update recipes and guides. It
@@ -217,15 +217,17 @@ The key is readable by any process running as you; it keeps the browser honest, 
 Pick one from the header; it is remembered per browser (`?theme=<id>` in the URL also works). Each theme is
 one stylesheet scoped to `:root[data-theme="<id>"]`, so adding one touches nothing else. Several redress the
 confirmation dialog, the start-up screen and the notices in their own voice; a few draw things (falling code,
-rain, a honeycomb that pulses, a tracker sweep). Everything that moves stops under `prefers-reduced-motion`.
+rain, a honeycomb that pulses, a tracker sweep, the Blackwall's residue). Everything that moves stops under
+`prefers-reduced-motion`.
 
-`aperture`, `bladerunner`, `castlevania`, `codec`, `concord`, `cortex`, `cyberpunk`, `gits`, `hal`,
-`jurassic`, `lcars`, `magi`, `matrix`, `muthur`, `ocp`, `precrime`, `t800`, `tron`, `wopr`, and plain.
+`aperture`, `bladerunner`, `castlevania`, `codec`, `concord`, `cortex`, `cyberpunk`, `cynosure`, `gits`,
+`goldeneye`, `hal`, `hexen`, `jurassic`, `lcars`, `magi`, `matrix`, `muthur`, `ocp`, `precrime`, `t800`, `tron`,
+`wopr`, and plain.
 
 Fonts: the themes name display faces that ship with Windows and Office (Agency FB, OCR A Extended, Felix
-Titling, Old English Text MT, Bahnschrift, Cascadia). They are used from the viewer's machine; if a browser
-hides installed fonts from pages, drop your own copies into `ui/fonts/` (ignored by git) and `fonts.css`
-will serve them. A machine without them (Linux, macOS) can map the names to faces it has in
+Titling, Perpetua Titling MT, Old English Text MT, Bahnschrift, Cascadia). They are used from the viewer's
+machine; if a browser hides installed fonts from pages, drop your own copies into `ui/fonts/` (ignored by
+git) and `fonts.css` will serve them. A machine without them (Linux, macOS) can map the names to faces it has in
 `ui/fonts/local.css`, also ignored: one `@font-face` per name and weight, with `url()` to copies in `ui/fonts/`. The
 page loads it after `fonts.css`, so its rules win; where it does not exist, the agent and the container
 serve an empty one. Map the light weights too: Precrime, Aperture and Ghost in the Shell set Segoe UI and
