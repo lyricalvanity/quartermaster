@@ -878,9 +878,11 @@
       `<text x="2" y="10" fill="var(--fg3)" font-size="9" font-family="var(--mono)">${max.toFixed(0)}</text>`;
   }
   function renderTelemetry(st) {
-    const rid = (st.holders || [])[0];
+    // the resident model's; with none, an Ollama that has a model loaded (it is never resident, but it is what answers)
+    const oll = INV.units.find((x) => x.driver === "ollama" && ((st.servers[x.id] || {}).models || []).length);
+    const rid = (st.holders || [])[0] || (oll && oll.id);
     const s = rid && INV.units.find((x) => x.id === rid), i = rid && st.servers[rid];
-    $("#tele-name").textContent = s ? `${s.name} :${s.port}` : "no resident model";
+    $("#tele-name").textContent = s ? `${s.name} :${s.port}${s.driver === "ollama" ? " · " + i.models.map((m) => m.name).join(", ") : ""}` : "no resident model";
     if (!i) { ["t-toks", "t-prefill", "t-state", "t-ctx"].forEach((k) => $("#" + k).textContent = "—"); $("#t-facts").innerHTML = ""; $("#t-reqs").innerHTML = ""; spark($("#spark"), [], "var(--fg3)"); return; }
     const live = i.live || {}, last = i.last_request || {};
     $("#t-toks").textContent = live.tok_s ? live.tok_s.toFixed(1) : last.decode_tok_s ? last.decode_tok_s.toFixed(1) : "—";
@@ -897,7 +899,9 @@
     const tb = $("#t-reqs"); tb.innerHTML = "";
     for (const r of (i.recent_requests || []).slice().reverse()) {
       const tr = el("tr");
-      [r.prompt_tokens, r.output_tokens, r.prefill_tok_s && Math.round(r.prefill_tok_s), r.decode_tok_s && r.decode_tok_s.toFixed(1), r.finish_reason || r.finish].forEach((v) => tr.appendChild(el("td", null, v == null ? "—" : String(v))));
+      // a prompt mostly kept from the last request: the prefill rate beside it is over the new tokens only, so say how few
+      const prompt = r.reused > 0 ? `${r.prompt_tokens} · ${r.prompt_tokens - r.reused} new` : r.prompt_tokens;
+      [prompt, r.output_tokens, r.prefill_tok_s && Math.round(r.prefill_tok_s), r.decode_tok_s && r.decode_tok_s.toFixed(1), r.finish_reason || r.finish].forEach((v) => tr.appendChild(el("td", null, v == null ? "—" : String(v))));
       tb.appendChild(tr);
     }
     spark($("#spark"), i.tok_history || [], `var(--${slotOf(s)})`, 25);

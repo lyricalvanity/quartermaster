@@ -105,6 +105,25 @@
   Firefox and Chromium on Windows against the example inventory with every server down; the ready, busy
   and resident dress was checked by setting those classes by hand, not by driving an engine. The README's
   list of themes gains GoldenEye and Hexen with it.
+- **Ollama now has telemetry.** Its unit showed loaded models and nothing else: Ollama has no `/metrics`, the
+  probe read only `/api/ps`, and the Telemetry panel showed only a resident model, which Ollama never is. Its
+  runner is a llama-server of its own, and two things beside the API carry what the API leaves out
+  (`agent/ollama_runner.py`). **Ollama's log** has a line when a request begins, one for each batch of prompt
+  read, and the runner's timing lines when it ends: read on every poll while a model is loaded (the journal on
+  Linux, found by the pid of `ollama serve`; `%LOCALAPPDATA%\Ollama\server.log` on Windows; a unit's `log`
+  names a file anywhere), it gives busy, how far the prompt is read, and every finished request exactly. **The
+  runner's `/slots`** gives the tokens generated so far, and so the live rate; it is asked only while the log
+  says a request is in flight, because each answer costs Ollama's log a line. The unit reads *busy* while it
+  answers, its card and the sparkline carry the live rate, and with no resident model the Telemetry panel shows
+  the Ollama that has a model loaded: decode, prefill, state, context, KV type, the last five requests, the
+  count and the peak since `ollama serve` started. The decode rate is the one Ollama gives the client. The
+  prefill rate is over the tokens actually read, where Ollama's reply counts the whole prompt against that
+  time: a prompt mostly kept from the last request shows as `1905 · 13 new` with the true rate for those 13,
+  not thousands of tokens a second. Only numbers leave the log; no line is kept. Where the log cannot be read
+  (a system unit whose journal this account may not read) there are no finished requests and `/slots` is asked
+  on every poll. An Ollama whose runner is not a llama-server reads as before. Driven on Linux against Ollama
+  0.34.1, where the token counts and times of every request sent matched those in Ollama's own reply; the file
+  branch was fed the same lines from a file, and no Ollama on Windows has been read this way.
 
 ## 0.2.0 - 2026-11-07
 

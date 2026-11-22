@@ -7,6 +7,7 @@
   pid_listening(port)          pids of TCP listeners on a port
   binds(port)                  the addresses a port's listeners are bound to
   cmdline(pid)                 a process's command line, or ""
+  journal_read(pid, cursor)    what a process wrote to the systemd journal, since a cursor (Linux; nothing elsewhere)
   kill_tree(pid) / kill(pid)   end a process and its children / one process
   popen_detached(argv, ...)    start a server detached from this process: no console, its own group or session
   exe_names(stems)             process names as the OS lists them (stem.exe on Windows, stem on Linux)
@@ -228,6 +229,31 @@ def cmdline(pid: int) -> str:
         return Path(f"/proc/{int(pid)}/cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace").strip()
     except OSError:
         return ""
+
+
+JOURNALCTL = None if WINDOWS else shutil.which("journalctl")
+
+
+def journal_read(pid: int, cursor: str | None = None, grep: str | None = None, last: int | None = None) -> tuple[list[str], str | None]:
+    """The lines one process has written to the systemd journal, and the cursor of the last of them: this boot's
+    when no cursor is given, else those after it; only the newest `last` of them when that is given. grep is a
+    pattern journalctl applies itself, so only matching lines leave the journal. Linux with journald; ([], None)
+    on Windows, without journalctl, when the journal holds nothing (new) from that pid, or nothing this account
+    may read (a system unit's lines want the systemd-journal, adm or wheel group)."""
+    if not JOURNALCTL:
+        return [], None
+    args = [JOURNALCTL, f"_PID={int(pid)}", "-o", "cat", "--no-pager", "-q", "--show-cursor"]
+    args += [f"--after-cursor={cursor}"] if cursor else ["-b"]
+    if grep:
+        args += ["-g", grep]
+    if last:
+        args += ["-n", str(int(last))]
+    rc, out, _ = run(args, timeout=5)
+    lines = out.splitlines() if rc == 0 else []
+    mark = "-- cursor: "
+    if lines and lines[-1].startswith(mark):
+        return lines[:-1], lines[-1][len(mark):].strip()
+    return [], None
 
 
 def kill_tree(pid: int) -> str:

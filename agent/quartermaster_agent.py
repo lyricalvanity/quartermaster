@@ -38,6 +38,7 @@ import urllib.error
 
 import artqueue
 import compose_service
+import ollama_runner
 import platform_host as host
 import updaters
 
@@ -781,6 +782,18 @@ def cli_call(p: Plan, st, s: dict, verb: str):
 
 # ---- state -------------------------------------------------------------------
 
+_OLLAMA_RATES: dict[tuple, ollama_runner.Telemetry] = {}
+
+
+def ollama_rates(s: dict) -> ollama_runner.Telemetry:
+    """The reader of what one Ollama unit's API leaves out (ollama_runner.py); it keeps its place in the log
+    between polls, so there is one per unit for as long as the unit's port and log stay what they are."""
+    key = (s["id"], s["port"], s.get("log") or "")
+    if key not in _OLLAMA_RATES:
+        _OLLAMA_RATES.setdefault(key, ollama_runner.Telemetry(s["port"], s.get("log") or None))
+    return _OLLAMA_RATES[key]
+
+
 class State:
     """The poller's view of the machine, rebuilt every poll_s; plans and the UI read it under the lock."""
 
@@ -792,6 +805,7 @@ class State:
             self.parked.add("orca-q8")
         self.transient: dict[str, str] = {}      # id -> "starting" | "loading" | "unloading" | "stopping" set by plans
         self.history: dict[str, list] = {}       # id -> [(t, tok_s)] for the sparkline
+        self.procs: dict = {}                    # the last poll's engine processes, for a probe that wants a pid
         self.gpu_history: list = []
 
     def set_transient(self, sid, value):
@@ -823,6 +837,15 @@ class State:
                             models=[{"name": m.get("name"), "size_vram_gib": round((m.get("size_vram") or 0) / 2**30, 1),
                                      "size_gib": round((m.get("size") or 0) / 2**30, 1),
                                      "expires_at": m.get("expires_at")} for m in models])
+                # the API says nothing of the requests: the live state and the rates are read beside it
+                try:
+                    info.update(ollama_rates(s).read(self.procs, bool(models)))
+                    if len(models) == 1 and models[0].get("context_length"):
+                        info["engine"] = {"context": models[0]["context_length"], **(info.get("engine") or {})}
+                    if info["busy"]:
+                        info["state"] = "busy"
+                except Exception as e:  # noqa: BLE001 - metrics are decoration
+                    info["metrics_error"] = str(e)[:120]
                 return info
             if kind == "llamacpp-router":
                 # the router's /health says ok with nothing loaded: a model's own status is the only truth
@@ -917,6 +940,7 @@ class State:
             snap["processes"] = process_list()
         except Exception as e:  # noqa: BLE001
             snap["processes"] = {"error": str(e)}
+        self.procs = snap["processes"]
         threads = []
         results = {}
 

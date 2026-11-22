@@ -18,7 +18,7 @@
   },
   "drive": {
     "endpoints": {"loaded models": "GET /api/ps", "unload": "POST /api/generate {model, keep_alive: 0}", "version": "GET /api/version", "models": "GET /api/tags"},
-    "can": ["see which models are loaded and how much of the card they hold", "unload every loaded model", "report its version"],
+    "can": ["see which models are loaded and how much of the card they hold", "unload every loaded model", "report its version", "show whether it is answering, the live rate, and each finished request's prefill and decode rates (read from its log and its runner's /slots, since its API has no metrics)"],
     "cannot": ["start or stop it (it is a service that is always up)", "pull or delete models", "pick which model answers a request"]
   },
   "launch": {"note": "runs as a service or a tray application; OLLAMA_HOST changes its address; OLLAMA_MODELS its store."},
