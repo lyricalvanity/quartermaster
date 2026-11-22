@@ -22,7 +22,7 @@
     "endpoints": {"health": "GET /health", "models": "GET /v1/models", "router models": "GET /models (each model's status and its child's argv)",
                   "router load": "POST /models/load {model}", "router unload": "POST /models/unload {model}"},
     "can": ["start a unit with its recorded argv", "stop it", "treat it as loaded while it answers /health",
-            "a router: load and unload each model through its API; see a child busy in its /slots"],
+            "a router: load and unload each model through its API; see a child busy in its /slots, with its live rate, and each finished request's prefill and decode rates from the child's lines in the router's log"],
     "cannot": ["a single server: unload without stopping (one model for the server's life)", "change the context without a restart",
                "a router: stop it from the page (it serves every model; its own unit stops it)"]
   },

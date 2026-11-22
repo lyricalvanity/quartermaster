@@ -108,7 +108,8 @@
 - **Ollama now has telemetry.** Its unit showed loaded models and nothing else: Ollama has no `/metrics`, the
   probe read only `/api/ps`, and the Telemetry panel showed only a resident model, which Ollama never is. Its
   runner is a llama-server of its own, and two things beside the API carry what the API leaves out
-  (`agent/ollama_runner.py`). **Ollama's log** has a line when a request begins, one for each batch of prompt
+  (`agent/llama_rates.py` reads them; what is Ollama's own is in `agent/ollama_runner.py`). **Ollama's log**
+  has a line when a request begins, one for each batch of prompt
   read, and the runner's timing lines when it ends: read on every poll while a model is loaded (the journal on
   Linux, found by the pid of `ollama serve`; `%LOCALAPPDATA%\Ollama\server.log` on Windows; a unit's `log`
   names a file anywhere), it gives busy, how far the prompt is read, and every finished request exactly. **The
@@ -124,6 +125,20 @@
   on every poll. An Ollama whose runner is not a llama-server reads as before. Driven on Linux against Ollama
   0.34.1, where the token counts and times of every request sent matched those in Ollama's own reply; the file
   branch was fed the same lines from a file, and no Ollama on Windows has been read this way.
+- **A llama.cpp router's models have telemetry too.** A router unit showed busy and nothing more. The reader
+  written for Ollama's runner is a llama-server's in general (`agent/llama_rates.py`), and a router's child is
+  one: the router relays each child's lines into its own log under the child's port (`[58951] slot
+  print_timing: ...`), and the child answers `/slots`. A loaded router unit now shows reading or generating,
+  the live rate (summed over its slots when several answer at once), and each finished request's prefill and
+  decode rates, the same figures the server gives its client as `prompt_per_second` and
+  `predicted_per_second`. The whole prompt and the part of it kept from the request before are worked out from
+  what the slot held when it was let go, so they are there at a server's usual verbosity, where its log does
+  not state the prompt's length; that reckoning was checked against every request in a log that does state it.
+  `/slots` is asked on every poll, as it was for busy: at a router's usual verbosity an answer costs its log
+  nothing. A model loaded again is a new child, and its count starts over. Driven on Linux against llama.cpp
+  b12096 with seven requests through a router: three compared in full with the figures in the server's reply
+  (one of them a prompt mostly kept), and two pairs sent at once compared by their token counts and decode
+  rates. A single llama-server (kind `llamacpp`) is not read this way yet.
 
 ## 0.2.0 - 2026-11-07
 

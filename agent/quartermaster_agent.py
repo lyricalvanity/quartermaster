@@ -38,6 +38,7 @@ import urllib.error
 
 import artqueue
 import compose_service
+import llama_rates
 import ollama_runner
 import platform_host as host
 import updaters
@@ -782,16 +783,25 @@ def cli_call(p: Plan, st, s: dict, verb: str):
 
 # ---- state -------------------------------------------------------------------
 
-_OLLAMA_RATES: dict[tuple, ollama_runner.Telemetry] = {}
+_RATES: dict[str, tuple] = {}
 
 
-def ollama_rates(s: dict) -> ollama_runner.Telemetry:
-    """The reader of what one Ollama unit's API leaves out (ollama_runner.py); it keeps its place in the log
-    between polls, so there is one per unit for as long as the unit's port and log stay what they are."""
-    key = (s["id"], s["port"], s.get("log") or "")
-    if key not in _OLLAMA_RATES:
-        _OLLAMA_RATES.setdefault(key, ollama_runner.Telemetry(s["port"], s.get("log") or None))
-    return _OLLAMA_RATES[key]
+def rates_of(s: dict, child: int | None = None):
+    """The reader of what one unit's API leaves out: its requests, from its llama-server's log and /slots
+    (llama_rates.py; ollama_runner.py for Ollama). It keeps its place in the log between polls, so there is one
+    per unit for as long as the process it reads stays the same one: a router's model loaded again is a new
+    child on a new port, and its count starts over."""
+    sig = (s["driver"], s["port"], s.get("log") or "", child)
+    hit = _RATES.get(s["id"])
+    if not hit or hit[0] != sig:
+        if s["driver"] == "ollama":
+            reader = ollama_runner.Telemetry(s["port"], s.get("log") or None)
+        else:
+            # a router relays each child's lines into its own log under the child's port, and at its usual
+            # verbosity an answer to /slots costs that log nothing: asked every poll, as busy always was
+            reader = llama_rates.Rates(s["port"], s.get("log") or None, prefix=f"[{child}] ", always_ask=True)
+        hit = _RATES[s["id"]] = (sig, reader)
+    return hit[1]
 
 
 class State:
@@ -839,7 +849,7 @@ class State:
                                      "expires_at": m.get("expires_at")} for m in models])
                 # the API says nothing of the requests: the live state and the rates are read beside it
                 try:
-                    info.update(ollama_rates(s).read(self.procs, bool(models)))
+                    info.update(rates_of(s).read(self.procs, bool(models)))
                     if len(models) == 1 and models[0].get("context_length"):
                         info["engine"] = {"context": models[0]["context_length"], **(info.get("engine") or {})}
                     if info["busy"]:
@@ -863,12 +873,12 @@ class State:
                 info["loaded"] = value == "loaded"
                 child = router_arg(status, "--port") or ""
                 if info["loaded"] and child.isdigit():
+                    # the child's /slots says whether it is answering (which guards an unload) and how far it is;
+                    # its lines in the router's log say what each finished request took
                     try:
-                        st2, slots = http("GET", f"http://127.0.0.1:{child}/slots", timeout=1.0)
-                        if st2 == 200 and isinstance(slots, list):
-                            info["busy"] = any(isinstance(x, dict) and x.get("is_processing") for x in slots)
-                    except Exception:  # noqa: BLE001 - busy only guards an unload; the state stands without it
-                        pass
+                        info.update(rates_of(s, int(child)).read(self.procs, True, [int(child)]))
+                    except Exception as e:  # noqa: BLE001 - metrics are decoration; the state stands without them
+                        info["metrics_error"] = str(e)[:120]
                 info["state"] = "busy" if info["busy"] else "ready" if info["loaded"] else "loading" if value == "loading" else "idle"
                 return info
             st, h = http("GET", base + "/health", timeout=2.0)
