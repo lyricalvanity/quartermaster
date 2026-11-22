@@ -790,8 +790,10 @@
       const refs = cards[s.id], i = st.servers[s.id] || { state: "down" };
       if (!refs) continue;
       let state = i.state;
-      refs.pill.textContent = i.parked && state === "idle" ? "parked" : state;
-      refs.pill.className = "pill " + (i.parked && state === "idle" ? "parked" : state);
+      const shown = i.parked && state === "idle" ? "parked" : state;
+      refs.pill.textContent = shown;
+      // asleep dresses as idle in every theme and carries its own mark: it holds nothing and wakes when asked
+      refs.pill.className = "pill " + (shown === "asleep" ? "idle asleep" : shown);
       refs.root.classList.toggle("resident", !!i.loaded && s.driver !== "ollama");
       refs.root.classList.toggle("down", !i.up);
       refs.root.classList.toggle("parked", !!i.parked);
@@ -802,6 +804,9 @@
         if (i.live.tok_s) lv.push(`<b>${i.live.tok_s.toFixed(1)}</b> tok/s`);
         if (i.live.generated) lv.push(`${i.live.generated} out`);
         if (i.live.queued) lv.push(`${i.live.queued} queued`);
+      } else if (i.sleeping) {
+        const r = i.last_request;
+        lv.push(`asleep · the next request wakes it${r && r.decode_tok_s ? ` · last <b>${r.decode_tok_s.toFixed(1)}</b> tok/s` : ""}`);
       } else if (i.last_request && i.loaded) {
         const r = i.last_request;
         lv.push(`last ${r.prompt_tokens ?? "?"} in · ${r.output_tokens ?? "?"} out · ${r.prefill_tok_s ? Math.round(r.prefill_tok_s) + " pre" : ""} · <b>${r.decode_tok_s ? r.decode_tok_s.toFixed(1) : "—"}</b> tok/s`);
@@ -809,6 +814,9 @@
         lv.push(`${fmtK(i.health.max_context)} ctx · ${i.health.model || ""}${i.health.version ? " · v" + i.health.version : ""}`);
       } else if (!i.up) {
         lv.push(s.driver === "strata-launch" ? `server down · ${s.preset}` : "server down");
+      }
+      if (i.loaded && i.idle_sleep_s && !(i.live && i.live.state && i.live.state !== "idle")) {
+        lv.push(`sleeps after ${i.idle_sleep_s >= 120 ? Math.round(i.idle_sleep_s / 60) + " min" : i.idle_sleep_s + " s"} idle`);
       }
       refs.live.innerHTML = lv.join(" &nbsp; ");
       serverVitals(refs.vit, s, i);
@@ -819,7 +827,7 @@
       } else {
         refs.mk.disabled = planRunning || (i.loaded && (st.holders || []).length === 1 && i.state === "ready");
         refs.mk.textContent = i.loaded && (st.holders || []).length === 1 ? "Resident" : "Make resident";
-        refs.un.disabled = planRunning || !i.loaded;
+        refs.un.disabled = planRunning || !(i.loaded || i.sleeping);
         if (refs.st) refs.st.disabled = planRunning || i.up;
         if (refs.sp) refs.sp.disabled = planRunning || !i.up;
         if (refs.pk) { refs.pk.textContent = i.parked ? "Unpark" : "Park"; refs.pk.disabled = planRunning; }

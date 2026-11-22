@@ -786,20 +786,23 @@ def cli_call(p: Plan, st, s: dict, verb: str):
 _RATES: dict[str, tuple] = {}
 
 
-def rates_of(s: dict, child: int | None = None):
+def rates_of(s: dict, child: int | None = None, naps: bool = False):
     """The reader of what one unit's API leaves out: its requests, from its llama-server's log and /slots
     (llama_rates.py; ollama_runner.py for Ollama). It keeps its place in the log between polls, so there is one
     per unit for as long as the process it reads stays the same one: a router's model loaded again is a new
-    child on a new port, and its count starts over."""
-    sig = (s["driver"], s["port"], s.get("log") or "", child)
+    child on a new port, and its count starts over. naps: the child is set to sleep when idle."""
+    sig = (s["driver"], s["port"], s.get("log") or "", child, naps)
     hit = _RATES.get(s["id"])
     if not hit or hit[0] != sig:
         if s["driver"] == "ollama":
             reader = ollama_runner.Telemetry(s["port"], s.get("log") or None)
         else:
-            # a router relays each child's lines into its own log under the child's port, and at its usual
-            # verbosity an answer to /slots costs that log nothing: asked every poll, as busy always was
-            reader = llama_rates.Rates(s["port"], s.get("log") or None, prefix=f"[{child}] ", always_ask=True)
+            # a router relays each child's lines into its own log under the child's port. At its usual verbosity
+            # an answer to /slots costs that log nothing: asked every poll, as busy always was. Not of a child set
+            # to sleep when idle: to it the question is work, so one asked every poll would never sleep. There
+            # the log leads, and /slots is asked only while the log has a request in flight
+            reader = llama_rates.Rates(s["port"], s.get("log") or None, prefix=f"[{child}] ",
+                                       always_ask=not naps, ask_blind=not naps)
         hit = _RATES[s["id"]] = (sig, reader)
     return hit[1]
 
@@ -872,14 +875,29 @@ class State:
                 info["health"] = {"status": value, "model": s.get("router_model"), **({"max_context": int(ctx)} if ctx.isdigit() else {})}
                 info["loaded"] = value == "loaded"
                 child = router_arg(status, "--port") or ""
+                nap = router_arg(status, "--sleep-idle-seconds") or ""
+                naps = nap.isdigit() and int(nap) > 0
+                if naps:
+                    info["idle_sleep_s"] = int(nap)
                 if info["loaded"] and child.isdigit():
                     # the child's /slots says whether it is answering (which guards an unload) and how far it is;
                     # its lines in the router's log say what each finished request took
                     try:
-                        info.update(rates_of(s, int(child)).read(self.procs, True, [int(child)]))
+                        reader = rates_of(s, int(child), naps)
+                        info.update(reader.read(self.procs, True, [int(child)]))
+                        if naps and not reader.log_ok:
+                            info["metrics_error"] = "the router's log cannot be read, and asking the model would keep it awake: whether it is answering is not known"
                     except Exception as e:  # noqa: BLE001 - metrics are decoration; the state stands without them
                         info["metrics_error"] = str(e)[:120]
-                info["state"] = "busy" if info["busy"] else "ready" if info["loaded"] else "loading" if value == "loading" else "idle"
+                elif value == "sleeping":
+                    # idle past its --sleep-idle-seconds: the child is still there, its memory is released, and the
+                    # next request wakes it. So would any question from here, /slots included: nothing is asked of
+                    # it, and what its finished requests took is what was already read
+                    info["sleeping"] = True
+                    if child.isdigit():
+                        info.update(rates_of(s, int(child), naps).recall())
+                info["state"] = ("busy" if info["busy"] else "ready" if info["loaded"] else "loading" if value == "loading"
+                                 else "asleep" if value == "sleeping" else "idle")
                 return info
             st, h = http("GET", base + "/health", timeout=2.0)
             if st != 200 or not isinstance(h, dict):
@@ -1259,7 +1277,7 @@ def op_unload_server(p: Plan, sid: str, force=False):
         _wait(p, st, lambda: (not fresh_info(sid).get("models"), "still loaded"), s["timeouts"].get("unload_s", 60), what="Ollama to release")
         p.done_step(st)
         return
-    if not info.get("up") or not info.get("loaded"):
+    if not info.get("up") or not (info.get("loaded") or info.get("sleeping")):
         return
     if info.get("busy") and not force:
         raise PlanFailed(f"{name} is answering a request; wait, or click again with force")
@@ -1282,13 +1300,17 @@ def op_unload_server(p: Plan, sid: str, force=False):
             p.done_step(st)
             op_stop_process(p, sid)
         elif kind == "llamacpp-router":
-            # the router ends this model's child process and stays up for the others
+            # the router ends this model's child process and stays up for the others; a model asleep has a child too
             code, r = http("POST", base + "/models/unload", body={"model": s["router_model"]}, timeout=60)
             _ROUTER_CACHE.pop(s["port"], None)
             p.say(st, f"/models/unload {s['router_model']} -> {code} {json.dumps(r)[:160]}")
             if code >= 400:
                 raise PlanFailed(f"{name} refused to unload: {json.dumps(r)[:200]}")
-            _wait(p, st, lambda: (not fresh_info(sid).get("loaded"), "still loaded"), s["timeouts"].get("unload_s", 60), what=f"{name} to release the card")
+
+            def released():
+                i = fresh_info(sid)
+                return not (i.get("loaded") or i.get("sleeping")), "still loaded"
+            _wait(p, st, released, s["timeouts"].get("unload_s", 60), what=f"{name} to release the card")
         elif kind == "maya":
             code, r = http("POST", base + "/models/unload", body={}, timeout=60)
             p.say(st, f"/models/unload -> {code} {json.dumps(r)[:160]}")
@@ -1479,12 +1501,26 @@ def op_load_server(p: Plan, sid: str):
             threading.Thread(target=fire, daemon=True).start()
             p.say(st, "/models/load sent")
         elif s["driver"] == "llamacpp-router":
-            # answers at once; the model's status in GET /models goes loading -> loaded
-            code, r = http("POST", base + "/models/load", body={"model": s["router_model"]}, timeout=60)
+            status = (router_models(s["port"], max_age=0) or {}).get(s["router_model"]) or {}
+            child = router_arg(status, "--port") or ""
+            if str(status.get("value") or "") == "sleeping" and child.isdigit():
+                # asleep: the router counts it as running and refuses to load it again (400). Any question of the
+                # child wakes it, and holds until it is awake: fire it on a thread and poll the status meanwhile
+
+                def fire():
+                    try:
+                        result["r"] = http("GET", f"http://127.0.0.1:{child}/slots", timeout=s["timeouts"]["load_s"] + 30)
+                    except Exception as e:  # noqa: BLE001
+                        result["r"] = (0, str(e))
+                threading.Thread(target=fire, daemon=True).start()
+                p.say(st, f"{s['router_model']} is asleep: woken by asking its /slots")
+            else:
+                # answers at once; the model's status in GET /models goes loading -> loaded
+                code, r = http("POST", base + "/models/load", body={"model": s["router_model"]}, timeout=60)
+                p.say(st, f"/models/load {s['router_model']} -> {code} {json.dumps(r)[:120]}")
+                if code >= 400:
+                    result["r"] = (code, r)
             _ROUTER_CACHE.pop(s["port"], None)
-            p.say(st, f"/models/load {s['router_model']} -> {code} {json.dumps(r)[:120]}")
-            if code >= 400:
-                result["r"] = (code, r)
         elif s["driver"] == "http":
             t = table_of(s)
             if not t.get("load"):

@@ -86,6 +86,7 @@ a.btn.off { opacity: .4; pointer-events: none; }      /* a link to a service tha
 .pill { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line2); color: var(--fg2); white-space: nowrap; }
 .pill.ready { color: var(--ok); border-color: var(--ok); } .pill.busy { color: var(--busy); border-color: var(--busy); }
 .pill.idle { color: var(--idle); } .pill.down { color: var(--fg3); border-style: dashed; }
+.pill.asleep { border-style: dotted; }
 .pill.starting, .pill.loading, .pill.unloading, .pill.stopping, .pill.reloading { color: var(--warn); border-color: var(--warn); animation: pulse 1.2s infinite; }
 .pill.parked { color: var(--bad); border-color: var(--bad); }
 @keyframes pulse { 50% { opacity: .5; } }

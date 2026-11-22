@@ -14,6 +14,8 @@ started with --metrics, and the rates of a request go to the client that made it
   Rates(port, log, ...)             one per server whose requests are to be read
   .read(procs, loaded, ports)       the keys a probe merges into a unit's info: busy, tok_s, live, last_request,
                                     recent_requests, totals. Whatever cannot be read is simply absent.
+  .recall()                         the finished requests it already has, reading and asking nothing: for a
+                                    server that is asleep
   parse(lines, pending, printed)    the finished requests in some log lines
 
 Whose log: the process listening on `port` (its journal on Linux, found by pid, so a user unit, a system unit
@@ -23,8 +25,11 @@ lines as "[<child port>] ...". Where the log cannot be read there are no finishe
 says whether the server is answering.
 
 When /slots is asked: on every poll (always_ask), or only while the log has a request in flight. The second is
-for a server run at debug verbosity, where every answer costs its log a line ("all slots are idle"); Ollama runs
-its runner so.
+for a server an answer costs something. One run at debug verbosity writes its log a line for every answer ("all
+slots are idle"); Ollama runs its runner so. One set to sleep when idle (--sleep-idle-seconds) counts the question
+as work: it starts the idle clock again and wakes a server that sleeps, so one asked on every poll never sleeps and
+never stays asleep. Where the log cannot be read, /slots is asked on every poll all the same (ask_blind), except
+of a server that sleeps: of that one nothing is asked, and whether it is answering is not known.
 
 The figures: a rate is the engine's printed one (`printed`, what a llama-server gives its client as
 predicted_per_second: the generation's leaves out the first token) or tokens over milliseconds. The prompt rate
@@ -160,13 +165,14 @@ def parse(lines, pending: dict, printed: bool = False) -> list[dict]:
 
 class Rates:
     def __init__(self, port: int, log: str | None = None, proc: str = "llama-server", prefix: str = "",
-                 printed: bool = True, always_ask: bool = False):
+                 printed: bool = True, always_ask: bool = False, ask_blind: bool = True):
         self.port = port                                # of the process whose log it is
         self.log = log
         self.proc = host.exe_names((proc,))[0].lower()
         self.prefix = prefix
         self.printed = printed
         self.always_ask = always_ask
+        self.ask_blind = ask_blind                      # with no log to go by, ask /slots on every poll
         self.lock = threading.Lock()
         self._writer = None                             # pid of the process whose journal lines to read
         self._slots: dict[tuple, dict] = {}             # (port, slot id) -> the task it is on and its samples
@@ -326,7 +332,7 @@ class Rates:
             flying = self._pending.setdefault("flying", set())
             now = time.time()
             live = None
-            if self.always_ask or flying or self._busy or not self._log_ok:
+            if self.always_ask or flying or self._busy or (self.ask_blind and not self._log_ok):
                 live = self._live(ports, now)
                 if live is not None:
                     self._missed = 0
@@ -340,7 +346,7 @@ class Rates:
                     live = self._held
                 else:
                     flying.clear()
-            elif ports:
+            elif ports and self._log_ok:
                 live = {"state": "idle"}                # the log is being read and tells of no request
             self._busy = bool(live and live["state"] != "idle")
             self._held = live if self._busy else None
@@ -350,9 +356,25 @@ class Rates:
                 if live["state"] == "reading":
                     live.update(self._pending.get("reading") or {})
                 out.update(busy=self._busy, live=live, tok_s=live.get("tok_s") if self._busy else None)
-            if self._recent:
-                out["last_request"] = dict(self._recent[-1])
-                out["recent_requests"] = [dict(r) for r in self._recent]
-            if self._totals["requests"]:
-                out["totals"] = dict(self._totals)
+            out.update(self._finished())
             return out
+
+    def _finished(self) -> dict:
+        out: dict = {}
+        if self._recent:
+            out["last_request"] = dict(self._recent[-1])
+            out["recent_requests"] = [dict(r) for r in self._recent]
+        if self._totals["requests"]:
+            out["totals"] = dict(self._totals)
+        return out
+
+    def recall(self) -> dict:
+        """The finished requests it already has. Nothing is read and nothing is asked: a server that is asleep
+        writes no line, and a question would wake it."""
+        with self.lock:
+            return self._finished()
+
+    @property
+    def log_ok(self) -> bool:
+        """Whether the last read of the log worked; False before the first."""
+        return self._log_ok

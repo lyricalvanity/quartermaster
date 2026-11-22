@@ -139,6 +139,21 @@
   b12096 with seven requests through a router: three compared in full with the figures in the server's reply
   (one of them a prompt mostly kept), and two pairs sent at once compared by their token counts and decode
   rates. A single llama-server (kind `llamacpp`) is not read this way yet.
+- **A router model set to sleep when idle is let sleep, and has a state of its own.** llama-server's
+  `--sleep-idle-seconds` releases a model's memory after that long without work and wakes it on the next
+  request. To it a question to `/slots` is work: the agent, asking every poll, kept such a model awake for
+  good, and one question woke a model that slept. Where a router's child carries the flag (the agent reads it
+  from the argv in the router's `GET /models`), the log now leads, as it does for Ollama: `/slots` is asked
+  only while the log has a request in flight, and nothing is asked of a model the router reports as
+  `sleeping`. A child without the flag is asked on every poll, as before. A sleeping unit reads **asleep**:
+  not loaded, not a holder of the card, its finished requests still shown from what was already read. Unload
+  works on it (the router ends its child). Make resident wakes it by asking its `/slots`, because the router
+  counts a sleeping model as running and answers a load with 400. A loaded unit that will sleep says after how
+  long. Where the router's log cannot be read, a model that sleeps is not asked at all: whether it is
+  answering is then not known, and the unit's info says so. Driven on Linux against llama.cpp b12096 with a
+  model set to sleep after 20 seconds and the agent polling every 2: it slept on time and stayed asleep for
+  the 40 seconds watched, a request woke it with its figures matching the server's and its count carried on,
+  and Make resident and Unload were each run on it asleep. The page was looked at in one theme.
 
 ## 0.2.0 - 2026-11-07
 
