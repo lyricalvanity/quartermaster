@@ -154,6 +154,15 @@
   model set to sleep after 20 seconds and the agent polling every 2: it slept on time and stayed asleep for
   the 40 seconds watched, a request woke it with its figures matching the server's and its count carried on,
   and Make resident and Unload were each run on it asleep. The page was looked at in one theme.
+- **Cynosure's residue grows from the window's edge, or ragged at both ends.** A growth used to stand on a flat
+  base a little in from the edge it belonged to, in mid-air. Now it is one of two kinds. Rooted: its foot is
+  the very top or bottom edge of the window, and its columns start a little beyond it, so the edge cuts them
+  and no base shows. Free: somewhere in a margin, with no base; each column is one unbroken stack running both
+  ways from where the growth starts, to lengths of its own, with hairlines and wiring out of both halves, and
+  an arc may crawl either way. Of four thousand seeded on a 1920 by 1080 window, about 45% were rooted at the
+  bottom, 14% at the top and 41% free; every rooted column ran off the window at its edge, and a free growth's
+  ends were as ragged below as above. What it lies over, how strongly it is drawn and how often it comes are
+  unchanged. Looked at running in a bare page under the theme, not over the dashboard's cards.
 
 ## 0.2.0 - 2026-11-07
 

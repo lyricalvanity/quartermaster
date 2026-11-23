@@ -1085,11 +1085,13 @@
   // ---- the Blackwall's residue, for the Cynosure theme (#residue is hidden everywhere else and nothing is drawn) ----
   // What the Blackwall leaves where it has touched: red growths of upright wireframe blocks. Each is a stand of
   // narrow columns, every column a stack of outlined rectangles with a face lit here and there; hairlines run on
-  // past the tops; a little right-angled wiring leaves the sides; motes hang about its edge. A stand rises from its
-  // foot over a second, flickers while it stands, and comes apart piece by piece; while it stands, an arc may crawl
-  // up it. Everything in it is upright: having almost nothing horizontal is what makes it read as the Blackwall and
-  // not as a broken picture. Two or three faint growths are always there, and brighter ones come and go, all close
-  // to the window's edges and mostly the right and the bottom.
+  // past the tops; a little right-angled wiring leaves the sides; motes hang about its edge. A stand grows over a
+  // second, flickers while it stands, and comes apart piece by piece; while it stands, an arc may crawl along it.
+  // It grows either from the very edge of the window (up from the bottom, or hanging from the top) or free of any
+  // edge, both ways from where it starts: never from a flat base in mid-air (footNearEdge). Everything in it is
+  // upright: having almost nothing horizontal is what makes it read as the Blackwall and not as a broken picture.
+  // Two or three faint growths are always there, and brighter ones come and go, all in the window's margins and
+  // mostly the right and the bottom.
   //
   // It is drawn OVER the page, cleared and redrawn every tick, so it must never wash out what is read or pressed.
   // A click passes through the canvas (the theme makes it deaf to the pointer). For the eye, every piece knows what
@@ -1117,58 +1119,83 @@
       : [[x, part.y + 1], [x, part.y + part.h / 2], [x, part.y + part.h - 1]];
     return spots.some(([px, py]) => overSomething(px, py));
   }
-  // Where a growth takes root: close to an edge. `toward` is the way it grows (-1 up, +1 down). On a side edge it is
-  // a strip, narrow and tall; along the bottom or the top it is a wider stand.
+  // Where a growth takes root. Two kinds, and never a stand on a flat base in mid-air:
+  //   ROOTED at the very edge of the window: up from the bottom, or hanging from the top. The edge is its base, and
+  //   it starts a little beyond it, so no base shows.
+  //   FREE of any edge, somewhere in the margins. It has no base: it grows both ways from where it starts, and each
+  //   end is ragged.
+  // `toward` is the way a rooted one grows (-1 up, +1 down), and the first of a free one's two ways. In a side margin
+  // a growth is a strip, narrow and tall; along the bottom or the top it is a wider stand.
   function footNearEdge(width, height, lingering) {
     const [right, bottom, left] = lingering ? [0.35, 0.65, 0.85] : [0.5, 0.85, 0.93];     // the rest is the top
     const side = Math.random(), depth = Math.random() ** 2 * 0.14;      // depth: how far in from its edge, as a share of the window
-    if (side < right) return { x: (1 - depth) * width, y: between(0.3, 1) * height, toward: -1, strip: true };
-    if (side < bottom) return { x: Math.random() * width, y: (1 - depth) * height, toward: -1, strip: false };
-    if (side < left) return { x: depth * width, y: between(0.3, 1) * height, toward: -1, strip: true };
-    return { x: Math.random() * width, y: depth * height, toward: 1, strip: false };
+    const how = Math.random();
+    if (side < right || (side >= bottom && side < left)) {
+      const x = (side < right ? 1 - depth : depth) * width;
+      if (how < 0.35) return { x, y: height, toward: -1, strip: true, rooted: true };
+      if (how < 0.45) return { x, y: 0, toward: 1, strip: true, rooted: true };
+      return { x, y: between(0.25, 0.8) * height, toward: Math.random() < 0.5 ? -1 : 1, strip: true, rooted: false };
+    }
+    const up = side < bottom;                           // a stand along the bottom grows up; along the top, down
+    if (how < 0.75) return { x: Math.random() * width, y: up ? height : 0, toward: up ? -1 : 1, strip: false, rooted: true };
+    return { x: Math.random() * width, y: (up ? 0.96 - depth : 0.04 + depth) * height, toward: up ? -1 : 1, strip: false, rooted: false };
   }
-  // A growth is built whole when it takes root, each part stamped with the tick it appears on, so that it rises from
-  // its foot. Drawing it is then only a matter of which parts are due.
+  // A growth is built whole when it takes root, each part stamped with the tick it appears on, so that it grows
+  // outward from its foot. Drawing it is then only a matter of which parts are due.
   function seedGrowth(width, height, lingering) {
     const size = Math.min(1.6, Math.max(0.8, height / 900));
     const foot = footNearEdge(width, height, lingering);
     const span = (foot.strip ? between(28, 90) : between(70, 220)) * size;        // how wide the stand is
     const rise = (foot.strip ? between(110, 300) : between(60, 200)) * size;      // how tall its tallest column
+    const back = foot.rooted ? 0 : rise * between(0.45, 1.1);                     // a free growth's other way, shorter or longer as it falls
     const grow = 8 + pick(10);
-    const due = (reach) => Math.floor(Math.min(1, reach / rise) * grow) + pick(3);
-    const at = (reach) => foot.y + foot.toward * reach;        // a height above the foot, as a place in the window
+    const due = (reach) => Math.floor(Math.min(1, Math.abs(reach) / rise) * grow) + pick(3);     // outward from the foot, either way
+    const at = (reach) => foot.y + foot.toward * reach;        // a distance from the foot, as a place in the window
     const parts = [];
     for (let n = Math.round(span / between(3.5, 6)); n > 0; n--) {
       const offset = between(-0.5, 0.5) * span, x = Math.round(foot.x + offset);
-      const top = rise * (1 - 1.5 * Math.abs(offset) / span) * between(0.25, 1);     // tallest near the middle
+      const taper = 1 - 1.5 * Math.abs(offset) / span;                               // longest near the middle
+      const top = rise * taper * between(0.25, 1);
       const wide = [3, 4, 4, 6, 6, 8, 10, 14][pick(8)];
-      let reach = between(0, 10);
+      // Rooted, a column starts a little beyond the edge: the edge cuts it, and no base shows. Free, it runs the
+      // other way too, to a length of its own, so that end is as ragged as the first. Either way it is one unbroken
+      // stack through the foot: nothing lines up across the stand.
+      const low = foot.rooted ? -between(0, 12) : -back * taper * between(0.25, 1);
+      let reach = low;
       while (reach < top) {
         const tall = Math.round(Math.random() < 0.75 ? between(4, 22) : between(22, 52)), lit = Math.random();     // mostly small
         parts.push({ kind: "box", x, y: Math.round(Math.min(at(reach), at(reach + tall))), w: wide, h: tall,
           face: lit < 0.08 ? 0.65 : lit < 0.45 ? between(0.12, 0.34) : 0, bright: lit < 0.08, due: due(reach) });
         reach += tall + (Math.random() < 0.6 ? 0 : between(2, 8));
       }
-      if (Math.random() < 0.34) {                       // a hairline running on past the column's top
+      if (Math.random() < 0.34) {                       // a hairline running on past the column's end (`away`: the way it runs)
         const length = Math.round(between(0.3, 0.9) * rise);
-        parts.push({ kind: "hair", x: x + pick(wide), y: Math.round(Math.min(at(reach), at(reach + length))), h: length, due: due(reach) });
+        parts.push({ kind: "hair", x: x + pick(wide), y: Math.round(Math.min(at(reach), at(reach + length))), h: length,
+          away: foot.toward, due: due(reach) });
+      }
+      if (!foot.rooted && Math.random() < 0.34) {       // and, on a free growth, one past its other end
+        const length = Math.round(between(0.3, 0.9) * back);
+        parts.push({ kind: "hair", x: x + pick(wide), y: Math.round(Math.min(at(low), at(low - length))), h: length,
+          away: -foot.toward, due: due(low) });
       }
     }
     for (let n = 2 + pick(5); n > 0; n--) {             // wiring: it leaves the stand sideways, turns at right angles, and ends in a node
-      let x = foot.x + between(-0.5, 0.5) * span, reach = between(0.1, 0.8) * rise;
+      const way = foot.rooted || Math.random() < 0.5 ? 1 : -1;       // a free growth sends it out of both halves
+      let x = foot.x + between(-0.5, 0.5) * span, reach = way * between(0.1, 0.8) * (way > 0 ? rise : back);
       const path = [[Math.round(x), Math.round(at(reach))]];
       for (let turn = 0, turns = 2 + pick(2); turn < turns; turn++) {
-        if (turn % 2 === 0) x += (Math.random() < 0.5 ? -1 : 1) * between(10, 60); else reach += between(8, 46);
+        if (turn % 2 === 0) x += (Math.random() < 0.5 ? -1 : 1) * between(10, 60); else reach += way * between(8, 46);
         path.push([Math.round(x), Math.round(at(reach))]);
       }
       parts.push({ kind: "wire", path, due: due(reach) });
     }
     for (let n = 16 + pick(28); n > 0; n--) {
-      parts.push({ kind: "mote", x: Math.round(foot.x + between(-0.7, 0.7) * span), y: Math.round(at(between(0.2, 1.25) * rise)),
+      const reach = foot.rooted ? between(0.2, 1.25) * rise : between(-1.25 * back, 1.25 * rise);
+      parts.push({ kind: "mote", x: Math.round(foot.x + between(-0.7, 0.7) * span), y: Math.round(at(reach)),
         w: 1 + pick(3), due: grow - pick(4) });
     }
     for (const part of parts) part.veiled = veiled(part);
-    return { foot, span, rise, parts, grow, age: 0, arc: null,
+    return { foot, span, rise, back, parts, grow, age: 0, arc: null,
       hold: lingering ? 90 + pick(90) : 10 + pick(30),        // ticks it stands once risen
       gain: lingering ? 0.45 : 1,                             // how brightly it is drawn
       arcs: lingering ? 0.015 : 0.09 };                       // the chance, each tick, that an arc starts
@@ -1184,10 +1211,10 @@
         if (part.face) { pen.fillStyle = ink(part.bright ? BW_FACE : BW_LINE, part.face * gain * between(0.7, 1)); pen.fillRect(part.x, part.y, part.w, part.h); }
         pen.strokeStyle = ink(BW_LINE, 0.75 * gain);
         pen.strokeRect(part.x + 0.5, part.y + 0.5, part.w - 1, part.h - 1);
-      } else if (part.kind === "hair") {                // in three lengths, each fainter than the last, counted from the end nearest the foot
+      } else if (part.kind === "hair") {                // in three lengths, each fainter than the last, counted from the end nearest the stand
         const third = part.h / 3;
         for (let i = 0; i < 3; i++) {
-          pen.fillStyle = ink(BW_LINE, 0.6 * gain * (1 - (growth.foot.toward < 0 ? 2 - i : i) * 0.33));
+          pen.fillStyle = ink(BW_LINE, 0.6 * gain * (1 - (part.away < 0 ? 2 - i : i) * 0.33));
           pen.fillRect(part.x, part.y + i * third, 1, third);
         }
       } else if (part.kind === "wire") {
@@ -1205,9 +1232,9 @@
     }
   }
   // An arc is a jagged thread with a bright heart. It is drawn afresh each tick from a point that climbs the stand,
-  // which is what makes it crawl.
+  // which is what makes it crawl. On a free growth it may crawl either way.
   function drawArc(pen, growth) {
-    const arc = growth.arc, toward = growth.foot.toward;
+    const arc = growth.arc, toward = arc.toward;
     let x = arc.x, y = arc.y;
     pen.beginPath(); pen.moveTo(x, y);
     for (let joint = 0; joint < arc.joints; joint++) {
@@ -1240,8 +1267,11 @@
         growth.parts = growth.parts.filter(() => Math.random() > 0.13);       // it comes apart piece by piece
         growth.arc = null;
       } else if (!growth.arc && growth.age > growth.grow / 2 && Math.random() < growth.arcs) {
-        growth.arc = { x: growth.foot.x + between(-0.3, 0.3) * growth.span, y: growth.foot.y + growth.foot.toward * between(0, 0.4) * growth.rise,
-          joints: 4 + pick(5), life: 5 + pick(7) };
+        const first = growth.foot.rooted || Math.random() < 0.5;        // which of a free growth's two ways
+        const toward = first ? growth.foot.toward : -growth.foot.toward;
+        growth.arc = { x: growth.foot.x + between(-0.3, 0.3) * growth.span,
+          y: growth.foot.y + toward * between(0, 0.4) * (first ? growth.rise : growth.back),
+          toward, joints: 4 + pick(5), life: 5 + pick(7) };
       }
       drawGrowth(pen, growth);
       if (growth.arc) drawArc(pen, growth);
