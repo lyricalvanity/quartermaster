@@ -18,7 +18,7 @@
 <mask id="lines"><rect width="1240" height="340" fill="url(#raster)"/></mask>
 <filter id="glow" x="-10%" y="-40%" width="120%" height="180%"><feGaussianBlur stdDeviation="9"/></filter>
 </defs>
-<g opacity="0.34" fill="#ff5a52">
+<g opacity="0.748" fill="#ff5a52">
 <g filter="url(#glow)" opacity=".5"><use href="#mark"/><use href="#name"/><use href="#motto"/></g>
 <use href="#mark"/>
 <g mask="url(#lines)"><use href="#name"/><use href="#motto"/></g>

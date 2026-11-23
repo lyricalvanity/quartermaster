@@ -4,7 +4,8 @@
    per unit, the free-memory counter), with the facility's mark where the radar was. Red on black:
    - Red cannot be as bright as green. MU/TH/UR's text is 15:1 on its panels; the brightest red that still
      reads as red is 6.6:1, with the two quieter steps at 4.9:1 and 3.8:1. That is the price of the look,
-     and it is why the ground is kept nearly black.
+     and it is why everything that is read stands on a panel that is nearly black. (The open ground was
+     nearly black too, until the screen was seen by itself as a desktop wallpaper; see below.)
    - Red can no longer mean "failed": a failure in red would be one more red line. The alarm is hot pink,
      the one hue here hotter than the text. Caution stays yellow and "ready" stays green.
    - What MU/TH/UR draws in cyan (what is live or selected, the first band) is pale rose, the colour the
@@ -28,9 +29,13 @@
   --led: #ffdcd5;
   scrollbar-color: var(--line2) var(--bg);
 
-  /* The facility's mainframe screen, turned far down. From the top layer: the mark (ui/img/cynosure-dim.svg,
+  /* The facility's mainframe screen, turned down. From the top layer: the mark (ui/img/cynosure-dim.svg,
      drawn by tools/make_cynosure.py); the darker band that crosses that screen below its middle; its maroon
      field, black at the top and bottom edges. The cards are opaque, so it shows in the open ground.
+     The field and the mark are 2.2 times as bright as they first were (the field's six colours each
+     multiplied; the mark's strength is the opacity in its file). They stood at a third of the reference
+     screen until the theme was seen by itself as a desktop wallpaper, where that was too dark to be the
+     screen. Cards, the bar and every control keep --bg and its neighbours.
      The mark is centred on the window, as MU/TH/UR's is, until that would put the end of its name behind
      the side panels (a W can lose an arm to them; a word cannot lose a letter). Then it moves left to end
      where the cards' column does: the panels' 380px, the two 18px gutters, and room for a scrollbar. The
@@ -41,7 +46,7 @@
     background:
       url("img/cynosure-dim.svg") var(--mark-x) 56% / var(--mark-w) auto no-repeat fixed,
       linear-gradient(180deg, transparent 54%, rgba(0,0,0,.20) 60%, rgba(0,0,0,.08) 66%, transparent 74%) fixed,
-      linear-gradient(180deg, #0a0203 0%, #160405 18%, #1c0507 38%, #1a0506 60%, #130405 80%, #0a0203 100%) fixed; }
+      linear-gradient(180deg, #160407 0%, #30090b 18%, #3e0b0f 38%, #390b0d 60%, #2a090b 80%, #160407 100%) fixed; }
   ::selection { background: var(--fg); color: var(--bg); text-shadow: none; }
   /* scanlines and tube vignette, above everything, never in the way of a click */
   body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60;

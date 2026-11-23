@@ -1,19 +1,21 @@
 """Draws the Cynosure mark for the Cynosure theme. Usage: python make_cynosure.py <out-dir> [dim-opacity]
 cynosure.svg      - lit, for the start-up screen: near white, with the glow and colour fringe of a tube.
-cynosure-dim.svg  - the same drawing at rest, in the theme's red at low strength, for the page background.
+cynosure-dim.svg  - the same drawing at rest, in the theme's red at lower strength, for the page background.
 The mark on the facility's mainframe screens (Cyberpunk 2077: Phantom Liberty), redrawn from its geometry
 and measured against a reference still, not traced: a disc of thirteen bars with an eye at its centre,
 the name in inscriptional capitals, the motto beneath. An SVG used as an image cannot load the page's web
 fonts, so the lettering names faces that ship with Windows and Office and is pinned to its measured
 width: a fallback face keeps the composition.
 The dim drawing is ruled like a raster picture, as weyland-dim.svg is, except the disc: its bars are its
-raster. Red carries less light than MU/TH/UR's green, so it rests at a higher opacity to be as present."""
+raster. Red carries less light than MU/TH/UR's green, so it rests at a higher opacity to be as present.
+Its strength was 0.34 while the theme's ground was kept nearly black. The ground is now 2.2 times as
+bright (see theme-cynosure.css), and the mark with it: 0.34 x 2.2."""
 import sys
 from pathlib import Path
 
 out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
-dim = float(sys.argv[2]) if len(sys.argv) > 2 else 0.34
+dim = float(sys.argv[2]) if len(sys.argv) > 2 else 0.748
 
 VW, VH = 1240, 340
 CX, CY, R = 160, 170, 100          # the disc

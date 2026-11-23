@@ -11,7 +11,7 @@
 <text x="550.0" y="462" font-size="34" textLength="620" lengthAdjust="spacingAndGlyphs">BUILDING BETTER WORLDS</text>
 </g>
 </defs>
-<g opacity="0.2" fill="#7CF29C">
+<g opacity="0.62" fill="#7CF29C">
 <g filter="url(#glow)" opacity=".5"><use href="#mark"/><use href="#words"/></g>
 <g mask="url(#lines)"><use href="#mark"/><use href="#words"/></g>
 </g>

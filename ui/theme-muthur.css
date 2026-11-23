@@ -19,9 +19,15 @@
   scrollbar-color: var(--line2) var(--bg);
 
   /* The company's emblem behind the page (ui/img/weyland-dim.svg, drawn by tools/make_weyland.py; its
-     strength is the opacity on the file's outer <g>). The cards are opaque, so it shows in the open ground. */
+     strength is the opacity on the file's outer <g>). The cards are opaque, so it shows in the open ground.
+     The open ground is lit: 3.1 times the light of --bg, and the emblem with it. It stood at --bg, near
+     black, until the screen was seen by itself as a desktop wallpaper, where it was too dark to be that
+     screen. Cards, the bar and every control keep --bg and its neighbours, so what is read on them reads
+     as it did; lettering on the open ground loses little (measured on the dashboard before and after: no
+     colour's lowest reading fell by more than 0.05:1, and one piece of the faintest green there went
+     under 4.5:1 that was just over it). */
   body { text-shadow: 0 0 5px color-mix(in srgb, currentColor 32%, transparent);
-    background: url("img/weyland-dim.svg") 50% 56% / min(1700px, 60vw) auto no-repeat fixed, var(--bg); }
+    background: url("img/weyland-dim.svg") 50% 56% / min(1700px, 60vw) auto no-repeat fixed, #061f10; }
   ::selection { background: var(--fg); color: var(--bg); text-shadow: none; }
   /* scanlines and tube vignette, above everything, never in the way of a click */
   body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 60;

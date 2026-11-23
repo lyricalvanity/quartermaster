@@ -1,6 +1,8 @@
 """Draws the Weyland-Yutani emblem for the MU/TH/UR theme. Usage: python make_weyland.py <out-dir> [dim-opacity]
 weyland.svg      - full strength, for the start-up screen.
-weyland-dim.svg  - the same drawing at low strength, for the page background.
+weyland-dim.svg  - the same drawing at lower strength, for the page background (0.2 while the theme's
+                   ground was near black; the ground is now 3.1 times as bright, and the emblem with
+                   it: 0.2 x 3.1. See theme-muthur.css).
 Drawn from the geometry (a wide W of four slanted arms, a triangle in each mouth), striped like a
 raster picture; not traced from a still. The wordmark uses Consolas, which ships with Windows:
 an SVG used as an image cannot load the page's web fonts."""
@@ -9,7 +11,7 @@ from pathlib import Path
 
 out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
-dim = float(sys.argv[2]) if len(sys.argv) > 2 else 0.2
+dim = float(sys.argv[2]) if len(sys.argv) > 2 else 0.62
 
 T, RUN, H = 110, 200, 260          # arm thickness (horizontal), horizontal run of one arm, height
 K = RUN / H                        # dx per dy along an arm

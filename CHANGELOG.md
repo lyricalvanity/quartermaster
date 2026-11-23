@@ -163,6 +163,17 @@
   bottom, 14% at the top and 41% free; every rooted column ran off the window at its edge, and a free growth's
   ends were as ragged below as above. What it lies over, how strongly it is drawn and how often it comes are
   unchanged. Looked at running in a bare page under the theme, not over the dashboard's cards.
+- **MU/TH/UR 6000 and Cynosure have a lit ground.** The open ground behind the cards was kept near black in
+  both. Seen by itself, as a desktop wallpaper, that was too dark to be the screen it is drawn from. Now
+  MU/TH/UR's ground is 3.1 times as bright (`#061f10` where it took `--bg`) and Cynosure's field 2.2 times
+  (its six colours each multiplied), and each emblem is as much stronger: the opacity in `weyland-dim.svg`
+  is 0.62 where it was 0.2, in `cynosure-dim.svg` 0.748 where it was 0.34 (`tools/make_weyland.py` and
+  `tools/make_cynosure.py` draw them so by default now). Cards, the bar and every control keep `--bg` and
+  its neighbours, so nothing read on them changed. Measured on the dashboard with the old ground laid back
+  over it for comparison, 126 pieces of lettering in each theme: no colour's lowest reading moved by more
+  than 0.05:1, and one piece of MU/TH/UR's faintest green on the open ground went under 4.5:1 that was just
+  over it (three of nine are under, where two were). Both themes had lettering under 4.5:1 before this,
+  which is not touched here.
 
 ## 0.2.0 - 2026-11-07
 
