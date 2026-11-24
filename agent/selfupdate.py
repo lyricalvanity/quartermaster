@@ -1,12 +1,16 @@
-"""Updating Quartermaster itself (docs/self-update.md), stage 1: what this installation is, and what an update of it
-would take. Read-only, apart from the check's own `git fetch`, which is the click. The apply is stage 2: until it
-lands, the record carries each step with the command that does it by hand.
+"""Updating Quartermaster itself (docs/self-update.md), stages 1 and 2: what this installation is, what an update of
+it takes, and the update for the paths that only fast-forward (B, no restart; C, a restart through a systemd user unit,
+or none). The check is read-only apart from its `git fetch`, which is the click. Every step the agent does not take
+yet carries the command that does it by hand.
 
   state(root, cache)                    the version and head, cheap enough for every snapshot
   context(root, port, block, inv)       how this installation runs: platform, checkout, who restarts the agent, page
   check(root, block, inv, port, say)    fetch, then the context, the path and its flags: the record kept under "quartermaster"
   settle(rec, head)                     a record as of now (the checkout may have moved by hand since the check)
   propose_block(root, port)             the `self` block setup and detect offer to write into the inventory
+  blocker(rec, block) / ready(...)      why an update cannot run: from the check, and again just before it moves anything
+  prepare / move / preflight / hand_over / reset    the update's steps (the agent's ops drive them)
+  last_update(log_dir, head)            the newest update's record, for the state and the Roll back entry
 
 The paths (A current .. I archive) and the flags are section 5 of the specification. Nothing here acts on what the
 probe finds: the inventory's `self` block says what the agent may run, and the probe only checks that it still
@@ -35,8 +39,8 @@ SENSITIVE = ("agent/", "catalog/", "contrib/", "docker/", "docker-compose.yml", 
 TEMPLATE_DIRS = {"contrib/openwebui-systemd/": "OpenWebUI's systemd controls"}
 PATHS = {"A": "current", "B": "no restart (page, docs, tools)", "C": "agent code: restart", "D": "rewritten upstream",
          "E": "local work", "F": "uncommitted changes", "G": "untracked files in the way", "H": "no upstream", "I": "archive"}
-APPLY_NOTE = ("Update from this page arrives in stage 2 (docs/self-update.md). Until then these are the steps it will "
-              "take, each with the command that does it by hand.")
+APPLY_NOTE = "Update takes the steps marked agent; the ones marked you stay yours, each with its command."
+BLOCKED_NOTE = "Update is not offered here ({why}). These are the steps, each with the command that does it by hand."
 
 
 def run(args, cwd=None, timeout=30, env=None) -> tuple[int, str, str]:
@@ -100,14 +104,18 @@ def version_file(root: Path) -> str | None:
         return None
 
 
-def state(root: Path, cache: dict) -> dict:
-    """What the page shows beside the brand: the version, and the head it runs. `git describe` only when the head moved."""
+def state(root: Path, cache: dict, running: str | None = None) -> dict:
+    """What the page shows beside the brand: the version, the checkout's head, and the head the agent started from
+    (`running`). They differ after an update until a restart; `restart_due` says whether that matters, i.e. whether
+    anything the agent loads changed between them. Git runs only when either head moves."""
     branch, sha = head_cheap(root)
-    if cache.get("sha") != sha:
+    if (cache.get("sha"), cache.get("running")) != (sha, running):
         rc, o, _ = git(root, "describe", "--tags", "--always") if sha else (1, "", "")
-        cache.update(sha=sha, describe=o.strip() if rc == 0 else None)
+        due = bool(sha and running and sha != running
+                   and any(p.startswith(AGENT_PATHS) for _, p in changed_paths(root, running, sha)))
+        cache.update(sha=sha, running=running, describe=o.strip() if rc == 0 else None, restart_due=due)
     return {"version": version_file(root), "git": sha is not None, "branch": branch, "head": sha[:7] if sha else None,
-            "head_full": sha, "describe": cache.get("describe")}
+            "head_full": sha, "describe": cache.get("describe"), "running": running, "restart_due": cache.get("restart_due", False)}
 
 
 # ---- who keeps the agent running -------------------------------------------------------------------------------
@@ -443,6 +451,9 @@ def check(root: Path, block: dict | None, inv: dict | None, port: int, say=lambd
            "whats_new": _whats_new(root, since if path == "D" else "HEAD", target) if pos["behind"] else [],
            "flags": flags, "note": note, "took_s": round(time.time() - t0, 1)}
     rec["steps"] = steps(rec, ctx, block, root)
+    why = blocker(rec, block)
+    rec.update(can_apply=why is None and rec["available"], apply_blocked=why if rec["available"] else None,
+               apply_note=APPLY_NOTE if why is None else BLOCKED_NOTE.format(why=why))
     return rec
 
 
@@ -530,10 +541,12 @@ def steps(rec: dict, ctx: dict, block: dict | None, root: Path) -> list[dict]:
             out.append({"who": "you", "text": "restart the agent: nothing supervises it here, so the update stops after the code moves"})
         out.append({"who": "agent", "text": f"watch until the agent reports {short}; roll back by itself if it does not come up", "cmd": "qm status"})
     for f in rec["flags"]:
-        if f["id"] == "container":
+        if f["id"] == "container":              # the agent rebuilds it from stage 5; until then it is the owner's step
             b = (block or {}).get("container") or {}
-            out.append({"who": "agent", "text": f["text"], "cmd": f"docker compose -f {b.get('compose_file') or root / 'docker-compose.yml'} up -d --build {b.get('service') or 'quartermaster'}"})
-        elif f["id"] in ("hooks", "root", "fonts", "launcher", "catalog"):
+            out.append({"who": "you", "text": f["text"], "cmd": f"docker compose -f {b.get('compose_file') or root / 'docker-compose.yml'} up -d --build {b.get('service') or 'quartermaster'}"})
+        elif f["id"] == "hooks":
+            out.append({"who": "you", "text": f["text"], "cmd": f.get("cmd")})
+        elif f["id"] in ("root", "fonts", "launcher", "catalog"):
             out.append({k: v for k, v in f.items() if k != "id"})
     out.append({"who": "you", "text": "reload any open page once the update is done"})
     return out
@@ -576,8 +589,9 @@ def settle(rec: dict | None, head: str | None) -> dict | None:
     elsewhere makes the record stale until the next check."""
     if not rec or not rec.get("ok") or not head or not rec.get("installed_head"):
         return rec
-    if rec.get("target") == head and rec.get("available"):
-        return {**rec, "available": False, "path": "A", "path_label": "current (moved here since the check)", "steps": []}
+    if rec.get("target") == head and rec.get("path") != "A":       # updated, by the button or by hand, to what it found
+        return {**rec, "available": False, "can_apply": False, "path": "A", "steps": [],
+                "path_label": "current (updated here since the check)" if rec.get("applied_at") else "current (moved here since the check)"}
     if head != rec["installed_head"] and head != rec.get("target"):
         return {**rec, "available": False, "stale": True, "note": "the checkout moved since this check: check again"}
     return rec
@@ -607,3 +621,183 @@ def propose_block(root: Path, port: int) -> dict:
     if not git_dir(root):
         block["github"] = "lyricalvanity/quartermaster"
     return block
+
+
+# ---- stage 2: the update ---------------------------------------------------------------------------------------------
+
+STAMP_FMT = "%Y%m%d-%H%M%S"
+
+
+def blocker(rec: dict, block: dict | None) -> str | None:
+    """Why Update is not offered for this check, or None. Paths D (stage 4) and a Windows restart (stage 3) are later
+    stages; the refusing paths say their own reason in their steps."""
+    path = rec.get("path")
+    if path in ("E", "F", "G", "H", "I", "A"):
+        return {"A": "nothing to update", "E": "commits here that upstream lacks", "F": "uncommitted changes",
+                "G": "untracked files in the way", "H": "no upstream", "I": "not a git checkout"}[path]
+    if path == "D":
+        return "upstream rewrote its history: the reset comes in a later stage; the steps below do it by hand"
+    if not block:
+        return "the inventory has no self block: run `qm detect`"
+    if rec.get("mismatches"):
+        return "the self block does not match how the agent runs: run `qm detect`"
+    if (rec.get("context") or {}).get("others"):
+        return "another agent runs from this checkout"
+    via = (block.get("restart") or {}).get("via")
+    if rec.get("restart") and via == "respawn":
+        return "restarting on Windows comes in a later stage"
+    if rec.get("restart") and via == "systemd-user" and not shutil.which("systemd-run"):
+        return "systemd-run is not on PATH, so the restart cannot run outside the agent's unit"
+    if rec.get("restart") and via not in ("systemd-user", "none"):
+        return f"no restart the agent can take ({via})"
+    return None
+
+
+def ready(root: Path, rec: dict | None, block: dict | None) -> str | None:
+    """Just before anything moves: the check still describes the checkout. Returns the reason not to go, or None."""
+    if not rec or not rec.get("ok"):
+        return "run Check first"
+    if rec.get("stale"):
+        return "the checkout moved since the check: check again"
+    why = blocker(rec, block)
+    if why or not rec.get("available"):
+        return why or "the last check found nothing to update"
+    if head_cheap(root)[1] != rec.get("installed_head"):
+        return "the checkout moved since the check: check again"
+    if git(root, "cat-file", "-e", f"{rec['target']}^{{commit}}")[0]:
+        return f"{rec['target'][:7]} is not in this checkout any more: check again"
+    if dirty_tracked(root):
+        return "uncommitted changes appeared since the check: " + ", ".join(dirty_tracked(root)[:6])
+    added = [p for st, p in changed_paths(root, "HEAD", rec["target"]) if st == "A" and (root / p).exists()]
+    if added:
+        return "untracked files are now in the way: " + ", ".join(added[:6])
+    if others_on_checkout(root):
+        return "another agent runs from this checkout"
+    live, want = supervisor(), (block.get("restart") or {})
+    if rec.get("restart") and want.get("via") == "systemd-user" and (live.get("via"), live.get("unit")) != ("systemd-user", want.get("unit")):
+        return f"the self block says {want.get('unit')}, but this agent is kept by: {live.get('detail')}"
+    return None
+
+
+def _sha(path: Path) -> str | None:
+    import hashlib
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def prune(log_dir: Path, keep: int = 3) -> None:
+    base = Path(log_dir) / "self-update"
+    olds = sorted((d for d in base.iterdir() if d.is_dir()), key=lambda d: d.name) if base.is_dir() else []
+    for d in olds[:-keep] if len(olds) > keep else []:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def prepare(root: Path, home: Path, log_dir: Path, port: int, kind: str, frm: str, to: str, block: dict, path: str,
+            restore_files: bool, files_from: Path | None = None) -> Path:
+    """The update's folder: record.json for the helper and the page, copies of the inventory and presets, and the
+    helper itself, taken from the tree running now (a broken new tree cannot break the way back)."""
+    prune(log_dir, keep=2)
+    folder = Path(log_dir) / "self-update" / f"{time.strftime(STAMP_FMT)}-{kind}"
+    folder.mkdir(parents=True, exist_ok=True)
+    files = []
+    for name in ("inventory.json", "presets.json"):
+        live = Path(home) / name
+        src = (Path(files_from) / name) if files_from else live
+        if src.exists():
+            shutil.copy2(src, folder / name)
+            files.append({"path": str(live), "sha256": _sha(live), "copy": name})
+    helper = Path(root) / "agent" / "selfupdate_helper.py"
+    if helper.exists():
+        shutil.copy2(helper, folder / "selfupdate_helper.py")
+    rec = {"kind": kind, "stamp": folder.name, "root": str(root), "port": port, "key_file": str(Path(home) / "agent.key"),
+           "restart": block.get("restart") or {"via": "none"}, "from": frm, "to": to, "path": path, "files": files,
+           "restore_files": restore_files, "watch_s": 60, "settle_s": 1.5, "state": "prepared", "result": None,
+           "started": time.time(), "version_from": version_file(root), "log": []}
+    (folder / "record.json").write_text(json.dumps(rec, indent=1), encoding="utf-8")
+    return folder
+
+
+def record(folder: Path, **kw) -> dict:
+    f = Path(folder) / "record.json"
+    rec = json.loads(f.read_text(encoding="utf-8"))
+    if kw:
+        rec.update(kw)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(rec, indent=1), encoding="utf-8")
+        os.replace(tmp, f)
+    return rec
+
+
+def move(root: Path, target: str) -> tuple[bool, str]:
+    rc, o, e = git(root, "merge", "--ff-only", target, timeout=120)
+    return rc == 0, (o + e).strip()[-300:]
+
+
+def reset(root: Path, head: str) -> tuple[bool, str]:
+    rc, o, e = git(root, "reset", "--hard", head, timeout=120)
+    return rc == 0, (o + e).strip()[-300:]
+
+
+def preflight(root: Path, timeout: int = 180) -> tuple[bool, dict]:
+    """The new code, run once beside the agent still serving: `quartermaster_agent.py --selftest` (same interpreter,
+    same environment, so the same QM_HOME and inventory)."""
+    rc, o, e = run([sys.executable, Path(root) / "agent" / "quartermaster_agent.py", "--selftest"], cwd=Path(root) / "agent",
+                   timeout=timeout, env=os.environ.copy())
+    line = next((l for l in reversed(o.splitlines()) if l.startswith("{")), "")
+    try:
+        out = json.loads(line)
+    except ValueError:
+        out = {"ok": False, "error": (e or o).strip()[-1200:] or f"exit {rc}, no output"}
+    out["ok"] = bool(out.get("ok")) and rc == 0
+    return out["ok"], out
+
+
+def hand_over(folder: Path) -> tuple[bool, str]:
+    """Start the helper copy in a transient user unit, outside the agent's control group: the agent's own restart
+    kills everything in its group (KillMode=control-group), a child of the agent included."""
+    unit = f"qm-selfupdate-{Path(folder).name}"
+    rc, o, e = run(["systemd-run", "--user", "--collect", "--unit", unit, "--quiet", sys.executable,
+                    Path(folder) / "selfupdate_helper.py", folder], timeout=30)
+    return rc == 0, (o + e).strip()[-300:] or unit
+
+
+_LAST: dict = {}
+
+
+def last_update(log_dir: Path, head: str | None) -> dict | None:
+    """The newest update's record, summarised for the state (read again only when it changes)."""
+    base = Path(log_dir) / "self-update"
+    try:
+        newest = max((d for d in base.iterdir() if (d / "record.json").exists()), key=lambda d: d.name)
+    except (OSError, ValueError):
+        return None
+    f = newest / "record.json"
+    mt = f.stat().st_mtime
+    if _LAST.get("key") != (str(f), mt):
+        try:
+            r = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        _LAST.update(key=(str(f), mt), rec=r)
+    r = _LAST["rec"]
+    ok = r.get("result") in ("updated", "moved; restart pending")
+    return {"kind": r.get("kind"), "stamp": r.get("stamp"), "from": r.get("from"), "to": r.get("to"), "path": r.get("path"),
+            "state": r.get("state"), "result": r.get("result"), "via": (r.get("restart") or {}).get("via"), "folder": str(newest),
+            "error": r.get("error"), "log": (r.get("log") or [])[-8:], "version_from": r.get("version_from"),
+            "can_rollback": bool(ok and r.get("kind") == "update" and head and head == r.get("to"))}
+
+
+def restore_files(folder: Path) -> list[str]:
+    """A rollback of an update that migrated the inventory: put the pre-update inventory and presets back before the
+    old code starts. The file as it is now is kept beside the copy as <name>.after-update."""
+    rec, said = record(folder), []
+    for f in rec.get("files") or []:
+        live, keep = Path(f["path"]), Path(folder) / f["copy"]
+        if keep.exists() and _sha(live) != _sha(keep):
+            if live.exists():
+                shutil.copy2(live, Path(folder) / f"{live.name}.after-update")
+            shutil.copy2(keep, live)
+            said.append(f"{live.name} restored (the changed one kept as {live.name}.after-update)")
+    return said

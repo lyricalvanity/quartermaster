@@ -64,6 +64,7 @@ ALLOWED_ORIGINS = {f"http://{h}:{p}" for h in ("127.0.0.1", "localhost") for p i
 NVIDIA_SMI = host.nvidia_smi() or "nvidia-smi"
 NO_WINDOW, NEW_GROUP = host.NO_WINDOW, host.NEW_GROUP
 DEBUG = "--debug" in sys.argv
+SELFTEST = "--selftest" in sys.argv  # the new code run once beside the running agent, before an update touches it: writes nothing
 # engine processes as the OS names them (stem.exe on Windows); what the card's "apps" list is filtered to
 ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya", "maya-vision",
                                "ollama", "ollama_llama_server", "ollama-runner", "llama-server"))
@@ -158,7 +159,9 @@ class Inventory:
 
     def load(self):
         data = json.loads(INVENTORY.read_text(encoding="utf-8"))
-        if int(data.get("schema") or 1) < 2:
+        if int(data.get("schema") or 1) < 2 and SELFTEST:
+            data, presets = migrate_schema1(data)          # the migration runs (that is part of the test); its writes do not
+        elif int(data.get("schema") or 1) < 2:
             data, presets = migrate_schema1(data)
             keep = HOME / "inventory.schema1.json"
             if not keep.exists():
@@ -381,6 +384,26 @@ def settled(u: dict, live: str | None) -> dict:
 
 
 SELF_CACHE: dict = {}            # selfupdate.state's memo: `git describe` runs only when the head moves
+RUNNING_HEAD = selfupdate.head_cheap(ROOT)[1]   # the code this process runs: the checkout may move under it (an update, or by hand)
+
+
+def self_view() -> tuple[dict, dict | None]:
+    """Quartermaster's own part of the state: version, heads, the last update; and its check's record as of now."""
+    me = selfupdate.state(ROOT, SELF_CACHE, RUNNING_HEAD)
+    me["last_update"] = selfupdate.last_update(LOG_DIR, me["head_full"])
+    upd = selfupdate.settle(UPDATES[selfupdate.ID], me["head_full"]) if selfupdate.ID in UPDATES else None
+    return me, upd
+
+
+def publish_self() -> None:
+    """Into the published snapshot now: whoever asked reads the outcome next, not a poll later."""
+    me, upd = self_view()
+    with STATE.lock:
+        snap = dict(STATE.snapshot)
+        snap["self"] = me
+        if upd:
+            snap["updates"] = {**(snap.get("updates") or {}), selfupdate.ID: upd}
+        STATE.snapshot = snap
 
 
 def remember_update(uid: str, rec: dict) -> None:
@@ -1078,9 +1101,9 @@ class State:
         snap["updates"] = {uid: settled(u, (snap["engines"].get(uid) or snap["clients"].get(uid) or {}).get("version"))
                            for uid, u in UPDATES.items()}
         # Quartermaster itself: its version and head every time (file reads), its last check as of the head now
-        snap["self"] = selfupdate.state(ROOT, SELF_CACHE)
-        if selfupdate.ID in UPDATES:
-            snap["updates"][selfupdate.ID] = selfupdate.settle(UPDATES[selfupdate.ID], snap["self"]["head_full"])
+        snap["self"], upd = self_view()
+        if upd:
+            snap["updates"][selfupdate.ID] = upd
         with self.lock:
             self.snapshot = snap
         return snap
@@ -1742,11 +1765,7 @@ def op_check_self(p: Plan):
     r = selfupdate.check(ROOT, INV.data.get("self"), INV.data, PORT, say=lambda line: p.say(st, line),
                          home_set=bool(os.environ.get("QM_HOME")))
     remember_update(selfupdate.ID, r)
-    with STATE.lock:                    # into the published snapshot now: whoever asked reads it next, not a poll later
-        snap = dict(STATE.snapshot)
-        snap["updates"] = {**(snap.get("updates") or {}),
-                           selfupdate.ID: selfupdate.settle(UPDATES[selfupdate.ID], (snap.get("self") or {}).get("head_full"))}
-        STATE.snapshot = snap
+    publish_self()
     if not r.get("ok"):
         raise PlanFailed(r.get("error") or "check failed")
     head = f"{r.get('installed') or '?'}: "
@@ -1756,6 +1775,104 @@ def op_check_self(p: Plan):
         head += "current" if r.get("path") == "A" else f"not updatable here ({r.get('path_label')})"
     p.done_step(st, f"{head} · path {r.get('path')}, {r.get('path_label')}"
                 + (f" · {len(r['mismatches'])} thing{'s' if len(r['mismatches']) != 1 else ''} the self block does not match" if r.get("mismatches") else ""))
+
+
+def _self_quiet():
+    busy = {k: v for k, v in STATE.transient.items() if v}
+    if busy:
+        raise PlanFailed("units are mid-change (" + ", ".join(f"{k} {v}" for k, v in list(busy.items())[:4]) + "): try again when they settle")
+
+
+def _self_finish_without_restart(p: Plan, folder, result: str, note: str):
+    selfupdate.record(folder, state="done", result=result, ended=time.time())
+    st = p.step("Done", note)
+    p.done_step(st, note)
+
+
+def _self_move(p: Plan, kind: str, frm: str, to: str, path: str, restart: bool, restore_files: bool, files_from=None):
+    """The shared middle of an update and a rollback: back up, move the checkout, test the code, restart or say so."""
+    blk = INV.data.get("self") or {}
+    st = p.step("Back up", "the head, the inventory and presets, and the restart helper")
+    folder = selfupdate.prepare(ROOT, HOME, LOG_DIR, PORT, kind, frm, to, blk, path, restore_files, files_from)
+    p.done_step(st, str(folder))
+    st = p.step(f"Move the checkout to {to[:7]}", "git merge --ff-only" if kind == "update" else "git reset --hard")
+    ok, out = selfupdate.move(ROOT, to) if kind == "update" else selfupdate.reset(ROOT, to)
+    if not ok:
+        selfupdate.record(folder, state="done", result="failed", error=out)
+        raise PlanFailed(f"the checkout did not move: {out}")
+    p.done_step(st, f"{frm[:7]} -> {to[:7]}")
+    if kind == "rollback" and restore_files:
+        st = p.step("Put the inventory back", "the update this undoes migrated it; the old code reads the old file")
+        p.done_step(st, "; ".join(selfupdate.restore_files(folder)) or "unchanged since the update")
+    if not restart:
+        _self_finish_without_restart(p, folder, "updated" if kind == "update" else "rolled back by hand",
+                                     "nothing the agent runs changed: no restart. Reload any open page.")
+        return
+    st = p.step("Test-run the code before the running agent is touched", "quartermaster_agent.py --selftest")
+    ok, out = selfupdate.preflight(ROOT)
+    if not ok:
+        back_ok, back = selfupdate.reset(ROOT, frm)
+        selfupdate.record(folder, state="done", result="preflight failed", error=out.get("error"), ended=time.time())
+        p.say(st, (out.get("error") or "")[-300:])
+        raise PlanFailed(f"the code at {to[:7]} failed its test run, so nothing restarted; the checkout is "
+                         + (f"back at {frm[:7]}" if back_ok else f"NOT back ({back}): run git reset --hard {frm[:7]}"))
+    p.done_step(st, f"it serves, and reports {(out.get('head') or '?')[:7]}")
+    via = (blk.get("restart") or {}).get("via")
+    if via != "systemd-user":
+        _self_finish_without_restart(p, folder, "moved; restart pending",
+                                     f"the code is at {to[:7]}, but this agent is still the old one: nothing restarts it here, so restart it yourself")
+        return
+    unit = blk["restart"].get("unit")
+    st = p.step(f"Restart through {unit}", "a helper in its own transient unit restarts it, watches for the new head, and rolls back if it does not come")
+    ok, out = selfupdate.hand_over(folder)
+    if not ok:
+        selfupdate.reset(ROOT, frm)
+        selfupdate.record(folder, state="done", result="failed", error=f"systemd-run: {out}", ended=time.time())
+        raise PlanFailed(f"the helper did not start ({out}); the checkout is back at {frm[:7]}")
+    selfupdate.record(folder, state="handed over")
+    p.done_step(st, f"handed to {out}: the agent restarts in a moment and the page reconnects")
+
+
+def op_apply_self(p: Plan):
+    """Update Quartermaster itself (docs/self-update.md, stage 2): paths B and C, to the commit the last check found."""
+    if not p.args.get("confirm"):
+        raise PlanFailed("apply_self changes this installation: send confirm=true")
+    rec, blk = UPDATES.get(selfupdate.ID), INV.data.get("self")
+    st = p.step("Before anything moves", "the check still describes the checkout, and the agent is quiet")
+    why = selfupdate.ready(ROOT, rec, blk)
+    if why:
+        raise PlanFailed(why)
+    _self_quiet()
+    p.done_step(st, f"path {rec['path']}, {rec['behind']} commit{'s' if rec['behind'] != 1 else ''} to {rec['target'][:7]}")
+    schema = any(f.get("id") == "schema" for f in rec.get("flags") or [])
+    try:
+        _self_move(p, "update", rec["installed_head"], rec["target"], rec["path"], bool(rec.get("restart")), schema)
+        remember_update(selfupdate.ID, {**rec, "available": False, "can_apply": False, "applied_at": time.strftime("%Y-%m-%d %H:%M:%S")})
+    finally:
+        publish_self()
+
+
+def op_rollback_self(p: Plan):
+    """Put Quartermaster back at the head the last update started from, the same way it went forward."""
+    if not p.args.get("confirm"):
+        raise PlanFailed("rollback_self changes this installation: send confirm=true")
+    head = selfupdate.head_cheap(ROOT)[1]
+    last = selfupdate.last_update(LOG_DIR, head)
+    st = p.step("Before anything moves", "the last update, and the checkout still where it left it")
+    if not last or not last.get("can_rollback"):
+        raise PlanFailed("there is no update to roll back from this head (the checkout moved since, or the last update did not finish)")
+    if selfupdate.dirty_tracked(ROOT):
+        raise PlanFailed("uncommitted changes: " + ", ".join(selfupdate.dirty_tracked(ROOT)[:6]))
+    if (INV.data.get("self") or {}).get("restart", {}).get("via") == "respawn":
+        raise PlanFailed("restarting on Windows comes in a later stage: roll back by hand with git reset --hard " + last["from"][:7])
+    _self_quiet()
+    restart = any(p_.startswith(selfupdate.AGENT_PATHS) for _, p_ in selfupdate.changed_paths(ROOT, last["from"], last["to"]))
+    rec_last = selfupdate.record(last["folder"])
+    p.done_step(st, f"{last['to'][:7]} back to {last['from'][:7]}" + (", with a restart" if restart else ", no restart"))
+    try:
+        _self_move(p, "rollback", last["to"], last["from"], "rollback", restart, bool(rec_last.get("restore_files")), files_from=last["folder"])
+    finally:
+        publish_self()
 
 
 def op_rollback_update(p: Plan):
@@ -2987,7 +3104,7 @@ OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_
        "comfy_start": op_comfy_start, "comfy_stop": op_comfy_stop, "comfy_free": op_comfy_free,
        "art_batch": op_art_batch, "comfy_update": op_comfy_update, "comfy_rollback": op_comfy_rollback,
        "check_update": op_check_update, "apply_update": op_apply_update, "rollback_update": op_rollback_update,
-       "check_self": op_check_self}
+       "check_self": op_check_self, "apply_self": op_apply_self, "rollback_self": op_rollback_self}
 
 STATE = State()
 PLANS = Plans()
@@ -3249,7 +3366,40 @@ class Handler(BaseHTTPRequestHandler):
         return self._json(404, {"error": "not found"})
 
 
+def selftest() -> int:
+    """`--selftest` (docs/self-update.md, stage 2): an update moves the code, then runs it once like this, beside the
+    agent still serving, before anything restarts. Every module imported and the inventory loaded (at import), one
+    full poll, its snapshot as JSON, then the state and the page served on a spare loopback port and read back with
+    the key. Writes nothing; prints one JSON line; exit 0 only if all of it worked."""
+    out = {"ok": False, "head": None}
+    try:
+        snap = STATE.poll_once()
+        json.dumps(snap)
+        server = ThreadingHTTPServer((HOST, 0), Handler)
+        port = server.server_address[1]
+        ALLOWED_HOSTS.update({f"127.0.0.1:{port}", f"localhost:{port}"})
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            for path in ("/api/state", "/", "/app.js"):
+                req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers={"Authorization": "Bearer " + KEY})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    body = r.read()
+                if path == "/api/state":
+                    st = json.loads(body)
+                    out.update(head=(st.get("self") or {}).get("running"), version=(st.get("self") or {}).get("version"),
+                               servers=len(st.get("servers") or {}))
+        finally:
+            server.shutdown()
+        out["ok"] = True
+    except Exception:  # noqa: BLE001
+        out["error"] = traceback.format_exc()[-1200:]
+    print(json.dumps(out), flush=True)
+    return 0 if out["ok"] else 1
+
+
 def main():
+    if SELFTEST:
+        sys.exit(selftest())
     threading.Thread(target=STATE.loop, daemon=True).start()
     threading.Thread(target=OWUI_WATCH.loop, daemon=True).start()
     threading.Thread(target=COMFY_WATCH.loop, daemon=True).start()

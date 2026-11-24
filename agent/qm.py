@@ -3,6 +3,7 @@
   qm setup | detect [--yes]      find what this machine runs and write the inventory (setup.py; no agent needed)
   qm status                      who holds the card, every server's state
   qm self [check]                Quartermaster's own version; `check` fetches and says what an update would take here
+  qm self update | rollback      apply what the last check found (backup, test run, restart, watch), or undo it
   qm suggest | scan              what the inventory could use; what detection sees that the roster lacks
   qm resident <id> [--force]     make <id> the resident model (unloads the others first)
   qm unload <id> | all           give the card back
@@ -91,6 +92,11 @@ def show_self():
     _, s = call("GET", "/api/state")
     me, u = s.get("self") or {}, (s.get("updates") or {}).get("quartermaster")
     print(f"Quartermaster {me.get('version') or '?'} ({me.get('describe') or me.get('head') or 'not a git checkout'}) on {me.get('branch') or '-'}")
+    lu = me.get("last_update")
+    if lu:
+        print(f"last {lu.get('kind')}: {(lu.get('from') or '')[:7]} -> {(lu.get('to') or '')[:7]}, {lu.get('result') or lu.get('state')} ({lu.get('stamp')})")
+        for line in lu.get("log") or []:
+            print(f"    {line}")
     if not u:
         print("not checked yet: `qm self check` fetches and says what an update would take")
         return 0
@@ -239,6 +245,13 @@ def main(argv):
     if cmd == "self":
         if rest[:1] == ["check"] and action("check_self") != 0:
             return 1
+        if rest[:1] in (["update"], ["rollback"]):
+            try:
+                rc = action("apply_self" if rest[0] == "update" else "rollback_self", None, {"confirm": True})
+            except OSError:                        # the agent went away mid-poll: that is the restart
+                rc = 0
+            print("if it restarts, `qm self` in a minute shows how the helper's watch ended")
+            return rc
         return show_self()
     if cmd == "resident":
         return action("make_resident", rest[0], {"force": force})

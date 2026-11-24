@@ -242,3 +242,6 @@ select, input { background: var(--bg3); border: 1px solid var(--line2); color: v
 .vitals, .rounds, .defcon, .freq, .bootscreen, #helpbar, #rain, #pulse, #residue { display: none; }
 
 .c-source { font-size: 11px; color: var(--fg3, var(--fg2)); margin-top: 2px; font-family: ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+.self-bar { display: flex; gap: 12px; align-items: center; margin: 8px 18px 0; padding: 6px 10px; border: 1px solid var(--warn); border-radius: 6px; color: var(--warn); background: var(--bg2); font-size: 12.5px; }
+.self-bar[hidden] { display: none; }
+.self-bar span { flex: 1; }

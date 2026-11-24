@@ -1,7 +1,8 @@
 # Updating Quartermaster itself: specification (draft, 2026-11-24)
 
-*Status: stage 1 is built (2026-11-24): the check, the context card and the `self` block. Apply, rollback and
-everything after are design. The owner's decisions are in section 12.*
+*Status: stages 1 and 2 are built (2026-11-24): the check, the context card and the `self` block; the update and
+rollback for paths B and C, through a systemd user unit or by hand. Windows restarts (3), the rewritten-upstream reset
+(4) and the agent's own container, hooks and flag steps (5) are design. The owner's decisions are in section 12.*
 
 ## 1. Purpose
 
@@ -249,7 +250,7 @@ container again if it was rebuilt. Root steps the owner took are not undone; the
 | stage | content |
 |---|---|
 | 1 | Context probe, `check_self`, `self` in the state, the brand menu and context card; `qm detect` writes the `self` block. No apply. **Built 2026-11-24**, notes below. |
-| 2 | Apply for paths B and C: preflight with `--selftest`, the helper, `systemd-user` and `none`; rollback. |
+| 2 | Apply for paths B and C: preflight with `--selftest`, the helper, `systemd-user` and `none`; rollback. **Built 2026-11-24**, notes below. |
 | 3 | `respawn` on Windows. |
 | 4 | Path D, with the tree-accounting proof. |
 | 5 | Container staleness and rebuild; the flags (root step, launcher with `qm setup --launchers`, font map, schema, catalog, hooks, sensitive paths); `require_signed`. |
@@ -317,3 +318,53 @@ re-detect.
    scheme the repository lacks. To be revisited if one appears.
 5. **The agent rebuilds the container** when the `self` block names it, as the update's last step. The
    possible base-image pull belongs to the apply's click and is stated in the dialog (decided).
+
+### Stage 2, as built (2026-11-24)
+
+**The ops.** `apply_self` and `rollback_self`, each confirmed. An update runs in this order:
+1. re-checks that the check still describes the checkout (`ready`);
+2. refuses while units are mid-change;
+3. backs up into `logs/self-update/<stamp>-update/`: the record, the inventory and presets, and the helper copied
+   from the running tree; the newest three folders are kept;
+4. fast-forwards to the checked commit;
+5. for path C, runs `--selftest` on the new code beside the serving agent; if that fails, it resets and stops;
+6. hands the restart to `agent/selfupdate_helper.py` in a transient `qm-selfupdate-<stamp>` unit (`systemd-run
+   --user --collect`), or with restart `none` ends with "restart it yourself".
+
+The helper restarts the unit and watches for up to 60 seconds. If the new head never reports, it resets, restores the
+inventory when the update was a migrating one (keeping the changed file as `.after-update`), restarts, and watches for
+the old head. A rollback is the same route in reverse, from the last update's record. It restores a migrated inventory
+before the old code starts.
+
+**Two things the design did not foresee:**
+- **The running head.** The state's `head` is the checkout's, and an update moves the checkout before the restart. A
+  watch on it would have passed with the old process still answering. The agent therefore reports `running`, the head
+  it started from, and the helper watches that.
+- **`restart_due`.** After a page-only update, the checkout is ahead of the running code by design. `restart_due` is
+  true only when what lies between them touches `agent/` or `catalog/`. The bar says "restart it" for that, and
+  "reload" when only the page changed.
+
+The check, the apply and the rollback each put their outcome into the published state at once. Without that, the page
+and `qm` read the old record for up to one poll.
+
+**The page.**
+- The brand menu adds Update to … (behind a confirmation that says whether the agent restarts), the reason when
+  Update is not offered, Roll back to … after an update, and the state of an update still running.
+- The bar is drawn first in `render()`, from the heads alone.
+- `qm self update | rollback` does the same from a terminal.
+
+**Tested on a disposable install** with its own agent under a transient unit with `Restart=on-failure`, like the real
+one:
+- path B, and path C through the real restart (new PID, new head in two seconds, helper unit collected);
+- rollback, and forward again;
+- a syntax error caught by the preflight, with nothing restarted and the checkout back;
+- a version that passes the preflight but refuses to start: the helper rolled back in 64 seconds and kept the
+  journal;
+- refusals: changes after the check, no `confirm`, another agent on the checkout;
+- restart `none`, with an agent started by hand: the code moved, the old process kept serving, `restart_due` was
+  set;
+- the whole flow in the page: check, Update, confirm, restart, the bar, Reload, Roll back offered.
+
+The stage-1 bench still passes. Not exercised: a real update of the real installation, which waits for a real
+upstream commit.
+

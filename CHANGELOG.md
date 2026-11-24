@@ -192,6 +192,20 @@
   with who takes it and the command that does it by hand until stage 2 applies it. An ↑ beside the host line
   shows only after a check found something. `qm self [check]` is the same from a terminal. The agent reports
   its own version and head in the state as `self`.
+- **Quartermaster updates itself** (stage 2), for an update that fast-forwards. Update to … in its menu (or
+  `qm self update`) does, in order:
+  1. backs up into `logs/self-update/`;
+  2. moves the checkout to the commit the check found;
+  3. when agent code changed, test-runs it with the new `quartermaster_agent.py --selftest` while the old agent still
+     serves;
+  4. restarts through the systemd user unit, from a helper in a transient unit of its own (the agent's unit kills its
+     own control group);
+  5. watches for the new version, and puts the old one back by itself if it does not come up within a minute.
+
+  With nothing supervising the agent, it moves the code and says to restart by hand. Roll back to … (or `qm self
+  rollback`) undoes the last update the same way. The state reports `running`, the head the agent started from, and
+  `restart_due`. A bar asks for a reload when the page changed, or for a restart when the code changed and nothing
+  restarted it. Windows restarts and a rewritten upstream are still by hand.
 - The inventory gains an optional `self` block: the checkout, its remote and branch, how the agent restarts
   (`systemd-user` with its unit, `respawn` on Windows, or `none`), and the container that serves the page.
   Setup and detect write it from the running agent, asking first, and detect keeps fields it cannot see.

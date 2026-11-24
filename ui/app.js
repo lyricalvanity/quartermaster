@@ -7,6 +7,7 @@
   const ago = (t) => { const s = Math.max(0, Date.now() / 1000 - t); return s < 60 ? Math.round(s) + "s" : s < 3600 ? Math.round(s / 60) + "m" : (s / 3600).toFixed(1) + "h"; };
 
   let INV = null, STATE = null, lastPlanId = null, logServer = null;
+  let LOADED_HEAD = null;          // the head this page was loaded from: when the agent reports another, the bar asks for a reload
   const confirmQueue = [];
 
   // ---- API ----
@@ -675,9 +676,24 @@
       else if (u.available) item(`Newer: ${u.latest}, ${u.behind} commit${u.behind === 1 ? "" : "s"}: what updating takes here…`, () => selfCard(u));
       else item(`${u.path === "A" ? "Current" : u.path_label}: this installation…`, () => selfCard(u));
     }
+    if (u && u.ok && !u.stale && u.available && u.can_apply) item(`Update to ${u.latest}…`, async () => {
+      const yours = (u.steps || []).filter((x) => x.who === "you").length;
+      const how = u.restart
+        ? "The new code is test-run beside this agent first; then the agent restarts through its unit, and a helper puts the old version back by itself if the new one does not come up."
+        : "Nothing the agent runs changes, so it does not restart.";
+      if (await confirm(`Update Quartermaster to ${u.latest}?`, `${u.behind} commit${u.behind === 1 ? "" : "s"}, path ${u.path} (${u.path_label}). ${how} A backup goes to logs/self-update.${yours ? ` ${yours} step${yours === 1 ? "" : "s"} stay${yours === 1 ? "s" : ""} yours: the card lists them.` : ""}`)) action("apply_self", null, { confirm: true });
+    }, planRunning);
+    else if (u && u.ok && !u.stale && u.available && u.apply_blocked) item(`Update not offered: ${u.apply_blocked.slice(0, 90)}`, () => selfCard(u));
+    const lu = s.last_update;
+    if (lu && lu.state && lu.state !== "done") item(`${lu.kind === "rollback" ? "Rollback" : "Update"} to ${(lu.to || "").slice(0, 7)}: ${lu.state}…`, () => selfCard(u));
+    else if (lu && lu.can_rollback) item(`Roll back to ${lu.from.slice(0, 7)}…`, async () => {
+      if (await confirm(`Roll Quartermaster back to ${lu.from.slice(0, 7)}?`, `Puts the checkout back where the last update started (${lu.version_from || lu.from.slice(0, 7)}), the same way it went forward: a backup first${lu.via === "systemd-user" ? ", a test run, a restart through the unit, and a helper watching" : ""}.`)) action("rollback_self", null, { confirm: true });
+    }, planRunning);
+    else if (lu && lu.result && !["updated", "rolled back by hand"].includes(lu.result)) item(`Last ${lu.kind === "rollback" ? "rollback" : "update"}: ${lu.result}`, () => selfCard(u));
     const first = m.querySelector("button:not(:disabled)"); if (first && ev.type === "keydown") first.focus();
   }
   function selfCard(u) {
+    u = u || { ok: true };
     const b = $("#guide-body"); b.innerHTML = "";
     const h = (t) => b.appendChild(el("h3", null, t));
     const p = (t, cls) => b.appendChild(el("p", cls || null, t));
@@ -720,6 +736,13 @@
     if (other.length) { h("Also"); list(other.map((f) => f.text)); }
     if ((u.local || []).length && u.path !== "E") { h("Here, not upstream"); list(u.local.map((x) => `${x.short}  ${x.subject}${x.accounted ? "  (its content is upstream)" : ""}`)); }
     if ((u.whats_new || []).length) { h("What's new (CHANGELOG)"); b.appendChild(el("pre", "self-new", u.whats_new.join("\n"))); }
+    const lu = s.last_update;
+    if (lu) {
+      h(`Last ${lu.kind === "rollback" ? "rollback" : "update"}: ${lu.result || lu.state}`);
+      p(`${(lu.from || "").slice(0, 7)} → ${(lu.to || "").slice(0, 7)} · ${lu.stamp} · kept in ${lu.folder}`);
+      if (lu.error) p(lu.error, "self-bad");
+      if ((lu.log || []).length) b.appendChild(el("pre", "self-new", lu.log.join("\n")));
+    }
     $("#guide-modal").hidden = false;
   }
   function looksLikeCommand(s) { return /^(git |npm |pip |python |winget |docker |cmake |ollama |llama-server |venv|\.venv|\S+\.(bat|sh|exe)\b|[A-Za-z]:\\|\/usr\/)/.test(s) || /^[a-z0-9_.\/-]+( [-\w.\/:=<>"'\\@]+)+$/.test(s) && s.length < 90 && !/[.!?]$/.test(s); }
@@ -781,6 +804,19 @@
   // ---- render ----
   function render(st) {
     STATE = st;
+    // first, from self.head alone: an update may have changed what the rest of this state looks like
+    if (st.self && st.self.head_full) {
+      const me = st.self;
+      if (LOADED_HEAD == null) LOADED_HEAD = me.head_full;
+      const bar = $("#self-bar");
+      if (me.restart_due) {
+        $("#self-bar-text").textContent = `The checkout is at ${me.describe || me.head}, but this agent still runs ${me.running.slice(0, 7)}: restart it to run the update.`;
+        bar.hidden = false; $("#self-reload").hidden = true;
+      } else if (me.head_full !== LOADED_HEAD) {
+        $("#self-bar-text").textContent = `Quartermaster is now at ${me.describe || me.head}, and this page came from ${LOADED_HEAD.slice(0, 7)}: reload it to run the new page.`;
+        bar.hidden = false; $("#self-reload").hidden = false;
+      } else bar.hidden = true;
+    }
     const g = st.gpu || {}, ram = st.ram || {};
     const su = st.updates && st.updates.quartermaster;               // the ↑ only after a check found something: nothing polls
     $("#self-up").hidden = !(su && su.ok && su.available && !su.stale);
@@ -1419,6 +1455,7 @@
     $("#cat-scan").onclick = runScan;
     $("#guide-close").onclick = () => { $("#guide-modal").hidden = true; };
     $("#brand").onclick = selfMenu;
+    $("#self-reload").onclick = () => location.reload();
     $("#brand").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selfMenu(e); } };
     loadCatalog();
     $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", `Unloads every resident model (${(INV.engines || []).map((e) => e.name).join(", ")})${INV.comfyui ? " and asks ComfyUI to drop its models" : ""}. Servers stay up.`, "killall")) action("unload_all"); };

@@ -180,7 +180,18 @@ It then names the upgrade path the incoming commits call for: no restart, an age
 upstream, or one of the cases it refuses (local commits, uncommitted changes, files in the way). It lists
 each step with who takes it and the command that does it by hand. The inventory's `self` block, written by
 setup and `qm detect`, records how this installation restarts; the check verifies that block and never
-replaces it. Applying the update from the page is the next stage ([docs/self-update.md](docs/self-update.md)).
+replaces it.
+
+When the update only fast-forwards, **Update to …** applies it:
+- a backup;
+- the move;
+- a test run of new agent code beside the running agent;
+- a restart through the systemd user unit, by a helper outside it, which puts the old version back by itself if the
+  new one does not come up.
+
+**Roll back to …** undoes it. With nothing supervising the agent (started by hand), the update moves the code and
+the page asks for a restart. Windows restarts and a rewritten upstream are still by hand; the card says how
+([docs/self-update.md](docs/self-update.md)).
 
 **Clients** (Pi, Codex CLI, Claude Code) are a strip under the bands, not cards: version, the local ports
 their configuration points at, a menu with the update entries. A unit card says `used by Pi` when a
