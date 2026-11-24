@@ -206,6 +206,10 @@
   rollback`) undoes the last update the same way. The state reports `running`, the head the agent started from, and
   `restart_due`. A bar asks for a reload when the page changed, or for a restart when the code changed and nothing
   restarted it. Windows restarts and a rewritten upstream are still by hand.
+- The page's own files (HTML, scripts, stylesheets) are served `no-store`, by the agent and by the container's
+  nginx. With `no-cache`, a Firefox-based browser restoring a session after a restart showed a tab's stored copy
+  without asking the server, so the tab ran the page from before an update against the updated agent. Fonts and
+  images stay `no-cache`.
 - The inventory gains an optional `self` block: the checkout, its remote and branch, how the agent restarts
   (`systemd-user` with its unit, `respawn` on Windows, or `none`), and the container that serves the page.
   Setup and detect write it from the running agent, asking first, and detect keeps fields it cannot see.

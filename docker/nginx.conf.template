@@ -7,15 +7,22 @@ server {
     add_header X-Frame-Options DENY;
     add_header Referrer-Policy no-referrer;
 
+    # the page's own code is never stored: a browser restoring a session shows what it stored without asking, so a
+    # tab opened before an update would run the old page against the new agent
     location / {
         try_files $uri $uri/ =404;
+        add_header Cache-Control "no-store";
+    }
+    # fonts and images are large, many and rarely change: kept, and checked on each use
+    location ~* \.(ttf|otf|woff2?|svg|png|jpg|ico)$ {
+        try_files $uri =404;
         add_header Cache-Control "no-cache";
     }
 
     # a machine's own font map (ui/fonts/local.css, ignored by git); the page always links it
     location = /fonts/local.css {
         try_files $uri @no_font_map;
-        add_header Cache-Control "no-cache";
+        add_header Cache-Control "no-store";
     }
     location @no_font_map {
         default_type text/css;
