@@ -174,6 +174,28 @@
   than 0.05:1, and one piece of MU/TH/UR's faintest green on the open ground went under 4.5:1 that was just
   over it (three of nine are under, where two were). Both themes had lettering under 4.5:1 before this,
   which is not touched here.
+- **Quartermaster checks itself for updates** (docs/self-update.md, stage 1). The name at the top left opens
+  a menu: its version, and Check for an update. A check fetches the checkout's upstream on that click, then reads
+  how this installation runs and names one of nine upgrade paths (current, no restart, agent restart, rewritten
+  upstream, local work, uncommitted changes, files in the way, no upstream, archive). A rewritten upstream is
+  accepted only when every local commit's content is found upstream under some commit.
+  Flags mark the steps that stay the owner's:
+  - a changed root-side template in use here;
+  - a changed launcher;
+  - a font-map gap at a weight `fonts.css` now declares;
+  - a newer inventory schema;
+  - new catalog records;
+  - changed scrub hooks;
+  - code outside the page.
+
+  A context card lists the incoming commits (subject, author address, date), the changelog lines and every step
+  with who takes it and the command that does it by hand until stage 2 applies it. An ↑ beside the host line
+  shows only after a check found something. `qm self [check]` is the same from a terminal. The agent reports
+  its own version and head in the state as `self`.
+- The inventory gains an optional `self` block: the checkout, its remote and branch, how the agent restarts
+  (`systemd-user` with its unit, `respawn` on Windows, or `none`), and the container that serves the page.
+  Setup and detect write it from the running agent, asking first, and detect keeps fields it cannot see.
+  The check reports where the block no longer matches how the agent runs, and never replaces it.
 
 ## 0.2.0 - 2026-11-07
 

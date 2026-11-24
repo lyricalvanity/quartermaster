@@ -41,6 +41,7 @@ import compose_service
 import llama_rates
 import ollama_runner
 import platform_host as host
+import selfupdate
 import updaters
 
 HERE = Path(__file__).resolve().parent
@@ -316,6 +317,12 @@ def suggestions() -> list[dict]:
                     "why": "the band shows nothing and an update check has nothing to compare",
                     "how": "give the engine a version_cmd, version_file or version_url in the inventory (the catalog record says which it has)."})
     for uid, u in ((STATE.get() or {}).get("updates") or UPDATES).items():
+        if uid == selfupdate.ID:
+            if u.get("ok") and u.get("available"):
+                out.append({"kind": "update", "title": f"Quartermaster: {u.get('latest')} is newer than {u.get('installed') or '?'}",
+                            "why": f"from the check you ran {u.get('checked_at', '')}: path {u.get('path')}, {u.get('path_label')}",
+                            "how": "open the Quartermaster menu (the name at the top left) for what this installation is and the steps the update takes."})
+            continue
         if u.get("ok") and u.get("available"):
             out.append({"kind": "update", "title": f"{uid}: {u.get('latest')} is newer than {u.get('installed') or '?'}",
                         "why": f"from the check you ran {u.get('checked_at', '')}",
@@ -371,6 +378,9 @@ def settled(u: dict, live: str | None) -> dict:
     if u.get("ok") and u.get("available") and live and not updaters.newer(u.get("latest"), live):
         return {**u, "installed": live, "available": False, "can_apply": False}
     return u
+
+
+SELF_CACHE: dict = {}            # selfupdate.state's memo: `git describe` runs only when the head moves
 
 
 def remember_update(uid: str, rec: dict) -> None:
@@ -1067,6 +1077,10 @@ class State:
                                         "recipe": rp.get("recipe") or "none", "recipe_note": rp.get("note")}
         snap["updates"] = {uid: settled(u, (snap["engines"].get(uid) or snap["clients"].get(uid) or {}).get("version"))
                            for uid, u in UPDATES.items()}
+        # Quartermaster itself: its version and head every time (file reads), its last check as of the head now
+        snap["self"] = selfupdate.state(ROOT, SELF_CACHE)
+        if selfupdate.ID in UPDATES:
+            snap["updates"][selfupdate.ID] = selfupdate.settle(UPDATES[selfupdate.ID], snap["self"]["head_full"])
         with self.lock:
             self.snapshot = snap
         return snap
@@ -1718,6 +1732,30 @@ def op_apply_update(p: Plan):
     after = update_ctx(entry, role).get("installed") if probed else (r.get("after") or last.get("latest") or ctx.get("installed"))
     remember_update(p.target, {**last, "installed": after, "available": False, "applied_at": time.strftime("%Y-%m-%d %H:%M:%S"), "backup": r.get("backup")})
     p.done_step(st, f"now {after or r.get('after') or '?'}" + (f"; {r['note']}" if r.get("note") else ""))
+
+
+def op_check_self(p: Plan):
+    """Check Quartermaster itself (docs/self-update.md, stage 1). The fetch is this click's egress; after it, the agent
+    reads how this installation runs and which path the incoming commits call for. It moves nothing: the record says
+    what an update would do, step by step, and who does each step."""
+    st = p.step("Check Quartermaster for an update", "fetch, then the context and the path")
+    r = selfupdate.check(ROOT, INV.data.get("self"), INV.data, PORT, say=lambda line: p.say(st, line),
+                         home_set=bool(os.environ.get("QM_HOME")))
+    remember_update(selfupdate.ID, r)
+    with STATE.lock:                    # into the published snapshot now: whoever asked reads it next, not a poll later
+        snap = dict(STATE.snapshot)
+        snap["updates"] = {**(snap.get("updates") or {}),
+                           selfupdate.ID: selfupdate.settle(UPDATES[selfupdate.ID], (snap.get("self") or {}).get("head_full"))}
+        STATE.snapshot = snap
+    if not r.get("ok"):
+        raise PlanFailed(r.get("error") or "check failed")
+    head = f"{r.get('installed') or '?'}: "
+    if r.get("available"):
+        head += f"{r.get('behind')} commit{'s' if r.get('behind') != 1 else ''} behind, to {r.get('latest')}"
+    else:
+        head += "current" if r.get("path") == "A" else f"not updatable here ({r.get('path_label')})"
+    p.done_step(st, f"{head} · path {r.get('path')}, {r.get('path_label')}"
+                + (f" · {len(r['mismatches'])} thing{'s' if len(r['mismatches']) != 1 else ''} the self block does not match" if r.get("mismatches") else ""))
 
 
 def op_rollback_update(p: Plan):
@@ -2948,7 +2986,8 @@ OPS = {"make_resident": op_make_resident, "unload": op_unload, "unload_all": op_
        "owui_start": op_owui_start, "owui_stop": op_owui_stop, "owui_update": op_owui_update,
        "comfy_start": op_comfy_start, "comfy_stop": op_comfy_stop, "comfy_free": op_comfy_free,
        "art_batch": op_art_batch, "comfy_update": op_comfy_update, "comfy_rollback": op_comfy_rollback,
-       "check_update": op_check_update, "apply_update": op_apply_update, "rollback_update": op_rollback_update}
+       "check_update": op_check_update, "apply_update": op_apply_update, "rollback_update": op_rollback_update,
+       "check_self": op_check_self}
 
 STATE = State()
 PLANS = Plans()

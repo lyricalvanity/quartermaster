@@ -2,6 +2,7 @@
 
   qm setup | detect [--yes]      find what this machine runs and write the inventory (setup.py; no agent needed)
   qm status                      who holds the card, every server's state
+  qm self [check]                Quartermaster's own version; `check` fetches and says what an update would take here
   qm suggest | scan              what the inventory could use; what detection sees that the roster lacks
   qm resident <id> [--force]     make <id> the resident model (unloads the others first)
   qm unload <id> | all           give the card back
@@ -83,6 +84,33 @@ def action(op, target=None, args=None):
         if p["status"] not in ("queued", "running"):
             print(p["status"].upper() + (": " + p["error"] if p.get("error") else ""))
             return 0 if p["status"] == "done" else 1
+
+
+def show_self():
+    """Quartermaster's own version, and what its last check found (docs/self-update.md)."""
+    _, s = call("GET", "/api/state")
+    me, u = s.get("self") or {}, (s.get("updates") or {}).get("quartermaster")
+    print(f"Quartermaster {me.get('version') or '?'} ({me.get('describe') or me.get('head') or 'not a git checkout'}) on {me.get('branch') or '-'}")
+    if not u:
+        print("not checked yet: `qm self check` fetches and says what an update would take")
+        return 0
+    if not u.get("ok"):
+        print(f"last check failed ({u.get('checked_at')}): {u.get('error')}")
+        return 1
+    c = u.get("context") or {}
+    print(f"checked {u.get('checked_at')}: path {u.get('path')} ({u.get('path_label')})" + (f", {u.get('behind')} behind, newest {u.get('latest')}" if u.get("available") else ""))
+    print(f"  kept by: {(c.get('supervisor') or {}).get('detail')}")
+    for m in u.get("mismatches") or []:
+        print(f"  self block: {m}")
+    if u.get("note"):
+        print(f"  note: {u['note']}")
+    for x in (u.get("incoming") or [])[:10]:
+        print(f"  incoming {x['short']} {x['subject'][:70]}")
+    if u.get("steps"):
+        print(f"  {u.get('apply_note')}")
+        for i, st in enumerate(u["steps"], 1):
+            print(f"  {i}. [{st['who']}] {st['text']}" + (f"\n       {st['cmd']}" if st.get("cmd") else ""))
+    return 0
 
 
 def status():
@@ -208,6 +236,10 @@ def main(argv):
         else:
             print("`qm detect` adds what you choose")
         return 0
+    if cmd == "self":
+        if rest[:1] == ["check"] and action("check_self") != 0:
+            return 1
+        return show_self()
     if cmd == "resident":
         return action("make_resident", rest[0], {"force": force})
     if cmd == "unload":

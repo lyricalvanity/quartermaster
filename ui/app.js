@@ -653,6 +653,75 @@
     if (rec.detect) { h("How it is found"); p(Object.entries(rec.detect).map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("  ·  ")); }
     $("#guide-modal").hidden = false;
   }
+  // ---- Quartermaster itself (docs/self-update.md, stage 1): the brand opens its menu; a check fetches on that click and
+  // says what an update would take here. Every string from the check (commit subjects, authors) goes in as text.
+  function selfMenu(ev) {
+    ev.stopPropagation();
+    const open = document.querySelector(".menu.self-menu"); closeMenus(); if (open) return;
+    const r = $("#brand").getBoundingClientRect(), left = Math.max(8, r.left);
+    // fixed, from the brand's box: a theme may reshape the brand (LCARS caps its children's width), not this
+    const m = el("div", "menu self-menu"); m.setAttribute("role", "menu");
+    Object.assign(m.style, { position: "fixed", left: `${left}px`, right: "auto", top: `${r.bottom + 4}px`,
+      maxWidth: `${Math.min(480, document.documentElement.clientWidth - left - 8)}px` });
+    document.body.appendChild(m);
+    const s = (STATE && STATE.self) || {}, u = (STATE && STATE.updates && STATE.updates.quartermaster) || null;
+    const planRunning = STATE && STATE.plan && STATE.plan.status === "running";
+    const item = (label, fn, disabled) => { const b = el("button", "btn small ghost", label); b.disabled = !!disabled; b.setAttribute("role", "menuitem"); b.onclick = (e) => { e.stopPropagation(); closeMenus(); fn(); }; m.appendChild(b); return b; };
+    item(`Quartermaster ${s.version || ""}${s.describe ? ` · ${s.describe}` : ""}${s.branch ? ` on ${s.branch}` : ""}`, () => {}, true);
+    item(u ? `Check again for an update (last ${u.checked_at || "?"})` : "Check for an update (reaches the network)", () => action("check_self"), planRunning);
+    if (u) {
+      if (!u.ok) item(`Last check failed: ${(u.error || "").slice(0, 70)}`, () => selfCard(u));
+      else if (u.stale) item("The checkout moved since the last check: check again", () => selfCard(u));
+      else if (u.available) item(`Newer: ${u.latest}, ${u.behind} commit${u.behind === 1 ? "" : "s"}: what updating takes here…`, () => selfCard(u));
+      else item(`${u.path === "A" ? "Current" : u.path_label}: this installation…`, () => selfCard(u));
+    }
+    const first = m.querySelector("button:not(:disabled)"); if (first && ev.type === "keydown") first.focus();
+  }
+  function selfCard(u) {
+    const b = $("#guide-body"); b.innerHTML = "";
+    const h = (t) => b.appendChild(el("h3", null, t));
+    const p = (t, cls) => b.appendChild(el("p", cls || null, t));
+    const list = (items) => { const ul = el("ul"); for (const i of items) ul.appendChild(el("li", null, i)); b.appendChild(ul); };
+    const rows = (pairs) => { const dl = el("dl", "self-card"); for (const [k, v] of pairs) { if (v == null || v === "") continue; dl.appendChild(el("dt", null, k)); dl.appendChild(el("dd", null, v)); } b.appendChild(dl); };
+    const s = (STATE && STATE.self) || {}, c = u.context || {}, co = c.checkout || {}, sup = c.supervisor || {}, pg = c.page || {}, ct = pg.container;
+    const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    $("#guide-title").textContent = `Quartermaster ${u.installed || s.describe || s.version || ""}`;
+    if (!u.ok) p(`The last check failed: ${u.error || "no message"}`, "self-bad");
+    if (u.stale) p("The checkout moved since this check; what follows describes it as it was. Check again.", "self-bad");
+    const page = pg.agent_port ? `the agent on :${pg.agent_port}` + (ct ? (ct.found ? `; container ${ct.name} (${ct.state}${ct.image_created ? `, image built ${new Date(ct.image_created * 1000).toLocaleString()}` : ""})` : `; container: ${ct.error || "not found for this checkout"}`) : "") : null;
+    rows([
+      ["Running on", c.platform ? `${c.platform.system} ${c.platform.release} · Python ${c.platform.python}` : null],
+      ["Agent kept by", sup.detail || sup.via],
+      ["Page from", page],
+      ["Checkout", co.git === false ? "not a git checkout" : co.git ? `${co.branch || "detached HEAD"}${co.upstream ? ` → ${co.upstream}` : ", no upstream"}${(u.dirty || []).length ? `, ${n(u.dirty.length, "changed file", "changed files")}` : ", clean"}${u.behind != null ? `, ${u.behind} behind` : ""}${u.ahead ? `, ${n(u.ahead, "commit", "commits")} here that upstream lacks` : ""}` : null],
+      ["Path", u.path ? `${u.path} · ${u.path_label}` : null],
+      ["Newest", u.available ? u.latest : null],
+      ["Checked", `${u.checked_at || "?"}${u.took_s != null ? ` · ${u.took_s} s` : ""}`],
+    ]);
+    if (u.note) p(u.note);
+    if ((u.mismatches || []).length) { h("The inventory's self block does not match"); list(u.mismatches); }
+    if ((u.incoming || []).length) {
+      h(`Incoming: ${n(u.incoming_total, "commit", "commits")}`);
+      list(u.incoming.map((x) => `${x.short}  ${x.subject}  · ${x.author}, ${x.date}`));
+      if (u.incoming_total > u.incoming.length) p(`and ${u.incoming_total - u.incoming.length} more`);
+    }
+    if ((u.steps || []).length) {
+      h("What updating takes here");
+      if (u.apply_note) p(u.apply_note, "self-note");
+      const ol = el("ol", "self-steps");
+      for (const st of u.steps) {
+        const li = el("li"); li.appendChild(el("span", `who ${st.who}`, st.who === "you" ? "you" : "agent")); li.appendChild(document.createTextNode(" " + st.text));
+        if (st.cmd) { li.appendChild(el("br")); li.appendChild(el("code", null, st.cmd)); }
+        ol.appendChild(li);
+      }
+      b.appendChild(ol);
+    }
+    const other = (u.flags || []).filter((f) => !(u.steps || []).some((st) => st.text === f.text));
+    if (other.length) { h("Also"); list(other.map((f) => f.text)); }
+    if ((u.local || []).length && u.path !== "E") { h("Here, not upstream"); list(u.local.map((x) => `${x.short}  ${x.subject}${x.accounted ? "  (its content is upstream)" : ""}`)); }
+    if ((u.whats_new || []).length) { h("What's new (CHANGELOG)"); b.appendChild(el("pre", "self-new", u.whats_new.join("\n"))); }
+    $("#guide-modal").hidden = false;
+  }
   function looksLikeCommand(s) { return /^(git |npm |pip |python |winget |docker |cmake |ollama |llama-server |venv|\.venv|\S+\.(bat|sh|exe)\b|[A-Za-z]:\\|\/usr\/)/.test(s) || /^[a-z0-9_.\/-]+( [-\w.\/:=<>"'\\@]+)+$/.test(s) && s.length < 90 && !/[.!?]$/.test(s); }
   // `tested` in a record: {platform: date} for every machine someone drove it from. A tier A or B record without
   // one was written from the documentation, and the panel says so rather than letting the tier imply otherwise.
@@ -713,6 +782,9 @@
   function render(st) {
     STATE = st;
     const g = st.gpu || {}, ram = st.ram || {};
+    const su = st.updates && st.updates.quartermaster;               // the ↑ only after a check found something: nothing polls
+    $("#self-up").hidden = !(su && su.ok && su.available && !su.stale);
+    if (st.self) $("#brand").title = `Quartermaster ${st.self.version || ""}${st.self.describe ? ` (${st.self.describe})` : ""}: its version, and checking for an update`;
     $("#gpu-val").textContent = `${fmtGB(g.used_mib)} / ${fmtGB(g.total_mib)} GB`;
     $("#gpu-fill").style.width = g.total_mib ? (100 * g.used_mib / g.total_mib).toFixed(1) + "%" : "0%";
     $("#gpu-rounds").textContent = g.total_mib != null && g.used_mib != null ? String(Math.max(0, Math.round(g.total_mib - g.used_mib))).padStart(5, "0") : "-----";
@@ -1346,6 +1418,8 @@
     $("#preset-snap").onclick = () => openPresetEditor(snapshotPreset(), true);
     $("#cat-scan").onclick = runScan;
     $("#guide-close").onclick = () => { $("#guide-modal").hidden = true; };
+    $("#brand").onclick = selfMenu;
+    $("#brand").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selfMenu(e); } };
     loadCatalog();
     $("#btn-killall").onclick = async () => { if (await confirm("Clear the card?", `Unloads every resident model (${(INV.engines || []).map((e) => e.name).join(", ")})${INV.comfyui ? " and asks ComfyUI to drop its models" : ""}. Servers stay up.`, "killall")) action("unload_all"); };
     $("#plan-cancel").onclick = () => api("/api/plans/current/cancel", {}).then(() => toast("cancel requested")).catch((e) => toast(e.message, "bad"));

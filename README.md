@@ -169,6 +169,19 @@ verify, and a roll-back entry afterwards. An engine's units must be stopped firs
 `github-release` recipe is a check only and says "by hand". The last result per id is kept in
 `logs/updates.json`.
 
+**Quartermaster itself** has the same check under its name at the top left (or `qm self check`). The check
+fetches the checkout's upstream on that click and reads how this installation runs:
+- the platform;
+- what keeps the agent running (a systemd user unit, the Windows Startup launcher, or a terminal);
+- whether a container serves the page;
+- which root-side templates and font map are in use.
+
+It then names the upgrade path the incoming commits call for: no restart, an agent restart, a rewritten
+upstream, or one of the cases it refuses (local commits, uncommitted changes, files in the way). It lists
+each step with who takes it and the command that does it by hand. The inventory's `self` block, written by
+setup and `qm detect`, records how this installation restarts; the check verifies that block and never
+replaces it. Applying the update from the page is the next stage ([docs/self-update.md](docs/self-update.md)).
+
 **Clients** (Pi, Codex CLI, Claude Code) are a strip under the bands, not cards: version, the local ports
 their configuration points at, a menu with the update entries. A unit card says `used by Pi` when a
 client's configuration names its port, and the Stop dialog repeats it.

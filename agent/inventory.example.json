@@ -4,6 +4,15 @@
   "host": "workstation",
   "owner": "Dave",
   "_owner": "optional; every theme's start-up screen addresses the owner by name (HAL's notices too). Without it each uses its canon: Dave, Neo, Falken, Ripley, ...",
+  "self": {
+    "repo": "C:/quartermaster",
+    "remote": "origin",
+    "branch": "main",
+    "restart": { "via": "respawn" },
+    "container": { "compose_file": "C:/quartermaster/docker-compose.yml", "service": "quartermaster" },
+    "require_signed": false
+  },
+  "_self": "optional; how Quartermaster updates itself (docs/self-update.md), written by setup and detect. restart.via: systemd-user (with unit), respawn (Windows, no supervisor) or none (started by hand). container: the compose service that serves the page, or null. The check verifies this against how the agent runs; it never replaces it.",
   "gpus": [
     {
       "index": 0,

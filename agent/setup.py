@@ -1166,6 +1166,9 @@ def do_setup(home: Path) -> int:
         print("Nothing to manage was found. The inventory can still be written and filled in by hand (agent/inventory.example.json shows the shape).")
     owner = ask_text("Owner's name (shown by the themes that address you)", os.environ.get("USERNAME") or os.environ.get("USER") or "Dave")
     inv = inventory_from(hf, found, owner)
+    block = self_block(assume_launcher=True)
+    if ask(f"Record how this installation updates itself ({self_summary(block)})?", True):
+        inv["self"] = block
     if not ask(f"Write {inv_path}?", True):
         print("nothing written")
         return 1
@@ -1199,6 +1202,27 @@ def do_setup(home: Path) -> int:
     return 0
 
 
+SELF_SEEN = ("repo", "remote", "branch", "restart", "container")    # the self block's fields detection can see
+
+
+def self_block(assume_launcher: bool = False) -> dict:
+    """The inventory's `self` block for this checkout, from the running agent if there is one. A fresh setup on Linux
+    assumes the systemd user unit it writes (the check says so plainly if the agent turns out to run otherwise)."""
+    import selfupdate
+    b = selfupdate.propose_block(ROOT, int(os.environ.get("QM_PORT") or 8790))
+    if assume_launcher and b["restart"]["via"] == "none":
+        b["restart"] = {"via": "respawn"} if WIN else {"via": "systemd-user", "unit": "quartermaster.service"}
+    return b
+
+
+def self_summary(b: dict) -> str:
+    r = b.get("restart") or {}
+    via = {"systemd-user": f"restarts through the systemd user unit {r.get('unit')}", "respawn": "restarts by starting itself again (Windows)",
+           "none": "nothing restarts it: you do"}.get(r.get("via"), str(r.get("via")))
+    return (f"{via}; updates from {b.get('remote')}/{b.get('branch')}" if b.get("remote") else via + "; not a git checkout") + \
+           ("; rebuilds the page's container" if b.get("container") else "")
+
+
 def do_detect(home: Path) -> int:
     inv_path = home / "inventory.json"
     inv = load_json(inv_path)
@@ -1220,12 +1244,25 @@ def do_detect(home: Path) -> int:
     new_c = [c for c in found["clients"] if c["id"] not in have_c]
     # a listed client installed by another manager than its kind's recipe assumes (pnpm, not npm)
     re_c = [(c, x["update"]) for c in inv.get("clients", []) for x in found["clients"] if x["id"] == c["id"] and x.get("update") and not c.get("update")]
+    # how Quartermaster itself restarts and where it updates from (docs/self-update.md): only the fields detection can
+    # see are compared, so anything the owner set by hand (require_signed, say) is kept
+    have_self = inv.get("self") or None
+    seen = self_block()
+    want_self = {**(have_self or seen), **{k: seen[k] for k in SELF_SEEN}}
+    self_new = want_self if want_self != have_self else None
     for n in found["notes"]:
         print(f"  - {n}")
-    if not (new_e or new_u or new_s or new_c or re_c):
+    if not (new_e or new_u or new_s or new_c or re_c or self_new):
         print("nothing new: the inventory already has everything detection can see")
         return 0
     changed = False
+    if self_new and not have_self:
+        if ask(f"Record how this installation updates itself ({self_summary(self_new)})?", True):
+            inv["self"] = self_new; changed = True
+    elif self_new:
+        diff = "; ".join(f"{k}: {json.dumps(have_self.get(k))} -> {json.dumps(self_new.get(k))}" for k in SELF_SEEN if have_self.get(k) != self_new.get(k))
+        if ask(f"Update how this installation updates itself ({diff})?", True):
+            inv["self"] = self_new; changed = True
     for e in new_e:
         if ask(f"Add engine {e['id']} ({e.get('root', e['name'])})?", True):
             inv.setdefault("engines", []).append(e); changed = True

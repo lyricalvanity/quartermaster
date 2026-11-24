@@ -202,6 +202,21 @@ select, input { background: var(--bg3); border: 1px solid var(--line2); color: v
 .guide ul { margin: 4px 0 4px 18px; padding: 0; }
 .guide code { font-family: var(--mono); font-size: 12px; background: var(--bg3); padding: 1px 5px; border-radius: 4px; }
 .guide .lic { color: var(--fg3); font-size: 12px; }
+/* Quartermaster itself: the brand opens its menu; the ↑ after a check found something; the context card */
+.brand[role="button"] { cursor: pointer; border-radius: 6px; }
+.brand[role="button"]:focus-visible { outline: 2px solid var(--e2); outline-offset: 3px; }
+.self-up { color: var(--warn); font-weight: 700; }
+.self-card { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 0 0 8px; font-size: 12.5px; }
+.self-card dt { color: var(--fg3); }
+.self-card dd { margin: 0; overflow-wrap: anywhere; }
+.self-steps { margin: 4px 0 4px 20px; padding: 0; }
+.self-steps li { margin: 3px 0; }
+.self-steps .who { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; padding: 0 5px; border-radius: 3px; border: 1px solid var(--line2); color: var(--fg2); }
+.self-steps .who.you { color: var(--warn); border-color: currentColor; }
+.self-steps code { display: inline-block; margin-top: 2px; overflow-wrap: anywhere; }
+.self-note { color: var(--fg3); font-size: 12px; }
+.self-bad { color: var(--bad); }
+.self-new { font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; background: var(--bg3); padding: 6px 8px; border-radius: 6px; max-height: 260px; overflow: auto; }
 #log-body { flex: 1; overflow: auto; margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 11px/1.45 var(--mono); color: var(--fg2); white-space: pre-wrap; }
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 20; }
 .toast { background: var(--bg3); border: 1px solid var(--line2); border-radius: 8px; padding: 8px 14px; font-family: var(--mono); font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }

@@ -1,6 +1,7 @@
 # Updating Quartermaster itself: specification (draft, 2026-11-24)
 
-*Status: design only. Nothing here is built. The owner's decisions are in section 12.*
+*Status: stage 1 is built (2026-11-24): the check, the context card and the `self` block. Apply, rollback and
+everything after are design. The owner's decisions are in section 12.*
 
 ## 1. Purpose
 
@@ -247,7 +248,7 @@ container again if it was rebuilt. Root steps the owner took are not undone; the
 
 | stage | content |
 |---|---|
-| 1 | Context probe, `check_self`, `self` in the state, the brand menu and context card; `qm detect` writes the `self` block. No apply. |
+| 1 | Context probe, `check_self`, `self` in the state, the brand menu and context card; `qm detect` writes the `self` block. No apply. **Built 2026-11-24**, notes below. |
 | 2 | Apply for paths B and C: preflight with `--selftest`, the helper, `systemd-user` and `none`; rollback. |
 | 3 | `respawn` on Windows. |
 | 4 | Path D, with the tree-accounting proof. |
@@ -268,6 +269,40 @@ case at a time and drives the button through each:
 - a second agent on the same checkout.
 
 The real installation is not used until all of them pass.
+
+### Stage 1, as built (2026-11-24)
+
+**Where the code is.** The probe and the classification are in `agent/selfupdate.py`, beside `updaters.py`, so
+the agent and setup share them. The op is `check_self`, an ordinary plan. Its record is kept in
+`logs/updates.json` under `quartermaster` and written straight into the published state, so the page and `qm`
+read it at once rather than a poll later. `self` in the state comes from file reads every poll; `git
+describe` runs only when the head moves.
+
+**What the card shows until stage 2.** Every step carries the command that does it by hand, so stage 1 is
+already the manual procedure for this machine.
+
+**Setup and detect.** Setup proposes the block before it writes a new inventory. A fresh install on Linux
+assumes the user unit it writes; if the agent turns out to run otherwise, the check says so. Detect compares
+only `repo`, `remote`, `branch`, `restart` and `container`, so fields the owner set by hand survive a
+re-detect.
+
+**Tested on the bench** (a bare remote, an author's clone, an installation's clone): 28 cases.
+- Every path: A (including local commits with nothing behind), B, C, D, E (including a rewrite with one
+  commit upstream lacks), F, G (including on a rewrite), H and I.
+- Every flag, each with a case where it must not fire.
+- Block mismatches; `settle` after a move by hand; a fetch that fails.
+- A container found through a stand-in `docker`.
+- A second agent on the checkout.
+
+**Tested live, on a Linux laptop.**
+- The check, before and after detect wrote the block.
+- The brand menu in all 23 themes, at 1920 and 375 wide, and opened by keyboard.
+- The card with a hostile commit subject, shown as text.
+
+**Not tested yet:**
+- Windows: the supervisor reading, and the query for other agents.
+- A fetch that wants credentials. It fails with the message meant for it only if git's wording matches.
+- A real container.
 
 ## 12. Decisions (2026-11-24)
 
