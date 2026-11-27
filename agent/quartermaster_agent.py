@@ -2665,6 +2665,16 @@ def op_comfy_stop(p: Plan):
     comfy_kill(p)
 
 
+def _comfy_vouches(c: dict, needle: str) -> bool:
+    """True when the port itself says it is ComfyUI: /system_stats lists the arguments it was started with."""
+    try:
+        code, s = http("GET", c["url"] + "/system_stats", timeout=2.5)
+        argv = (s.get("system") or {}).get("argv") if code == 200 and isinstance(s, dict) else None
+        return isinstance(argv, list) and needle in " ".join(str(a) for a in argv).lower()
+    except Exception:  # noqa: BLE001 - down, or something that is not ComfyUI
+        return False
+
+
 def comfy_kill(p: Plan):
     c = _comfy_need()
     st = p.step("Stop ComfyUI", f"end the ComfyUI process listening on {c['port']}")
@@ -2675,6 +2685,14 @@ def comfy_kill(p: Plan):
     for pid in pids:
         cmd = _cmdline(pid)
         if needle not in cmd.lower():
+            if not cmd and _comfy_vouches(c, needle):
+                # The OS will not show this account the process: it has more privilege than the agent (started from
+                # an elevated prompt on Windows, by another user on Linux). The agent could not end it either, and
+                # it never elevates. The rule stands, nothing unidentified is ended; the refusal says what it is.
+                how, where = ("it runs elevated", "an elevated prompt") if host.WINDOWS else \
+                             ("it runs as another user", "that user's session")
+                raise PlanFailed(f"pid {pid} on port {c['port']} is ComfyUI, but {how}, started outside Quartermaster: "
+                                 f"end it from {where}; left alone")
             raise PlanFailed(f"pid {pid} on port {c['port']} is not ComfyUI ({cmd[:90] or 'no command line readable'}); left alone")
     for pid in pids:
         p.check()

@@ -214,6 +214,12 @@
   (`systemd-user` with its unit, `respawn` on Windows, or `none`), and the container that serves the page.
   Setup and detect write it from the running agent, asking first, and detect keeps fields it cannot see.
   The check reports where the block no longer matches how the agent runs, and never replaces it.
+- **Stop ComfyUI** says what it found when the process on ComfyUI's port will not show its command line. Windows
+  hides an elevated process's command line from an unelevated one, so a ComfyUI started from an elevated prompt
+  was refused as *is not ComfyUI (no command line readable)*. When the port answers `/system_stats` with the
+  inventory's `match` among its arguments, the refusal now says it is ComfyUI running with more privilege than
+  the agent (elevated on Windows, another user's on Linux) and where to end it. The rule is unchanged: the agent
+  ends nothing it cannot identify by command line, and never elevates.
 
 ## 0.2.0 - 2026-11-07
 
