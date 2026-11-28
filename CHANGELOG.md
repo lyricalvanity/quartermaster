@@ -238,6 +238,12 @@
   the server still listed (the first request after a start, until twelve more had run). They are now ordered by
   their time stamps. A request row without a prefill rate gets one from its own tokens and milliseconds, and
   the recent rows carry how much of each prompt was reused, which the panel already had a place for.
+- **Stop unloads a Basalt unit first.** Basalt's Flash-Next engine writes its parked conversations to disk when
+  the model is unloaded through the API, and nothing when its process is ended: a Stop lost them, and the next
+  start read the whole prompt again. A catalog record (or a unit) may now say `unload_before_stop`, and Basalt's
+  does: Stop asks the server to unload, waits for the card, then ends the process. The stop never depends on
+  it. A model that is answering, refuses or does not let go in time gets a failed step that says what was not
+  saved, and the process is ended all the same. Read for the Strata driver only; Strata itself is unchanged.
 
 ## 0.2.0 - 2026-11-07
 

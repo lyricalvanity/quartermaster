@@ -11,6 +11,7 @@ run time. See SPEC.md section 7a.
 | `tier` | A: an engine the state machine drives; B: a service with up/down/update; C: a client with version, update and bindings; D: listed with a guide only |
 | `role` | `engine`, `service` or `client` |
 | `driver` | how the agent moves a unit of this kind: `strata`, `maya`, `ollama`, `llamacpp`, `llamacpp-router` (code paths of their own), or `http` / `cli` (read the record's `table`). Absent: the kind drives as itself. A fork names its parent's driver and needs no code |
+| `unload_before_stop` | `true` for a `strata`-driven engine that writes what it holds (parked conversations) to disk when the model is unloaded and not when its process is ended: Stop then unloads through the API first, and ends the process either way. A unit's own key overrides it |
 | `table` | for `http` and `cli`: the calls and the keys, below. A unit's own `table` overrides it key by key |
 | `tested` | `{platform: date}` for each machine someone has driven the kind from. A tier A or B record without one was written from the documentation; the panel marks it *untested* and says so in the guide |
 | `detect` | executables, install roots (`~` is the home directory), configuration globs, default ports, health path, version source |

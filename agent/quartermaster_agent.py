@@ -69,7 +69,7 @@ SELFTEST = "--selftest" in sys.argv  # the new code run once beside the running 
 ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya", "maya-vision", "basalt", "basalt-vision",
                                "ollama", "ollama_llama_server", "ollama-runner", "llama-server"))
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
-                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
+                ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg",
                 ".woff2": "font/woff2", ".ttf": "font/ttf", ".otf": "font/otf", ".ico": "image/x-icon",
                 ".json": "application/json"}
 # a machine's own font map (ui/fonts/local.css, ignored by git); the page always links it, so an empty one is served when absent
@@ -1449,6 +1449,30 @@ def op_stop_launch(p: Plan, sid: str, st=None):
         STATE.set_transient(sid, None)
 
 
+def unload_before_stop(s: dict) -> bool:
+    """Whether Stop unloads this unit through its API before it ends the process: the unit's own
+    `unload_before_stop`, else its kind's catalog record. For an engine that writes what it holds (parked
+    conversations) when the model is unloaded and not when the process dies. Read for the strata driver only: it is
+    the one whose unload is a call and not the end of the process."""
+    v = s.get("unload_before_stop")
+    if v is None:
+        v = (CATALOG.get(str(s.get("kind", ""))) or {}).get("unload_before_stop")
+    return bool(v) and s["driver"] == "strata"
+
+
+def op_unload_for_stop(p: Plan, sid: str):
+    """Stop's first step for such a unit. It never fails the stop: a model that is answering, refuses, or does not
+    let go in time is said in the step, and the process is ended all the same, because that is what Stop means."""
+    n = len(p.steps)
+    try:
+        op_unload_server(p, sid, force=True)
+    except (PlanFailed, OSError) as e:           # OSError: the server stopped answering in the middle of it
+        for st in p.steps[n:]:
+            if st["status"] == "running":
+                p.say(st, str(e)[:160])
+                p.done_step(st, "not unloaded: the process is ended without it, and what it held in memory is not written to disk", status="failed")
+
+
 def op_stop_process(p: Plan, sid: str):
     """End a server process: the labelled, confirmed action. Strata: taskkill of the serve process listening on its port."""
     s = INV.servers[sid]
@@ -1460,6 +1484,8 @@ def op_stop_process(p: Plan, sid: str):
     if drv == "llamacpp-router":
         raise PlanFailed(f"{s['name']} is one model of the llama.cpp router on :{s['port']}; Unload ends its process, and the router, "
                          "which serves the others, is not stopped from here")
+    if unload_before_stop(s):
+        op_unload_for_stop(p, sid)
     unit = (s.get("start") or {}).get("systemd_user")
     cli_stop = drv == "cli" and (table_of(s).get("stop") or {}).get("argv")
     st = p.step(f"Stop {s['name']} process", f"systemd user unit {unit}" if unit else "its own stop command" if cli_stop

@@ -8,6 +8,7 @@
   "role": "engine",
   "platforms": ["linux", "windows"],
   "driver": "strata",
+  "unload_before_stop": true,
   "tested": {"windows": "2026-11-27"},
   "detect": {
     "roots": ["~/Basalt", "~/basalt", "~/AppData/Local/Basalt"],
@@ -22,7 +23,7 @@
     "endpoints": {"health": "GET /health (loaded, loading, percent, model, max_context)", "load": "POST /v1/load {}", "unload": "POST /v1/unload", "metrics": "GET /metrics (engine, live, requests newest first, best, totals)", "status": "GET /v1/status"},
     "can": ["everything the Strata driver does: start a unit from its launcher, load and unload through the API, see reading and generating with tok/s from /metrics, stop the process", "show a load's progress: /health carries loading and percent while the model file is read"],
     "cannot": ["change a unit's context without editing its config file and starting it again", "swap models inside one server: a config may list several, and Quartermaster treats one config as one unit, named for its first model"],
-    "note": "Driven on Windows 2026-11-27 with Basalt v0.5.7 built from source for sm_120 on a 32 GB card: start from a launcher, the probe's loading state and percent, live state and tok/s during a generation, unload through /v1/unload, load through /v1/load, stop. The server is three processes (the basalt launcher, the venv's python shim, the python that listens) with the engine as a child of the last; ending the listening process's tree ends them all. /v1/unload takes no wait= and answers busy while a request runs."
+    "note": "Driven on Windows 2026-11-27 with Basalt v0.5.7 built from source for sm_120 on a 32 GB card: start from a launcher, the probe's loading state and percent, live state and tok/s during a generation, unload through /v1/unload, load through /v1/load, stop. The server is three processes (the basalt launcher, the venv's python shim, the python that listens) with the engine as a child of the last; ending the listening process's tree ends them all. /v1/unload takes no wait= and answers busy while a request runs. With conversation-cache-disk-mib set, the Flash-Next engine wrote its parked conversations to disk when the model was unloaded through the API, and nothing when its process was ended (seen 2026-11-28: 0 files after a stop, 12 after an unload, and the conversation back in 1.7 s on a fresh server); the DeepSeek engine writes while it runs. So this record sets unload_before_stop: Stop asks for the unload first and ends the process whatever the answer."
   },
   "launch": {"argv": ["<root>/bin/basalt", "serve", "--config", "<file>.json", "--python", "<root>/.venv/bin/python"], "never": ["--host 0.0.0.0 without --api-key: the page has no login"], "note": "On Windows a from-source build needs the CUDA runtime it was linked against on PATH: start it from a launcher (.cmd) that sets PATH, and give the unit that launcher as its start.argv."},
   "update": {
