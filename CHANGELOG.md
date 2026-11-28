@@ -220,6 +220,24 @@
   inventory's `match` among its arguments, the refusal now says it is ComfyUI running with more privilege than
   the agent (elevated on Windows, another user's on Linux) and where to end it. The rule is unchanged: the agent
   ends nothing it cannot identify by command line, and never elevates.
+- **Basalt** is a kind (`catalog/basalt.json`): a Strata fork for Blackwell cards, one `.basalt` file per model,
+  started with `basalt serve --config`. Its record names the Strata driver, so start, load, unload and stop are
+  the code Strata already runs. `qm setup` finds an install with `bin/basalt` and proposes a unit for each
+  serve config it finds beside the install or in a `Basalt-data` folder (next to it, or at a drive's root),
+  started through a launcher in that folder when one names the config. The update check compares the newest
+  release; applying is the owner's to declare (a script recipe for a from-source build). Driven on Windows
+  against a real server: start, load, unload, stop, and the update check through a script recipe.
+- A unit whose server says it is **loading** reads `loading` with the percent of the model file read, on its
+  card and in the header, and counts as the card's occupant instead of raising the unexplained-occupant
+  warning. Basalt reports this at every start and load; a server that does not is unchanged.
+- The telemetry panel reads an engine that counts its experts in one figure: experts on the card and in RAM, the
+  two tiers' sizes, the draft window, the quant, the engine's version, and **experts left on the SSD** when the
+  model does not fit card and RAM together, which is the figure that explains a slow one.
+- **The last request was the oldest one.** Strata, Maya and Basalt list their finished requests newest first; the
+  agent took the end of that list, so a card's "last" line and the panel's recent requests showed the oldest
+  the server still listed (the first request after a start, until twelve more had run). They are now ordered by
+  their time stamps. A request row without a prefill rate gets one from its own tokens and milliseconds, and
+  the recent rows carry how much of each prompt was reused, which the panel already had a place for.
 
 ## 0.2.0 - 2026-11-07
 

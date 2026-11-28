@@ -34,7 +34,7 @@ HOMEDIR = Path.home()
 LOCAL = Path(os.environ.get("LOCALAPPDATA") or HOMEDIR / "AppData" / "Local")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 KINDS = [("strata", "Strata"), ("maya", "Maya"), ("ollama", "Ollama"), ("llamacpp", "llama.cpp (llama-server)"),
-         ("polystrata", "PolyStrata"), ("ik-llamacpp", "ik_llama.cpp"), ("koboldcpp", "KoboldCpp"), ("tabbyapi", "TabbyAPI"),
+         ("polystrata", "PolyStrata"), ("basalt", "Basalt"), ("ik-llamacpp", "ik_llama.cpp"), ("koboldcpp", "KoboldCpp"), ("tabbyapi", "TabbyAPI"),
          ("textgen", "textgen (text-generation-webui)"), ("foundry-local", "Foundry Local"),
          ("comfyui", "ComfyUI"), ("openwebui", "OpenWebUI"), ("pi", "Pi coding agent"), ("codex", "Codex CLI"),
          ("claude", "Claude Code")]
@@ -272,6 +272,8 @@ def running_servers() -> list[dict]:
         kind = None
         if "polystrata" in low and ("server.py" in low or "polystrata.py" in low):
             kind = "polystrata"                    # the same serve/server.py --engine strata shape as Strata: the folder's name decides
+        elif "serve.server" in low and "--engine-bin" in low and "basalt" in low:
+            kind = "basalt"                        # python -m serve.server --engine-bin <root>/bin/basalt: the listener `basalt serve` starts
         elif "serve\\server.py" in low and "--engine" in low and "strata" in low or "strata.exe" in low or "strata-dsv41" in low:
             kind = "strata"
         elif "maya.py" in low or "maya.exe" in low:
@@ -557,6 +559,69 @@ def detect_polystrata(seen: dict) -> dict:
         if int(d["port"]) in seen:
             out["notes"].append(f"PolyStrata {uid} shares port {d['port']} with {seen[int(d['port'])]}: one of them must move")
         seen.setdefault(int(d["port"]), uid)
+    return out
+
+
+def _basalt_config(path: Path) -> dict | None:
+    """A Basalt serve config: {"models": [{"model": "<file>.basalt", ...}, ...], "server": {...}, "engine": {...}}."""
+    d = load_json(path)
+    models = d.get("models") if isinstance(d, dict) else None
+    if not isinstance(models, list) or not models:
+        return None
+    if not all(isinstance(m, dict) and str(m.get("model") or "").lower().endswith(".basalt") for m in models):
+        return None
+    return d
+
+
+def detect_basalt(seen: dict) -> dict:
+    """Basalt (a Strata fork for Blackwell cards; the record drives it as Strata) is one install folder with
+    bin/basalt, and a server is `basalt serve --config <file>.json`. Its configs have no fixed home: they are looked
+    for beside the install, in a Basalt-data folder next to it, and in a Basalt-data folder at a fixed drive's root
+    (where the model files, hundreds of GB each, tend to sit). A launcher in the config's folder that names the
+    config is how the unit starts; on Windows a from-source build needs one, to put its CUDA runtime on PATH."""
+    out = {"engines": [], "units": [], "notes": []}
+    exe_name = "basalt.exe" if WIN else "basalt"
+    root = _first_root([HOMEDIR / "Basalt", HOMEDIR / "basalt", LOCAL / "Basalt"], Path("bin") / exe_name)
+    if not root:
+        return out
+    exe, py = root / "bin" / exe_name, py_in(root)
+    e = {"id": "basalt", "kind": "basalt", "name": "Basalt", "root": str(root)}
+    if (root / ".git").exists() and which("git"):
+        # the binary has no --version (and a Windows build without its CUDA folder on PATH does not exit): ask git
+        e["version_cmd"] = [which("git"), "-C", str(root), "describe", "--tags", "--always"]
+    out["engines"].append(e)
+    folders = [root, root.parent / "Basalt-data", root.parent / f"{root.name}-data"] + [d / "Basalt-data" for d in fixed_drives()]
+    for folder in dict.fromkeys(f for f in folders if f.is_dir()):
+        launchers = {}
+        for pat in (("run-*.cmd", "run-*.bat") if WIN else ("run-*.sh",)):
+            for b in folder.glob(pat):
+                launchers[b] = b.read_text(encoding="utf-8", errors="replace")
+        for cfg in sorted(folder.glob("*.json")):
+            d = _basalt_config(cfg)
+            if not d:
+                continue
+            server, engine, first = d.get("server") or {}, d.get("engine") or {}, d["models"][0]
+            port = int(server.get("port") or 8080)
+            stem = Path(str(first["model"])).stem
+            alias = str(first.get("alias") or stem)
+            uid = re.sub(r"[^a-z0-9]+", "-", alias.lower()).strip("-")
+            uid = uid if uid.startswith("basalt") else f"basalt-{uid}"
+            bat = next((b for b, t in launchers.items() if cfg.name in t), None)
+            argv = [str(bat)] if bat else [str(exe), "serve", "--config", str(cfg)] + (["--python", str(py)] if py else [])
+            more = len(d["models"]) - 1
+            ctx = engine.get("max-context")
+            out["units"].append({
+                "id": uid, "engine": "basalt", "kind": "basalt", "name": alias, "model": stem, "model_id": alias,
+                "context": int(ctx) if str(ctx or "").isdigit() else None, "vision": str(first.get("vision") or "off") != "off",
+                "quant": quant_of(stem), "port": port, "footprint": {"vram_gib": None, "ram_gib": None},
+                "start": {"argv": argv, "cwd": str(root), "loads_at_start": not server.get("lazy")},
+                "log": "", "config": str(cfg), "timeouts": {"start_s": 600, "load_s": 600, "unload_s": 90},
+                "notes": "Basalt serve config" + (f"; it lists {more} more model(s), which this unit does not switch to" if more else "")
+                         + ("" if bat or not WIN else "; no launcher names this config: a from-source build needs one that puts its CUDA runtime on PATH"),
+                "source": ""})
+            if port in seen:
+                out["notes"].append(f"Basalt {uid} shares port {port} with {seen[port]}: one of them must move")
+            seen.setdefault(port, uid)
     return out
 
 
@@ -1015,6 +1080,8 @@ def detect_all(kinds: set[str]) -> dict:
         take(detect_llamacpp(seen, running))
     if "polystrata" in kinds:
         take(detect_polystrata(seen))
+    if "basalt" in kinds:
+        take(detect_basalt(seen))
     if "ik-llamacpp" in kinds:
         take(detect_ik_llamacpp(seen, running))
     if "koboldcpp" in kinds:
@@ -1037,7 +1104,7 @@ def detect_all(kinds: set[str]) -> dict:
     for r in running:
         if r["port"] in seen:
             continue
-        if r["kind"] in ("strata", "maya", "polystrata", "koboldcpp", "tabbyapi", "textgen") and not any(e["id"] == r["kind"] for e in found["engines"]):
+        if r["kind"] in ("strata", "maya", "polystrata", "basalt", "koboldcpp", "tabbyapi", "textgen") and not any(e["id"] == r["kind"] for e in found["engines"]):
             found["notes"].append(f"a {r['kind']} server is listening on :{r['port']} (pid {r['pid']}) but its install was not found: {r['cmd'][:120]}")
     skip = set(ARGS["skip"] or [])
     if skip:

@@ -1,0 +1,42 @@
+{
+  "id": "basalt",
+  "name": "Basalt",
+  "what": "A fork of Strata built for NVIDIA Blackwell cards (sm_120) only: one .basalt file per model (weights, tokenizer, drafter and vision projector together), the most-routed experts on the card and the rest in RAM, drafting on by default. It serves Qwen3.8-Flash-Next, DeepSeek-V4.1-Flash, Qwen3.8-27B, Hy4-flash and Inkling 2 Mini through OpenAI and Anthropic routes. One server per config file, started with `basalt serve --config <file>.json`; the model loads at start unless the config says lazy.",
+  "licence": "MIT (models under their own)",
+  "home": "https://github.com/jesdga95/basalt",
+  "tier": "A",
+  "role": "engine",
+  "platforms": ["linux", "windows"],
+  "driver": "strata",
+  "tested": {"windows": "2026-11-27"},
+  "detect": {
+    "roots": ["~/Basalt", "~/basalt", "~/AppData/Local/Basalt"],
+    "marker": "bin/basalt (bin/basalt.exe on Windows)",
+    "configs": "any .json whose \"models\" list names .basalt files, beside the install, in a Basalt-data folder next to it, or in a Basalt-data folder at a fixed drive's root; its port is server.port (8080 when absent)",
+    "launchers": "run-*.cmd / run-*.bat / run-*.sh in the config's folder that name the config file",
+    "ports": [8080],
+    "health": "/health",
+    "version": {"cmd": ["git", "-C", "<root>", "describe", "--tags", "--always"], "note": "a checkout built from source. A ready-made archive has no .git: give the engine a static \"version\" in the inventory. The binary has no --version, and a from-source Windows build run without its CUDA folder on PATH does not exit: never give the agent a version_cmd that runs bin/basalt."}
+  },
+  "drive": {
+    "endpoints": {"health": "GET /health (loaded, loading, percent, model, max_context)", "load": "POST /v1/load {}", "unload": "POST /v1/unload", "metrics": "GET /metrics (engine, live, requests newest first, best, totals)", "status": "GET /v1/status"},
+    "can": ["everything the Strata driver does: start a unit from its launcher, load and unload through the API, see reading and generating with tok/s from /metrics, stop the process", "show a load's progress: /health carries loading and percent while the model file is read"],
+    "cannot": ["change a unit's context without editing its config file and starting it again", "swap models inside one server: a config may list several, and Quartermaster treats one config as one unit, named for its first model"],
+    "note": "Driven on Windows 2026-11-27 with Basalt v0.5.7 built from source for sm_120 on a 32 GB card: start from a launcher, the probe's loading state and percent, live state and tok/s during a generation, unload through /v1/unload, load through /v1/load, stop. The server is three processes (the basalt launcher, the venv's python shim, the python that listens) with the engine as a child of the last; ending the listening process's tree ends them all. /v1/unload takes no wait= and answers busy while a request runs."
+  },
+  "launch": {"argv": ["<root>/bin/basalt", "serve", "--config", "<file>.json", "--python", "<root>/.venv/bin/python"], "never": ["--host 0.0.0.0 without --api-key: the page has no login"], "note": "On Windows a from-source build needs the CUDA runtime it was linked against on PATH: start it from a launcher (.cmd) that sets PATH, and give the unit that launcher as its start.argv."},
+  "update": {
+    "recipe": "github-release",
+    "github": "jesdga95/basalt",
+    "note": "Releases are tagged vX.Y.Z, about one a week. The check compares your version with the newest release. Applying is yours to declare: an owner who builds from source overrides this in the inventory with a script recipe that checks out the tag and rebuilds; an owner on the ready-made archives fetches the new one by hand."
+  },
+  "install": {
+    "linux": ["Download the release archive for your card from https://github.com/jesdga95/basalt/releases and unpack it as ~/Basalt, or build from source (docs/building.md: CMake, Ninja, CUDA 13).", "Fetch a model file from https://huggingface.co/jesdga (one .basalt per model), or build one from a GGUF with tools/convert/convert.py."],
+    "windows": ["Windows 10 1903 or later, a Blackwell card. Unpack the release archive as %USERPROFILE%\\Basalt, or build from source with MSVC, Ninja and CUDA 13 (docs/building.md).", "Fetch a model file from https://huggingface.co/jesdga, or build one from a GGUF with tools\\convert\\convert.py."],
+    "then": ["Write a config: {\"version\": 2, \"models\": [{\"model\": \"<file>.basalt\"}], \"engine\": {\"max-context\": 32768}, \"server\": {\"port\": 8111}}", "basalt serve --config <file>.json starts the server and loads the model", "GET http://127.0.0.1:8111/health", "Change the port when 8080 is taken (Docker Desktop and WSL relays often hold it on Windows)."]
+  },
+  "fits": {
+    "good": ["one large mixture-of-experts model resident on a Blackwell card with the rest of its experts in RAM", "DeepSeek-V4.1-Flash and Qwen3.8-Flash-Next at the published packs' quants, with drafting"],
+    "not": ["any card that is not Blackwell: the kernels are built for sm_120 only", "GLM-5.3-Flash or MiniMax-M3.1-Flash: no route for either", "a pack larger than RAM plus the card: experts read from the SSD on every step", "many small models: Ollama"]
+  }
+}

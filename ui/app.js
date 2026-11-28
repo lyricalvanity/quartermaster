@@ -844,7 +844,8 @@
     const transient = INV.units.find((s) => ["starting", "loading", "unloading", "stopping", "reloading"].includes((st.servers[s.id] || {}).state));
     if (transient) {
       $("#resident-main").textContent = `${st.servers[transient.id].state} ${transient.name}`;
-      $("#resident-sub").textContent = `${fmtGB(g.used_mib)} GB on the card`;
+      const pct = st.servers[transient.id].load_percent;      // a server that says how far its load is (Basalt)
+      $("#resident-sub").textContent = `${pct != null ? Math.round(pct) + "% read · " : ""}${fmtGB(g.used_mib)} GB on the card`;
     } else if (holders.length === 0 && st.card_unattributed) {
       const apps = (g.apps || []).map((a) => a.name).join(", ");
       $("#resident-main").textContent = apps ? `${apps} is taking the card` : "something is taking the card";
@@ -918,6 +919,8 @@
       } else if (i.last_request && i.loaded) {
         const r = i.last_request;
         lv.push(`last ${r.prompt_tokens ?? "?"} in · ${r.output_tokens ?? "?"} out · ${r.prefill_tok_s ? Math.round(r.prefill_tok_s) + " pre" : ""} · <b>${r.decode_tok_s ? r.decode_tok_s.toFixed(1) : "—"}</b> tok/s`);
+      } else if (i.up && !i.loaded && i.load_percent != null) {
+        lv.push(`reading the model file · <b>${Math.round(i.load_percent)}%</b>`);
       } else if (i.health && i.health.max_context && i.up) {
         lv.push(`${fmtK(i.health.max_context)} ctx · ${i.health.model || ""}${i.health.version ? " · v" + i.health.version : ""}`);
       } else if (!i.up) {
@@ -1010,7 +1013,12 @@
     const facts = $("#t-facts"); facts.innerHTML = "";
     const add = (k, v) => { if (v != null && v !== "") facts.appendChild(el("span", "tag", `${k} ${v}`)); };
     add("vram slots", eng.vram_slots); add("ram slots", eng.ram_slots); add("vram", eng.vram_gb && eng.vram_gb + " GB"); add("ram tier", eng.ram_gb && eng.ram_gb + " GB");
-    add("threads", eng.cpu_threads); add("mtp", eng.mtp);
+    // an engine that counts its experts in one figure (Strata's DeepSeek engine, Basalt) rather than as two tiers of slots
+    if (eng.vram_slots == null) add("experts on card", eng.expert_slots);
+    add("experts in ram", eng.ram_experts); if (eng.expert_slots != null) add("of", eng.expert_total);
+    // experts neither tier holds are read from the SSD whenever a step routes to one: the figure that explains a slow model
+    if (eng.spill_experts) add("on the SSD", `${eng.spill_experts} experts${eng.spill_gb ? " · " + eng.spill_gb + " GB" : ""}`);
+    add("threads", eng.cpu_threads); add("mtp", eng.mtp); add("draft window", eng.spec); add("quant", eng.quant); add("engine", eng.version);
     if (i.totals) { add("requests", i.totals.requests); const pk = Number(i.totals.peak_decode); if (Number.isFinite(pk) && pk > 0) add("peak", pk.toFixed(1) + " tok/s"); }
     const tb = $("#t-reqs"); tb.innerHTML = "";
     for (const r of (i.recent_requests || []).slice().reverse()) {

@@ -66,7 +66,7 @@ NO_WINDOW, NEW_GROUP = host.NO_WINDOW, host.NEW_GROUP
 DEBUG = "--debug" in sys.argv
 SELFTEST = "--selftest" in sys.argv  # the new code run once beside the running agent, before an update touches it: writes nothing
 # engine processes as the OS names them (stem.exe on Windows); what the card's "apps" list is filtered to
-ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya", "maya-vision",
+ENGINE_PROCS = host.exe_names(("strata", "strata-dsv41", "strata-vision", "maya", "maya-vision", "basalt", "basalt-vision",
                                "ollama", "ollama_llama_server", "ollama-runner", "llama-server"))
 STATIC_TYPES = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
@@ -96,8 +96,8 @@ def log(msg: str) -> None:
 PRESETS = HOME / "presets.json"
 SLOTS = 6                       # theme accent slots --e1..--e6, by engine order; --e0 is the folded legacy band
 ENGINE_NAMES = {"strata": "Strata", "maya": "Maya", "ollama": "Ollama", "llamacpp": "llama.cpp", "comfyui": "ComfyUI",
-                "polystrata": "PolyStrata", "ik-llamacpp": "ik_llama.cpp", "koboldcpp": "KoboldCpp", "tabbyapi": "TabbyAPI",
-                "textgen": "textgen", "foundry-local": "Foundry Local"}
+                "polystrata": "PolyStrata", "basalt": "Basalt", "ik-llamacpp": "ik_llama.cpp", "koboldcpp": "KoboldCpp",
+                "tabbyapi": "TabbyAPI", "textgen": "textgen", "foundry-local": "Foundry Local"}
 UNSTOPPABLE = ("ollama", "llamacpp-router")      # drivers whose process serves others too: unload, never stop
 # A unit's *kind* is what it is (its catalog record, its band, its update recipe); its *driver* is how the agent
 # moves it: the code path for probe, load, unload, start and stop. Every kind here drives as itself; a fork
@@ -819,6 +819,27 @@ def cli_call(p: Plan, st, s: dict, verb: str):
 _RATES: dict[str, tuple] = {}
 
 
+def newest_last(reqs) -> list:
+    """A server's finished requests, oldest first. Strata, Maya and Basalt list them newest first and stamp each
+    with `time`; a list that carries no stamps is taken in the order it came."""
+    rows = [r for r in (reqs or []) if isinstance(r, dict)]
+    if rows and all(isinstance(r.get("time"), (int, float)) for r in rows):
+        return sorted(rows, key=lambda r: r["time"])
+    return rows
+
+
+def prefill_rate(r: dict):
+    """Tokens a second over the part of the prompt that was read. A row that carries its own figure keeps it;
+    Strata's and Basalt's rows carry the tokens and the milliseconds instead."""
+    if r.get("prefill_tok_s") is not None:
+        return r["prefill_tok_s"]
+    ms, total = r.get("prompt_ms"), r.get("prompt_tokens")
+    if not isinstance(ms, (int, float)) or ms <= 0 or not isinstance(total, (int, float)):
+        return None
+    read = r.get("prompt_read") if isinstance(r.get("prompt_read"), (int, float)) else total - (r.get("reused") or 0)
+    return round(read / (ms / 1000), 1) if read > 0 else None
+
+
 def rates_of(s: dict, child: int | None = None, naps: bool = False):
     """The reader of what one unit's API leaves out: its requests, from its llama-server's log and /slots
     (llama_rates.py; ollama_runner.py for Ollama). It keeps its place in the log between polls, so there is one
@@ -937,13 +958,17 @@ class State:
                 return info
             info["up"] = True
             info["health"] = {k: h.get(k) for k in ("status", "model", "max_context", "images", "loaded", "unloaded",
-                                                     "version", "model_label") if k in h}
+                                                     "version", "model_label", "loading", "service") if k in h}
             if kind == "maya":
                 info["loaded"] = not h.get("unloaded", False)
                 reloading = h.get("status") == "reloading"
             else:
                 info["loaded"] = bool(h.get("loaded", True))
                 reloading = False
+            # Basalt says when it is reading its model file, and how far it is: at a start, or on a load
+            loading = bool(h.get("loading")) and not info["loaded"]
+            if loading and isinstance(h.get("percent"), (int, float)) and not isinstance(h.get("percent"), bool):
+                info["load_percent"] = round(float(h["percent"]), 1)
             # live state from /metrics (passive on both engines)
             if info["loaded"]:
                 try:
@@ -953,20 +978,46 @@ class State:
                         info["live"] = {k: live.get(k) for k in ("state", "phase", "queued", "generated", "prompt_tokens",
                                                                 "prompt_read", "prompt_total", "tok_s", "tok_s_mean",
                                                                 "prefill_tok_s_mean", "elapsed_s", "max_tokens") if k in live}
-                        reqs = m.get("requests") or []
+                        # the servers list their finished requests newest first: the last one is the newest
+                        reqs = newest_last(m.get("requests"))
+                        for r in reqs[-5:]:
+                            rate = prefill_rate(r)
+                            if rate is not None:
+                                r["prefill_tok_s"] = rate
                         if reqs:
                             r = reqs[-1]
                             info["last_request"] = {k: r.get(k) for k in ("prompt_tokens", "output_tokens", "prompt_ms",
                                                                           "prefill_tok_s", "decode_ms", "decode_tok_s",
-                                                                          "finish", "finish_reason", "started", "reused") if k in r}
+                                                                          "finish", "finish_reason", "started", "reused", "time") if k in r}
                         info["recent_requests"] = [{k: r.get(k) for k in ("prompt_tokens", "output_tokens", "prefill_tok_s",
-                                                                           "decode_tok_s", "finish_reason", "finish") if k in r}
+                                                                           "decode_tok_s", "finish_reason", "finish", "reused") if k in r}
                                                    for r in reqs[-5:]]
                         eng = m.get("engine") or {}
                         info["engine"] = {k: eng.get(k) for k in ("context", "kv", "vram_slots", "ram_slots", "vram_gb", "ram_gb",
-                                                                  "expert_slots", "cpu_threads", "mtp", "kv_gb") if k in eng}
+                                                                  "expert_slots", "cpu_threads", "mtp", "kv_gb", "version",
+                                                                  "ram_experts", "cpu_experts", "expert_total") if eng.get(k) is not None}
+                        if "context" not in info["engine"] and eng.get("max_context"):
+                            info["engine"]["context"] = eng["max_context"]       # Basalt names it max_context
+                        # Basalt gives its two tiers in MiB, its CPU pool in workers, its drafting as a window, and
+                        # says which experts neither tier holds: those are read from the SSD on every step that routes there
+                        facts, num = info["engine"], (int, float)
+                        if "vram_gb" not in facts and isinstance(eng.get("expert_cache_mib"), num):
+                            facts["vram_gb"] = round(eng["expert_cache_mib"] / 1024, 1)
+                        if "ram_gb" not in facts and isinstance(eng.get("ram_experts_mib"), num):
+                            facts["ram_gb"] = round(eng["ram_experts_mib"] / 1024, 1)
+                        if "cpu_threads" not in facts and eng.get("pool_workers"):
+                            facts["cpu_threads"] = eng["pool_workers"]
+                        facts.update({k: eng[k] for k in ("spec", "quant") if eng.get(k) not in (None, "")})
+                        spill = eng.get("spill")
+                        if isinstance(spill, dict) and isinstance(spill.get("experts"), int) and spill["experts"] > 0:
+                            facts["spill_experts"] = spill["experts"]
+                            if isinstance(spill.get("bytes"), num):
+                                facts["spill_gb"] = round(spill["bytes"] / 2**30, 1)
                         tot = m.get("totals") or {}
                         info["totals"] = {k: tot.get(k) for k in ("requests", "prompt_tokens", "output_tokens", "peak_decode") if k in tot}
+                        best = ((m.get("best") or {}).get("decode") or {}).get("tok_s")
+                        if "peak_decode" not in info["totals"] and isinstance(best, (int, float)):
+                            info["totals"]["peak_decode"] = best                 # Basalt keeps its fastest decode as best.decode
                         info["busy"] = live.get("state") in ("reading", "generating")
                         info["tok_s"] = live.get("tok_s") if info["busy"] else None
                         # Strata's live comes without a state key when idle: use queued/active
@@ -976,6 +1027,8 @@ class State:
                     info["metrics_error"] = str(e)[:120]
             if reloading:
                 info["state"] = "reloading"
+            elif loading:
+                info["state"] = "loading"        # the server's own word for it: the card is filling
             elif info["busy"]:
                 info["state"] = "busy"
             elif info["loaded"]:
@@ -1061,7 +1114,9 @@ class State:
         ollama_procs = {n.lower() for n in host.exe_names(("ollama", "ollama_llama_server", "ollama-runner"))}
         ollama_holds = (any((m.get("size_vram_gib") or 0) > 0 for m in snap["ollama"]["models"])
                         and not {a["name"].lower() for a in g.get("apps", [])} - ollama_procs)
-        unattributed = (not holders and not comfy_holds and not ollama_holds and not PLANS.loading_now()
+        # a server that says it is loading (Basalt does) has admitted to the card already
+        self_loading = any(i.get("state") == "loading" and i.get("load_percent") is not None for i in snap["servers"].values())
+        unattributed = (not holders and not comfy_holds and not ollama_holds and not PLANS.loading_now() and not self_loading
                         and (g.get("used_mib") or 0) > INV.gpu["free_card_mib"])
         snap["card_unattributed"] = unattributed
         if unattributed:

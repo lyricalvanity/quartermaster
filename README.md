@@ -149,7 +149,7 @@ counts and has a menu: stop every unit of that engine, and the update entries be
 
 `catalog/<kind>.json` is one record per kind Quartermaster knows (what it is, licence, tier, how to detect
 and drive it, its update recipe, how to install it, what it fits); it ships with the code and `git pull`
-is how it updates. Fifteen kinds today: the engines Strata, Maya, Ollama, llama.cpp, PolyStrata,
+is how it updates. Sixteen kinds today: the engines Strata, Maya, Ollama, llama.cpp, PolyStrata, Basalt,
 ik_llama.cpp, KoboldCpp, TabbyAPI, textgen (text-generation-webui), Foundry Local and ComfyUI; the service
 OpenWebUI; the clients Pi, Codex CLI and Claude Code. Each record says where it has been **tested**; the six
 added from their documentation and source in November 2026 carry an *untested* mark in the panel until
